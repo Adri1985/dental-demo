@@ -1,0 +1,15 @@
+services:
+  - type: web
+    name: dental-demo
+    runtime: node
+    buildCommand: npm install
+    startCommand: node index.js
+    envVars:
+      - key: ANTHROPIC_API_KEY
+        sync: false
+      - key: GOOGLE_SERVICE_ACCOUNT_JSON
+        sync: false
+      - key: CALENDAR_ID_DR_DIEGO
+        sync: false
+      - key: PORT
+        value: 3000
