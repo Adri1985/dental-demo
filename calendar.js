@@ -177,6 +177,29 @@ async function createAppointment({ paciente_nombre, paciente_telefono, paciente_
   const start = new Date(fecha_hora);
   const end = new Date(start.getTime() + duracion_minutos * 60000);
 
+  // ── Verificación de conflicto justo antes de crear ──────────────
+  // Consulta el calendario en tiempo real para evitar doble turno
+  const { data: busyData } = await calendar.events.list({
+    calendarId: CALENDAR_ID,
+    timeMin: start.toISOString(),
+    timeMax: end.toISOString(),
+    singleEvents: true,
+  });
+
+  const conflicto = (busyData.items || []).some((ev) => {
+    const evStart = new Date(ev.start.dateTime || ev.start.date);
+    const evEnd   = new Date(ev.end.dateTime   || ev.end.date);
+    return start < evEnd && end > evStart;
+  });
+
+  if (conflicto) {
+    return {
+      ok: false,
+      error: "El horario ya fue tomado por otro paciente mientras confirmabas. Buscá otro disponible.",
+    };
+  }
+  // ────────────────────────────────────────────────────────────────
+
   // Descripción estructurada — los campos se usan para reconstruir el perfil
   const description = [
     `Paciente: ${paciente_nombre || ""}`,

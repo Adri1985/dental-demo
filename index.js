@@ -66,7 +66,6 @@ async function executeTool(name, input, telefono) {
     }
 
     case "create_appointment": {
-      // Enriquecer con datos del paciente guardados en memoria
       const inputEnriquecido = {
         ...input,
         paciente_dni:         input.paciente_dni        || patient?.dni,
@@ -74,7 +73,12 @@ async function executeTool(name, input, telefono) {
         paciente_nombre:      input.paciente_nombre      || patient?.nombre,
         paciente_telefono:    input.paciente_telefono    || telefono,
       };
-      return await createAppointment(inputEnriquecido);
+      const result = await createAppointment(inputEnriquecido);
+      if (!result.ok) {
+        // Devolver el error para que Claude lo comunique y busque otro horario
+        return result;
+      }
+      return result;
     }
 
     case "cancel_appointment": {
