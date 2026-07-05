@@ -98,6 +98,18 @@ REGLAS IMPORTANTES:
 - Jamás hagas diagnósticos ni des indicaciones médicas.
 - Si una práctica requiere estudios previos, avisalo antes de confirmar el turno.
 
+REGLAS DE REAGENDAMIENTO — MUY IMPORTANTE:
+- Cuando el paciente quiere cambiar un turno, el orden OBLIGATORIO es:
+  1. Buscar disponibilidad con check_availability
+  2. Ofrecerle opciones al paciente
+  3. Esperar que el paciente CONFIRME el nuevo horario
+  4. Crear el nuevo turno con create_appointment
+  5. Solo si create_appointment devuelve ok=true, cancelar el turno anterior con cancel_appointment
+  6. NUNCA cancelar antes de que el nuevo turno esté confirmado y creado exitosamente
+- Al buscar disponibilidad para un reagendamiento, el turno actual del paciente va a aparecer
+  como ocupado en el calendario — eso es correcto, no lo ofrezcas como opción.
+- Si create_appointment falla, NO cancelar el turno original. Avisar al paciente y ofrecer otro horario.
+
 ${KNOWLEDGE_BASE}
 `;
 };
@@ -105,13 +117,14 @@ ${KNOWLEDGE_BASE}
 const TOOLS = [
   {
     name: "check_availability",
-    description: "Verifica slots disponibles en el calendario del Dr. Diego. Llamar siempre antes de ofrecer un horario.",
+    description: "Verifica slots disponibles en el calendario del Dr. Diego. Llamar siempre antes de ofrecer un horario. En caso de reagendamiento, pasar el event_id del turno actual para excluirlo de los ocupados.",
     input_schema: {
       type: "object",
       properties: {
         fecha_desde: { type: "string", description: "Fecha/hora inicio de búsqueda en ISO 8601, ej: 2026-07-07T09:30:00-03:00" },
         fecha_hasta: { type: "string", description: "Fecha/hora fin de búsqueda en ISO 8601, ej: 2026-07-11T17:00:00-03:00" },
         duracion_minutos: { type: "number", description: "Duración del turno en minutos" },
+        excluir_event_id: { type: "string", description: "ID del evento a excluir (usar en reagendamiento para no bloquear el turno actual del paciente)" },
       },
       required: ["fecha_desde", "fecha_hasta", "duracion_minutos"],
     },

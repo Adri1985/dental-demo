@@ -96,73 +96,120 @@ async function getPatientAppointments(telefono, dni) {
 
 /**
  * Busca slots libres en el calendario del Dr. Diego.
+ * Usa Date en timezone Argentina via Intl para evitar bugs de offset.
  */
-async function checkAvailability({ fecha_desde, fecha_hasta, duracion_minutos }) {
+async function checkAvailability({ fecha_desde, fecha_hasta, duracion_minutos, excluir_event_id }) {
   const auth = getAuthClient();
   const calendar = google.calendar({ version: "v3", auth });
 
-  const timeMin = new Date(fecha_desde).toISOString();
-  const timeMax = new Date(fecha_hasta).toISOString();
+  // Ampliar rango al mes completo para no perder eventos
+  const desdeDia = new Date(fecha_desde);
+  desdeDia.setUTCHours(0, 0, 0, 0);
+  const hastaDia = new Date(fecha_hasta);
+  hastaDia.setUTCHours(23, 59, 59, 999);
 
   const { data } = await calendar.events.list({
     calendarId: CALENDAR_ID,
-    timeMin,
-    timeMax,
+    timeMin: desdeDia.toISOString(),
+    timeMax: hastaDia.toISOString(),
     singleEvents: true,
     orderBy: "startTime",
   });
 
-  const eventos = data.items || [];
+  const eventos = (data.items || []).filter(ev => ev.id !== excluir_event_id);
+
+  console.log(`[checkAvailability] ${eventos.length} eventos en rango:`);
+  eventos.forEach(ev => {
+    const s = new Date(ev.start.dateTime || ev.start.date);
+    const e = new Date(ev.end.dateTime || ev.end.date);
+    console.log(`  "${ev.summary}": ${s.toISOString()} → ${e.toISOString()}`);
+  });
+
+  // Helper: dado un Date UTC, devuelve {year, month, day, dow} en Argentina
+  function arParts(dt) {
+    const fmt = new Intl.DateTimeFormat("es-AR", {
+      timeZone: "America/Argentina/Buenos_Aires",
+      year: "numeric", month: "2-digit", day: "2-digit",
+      weekday: "short", hour: "2-digit", minute: "2-digit", hour12: false,
+    });
+    const parts = Object.fromEntries(fmt.formatToParts(dt).map(p => [p.type, p.value]));
+    return {
+      year:  parseInt(parts.year),
+      month: parseInt(parts.month) - 1, // 0-indexed
+      day:   parseInt(parts.day),
+      dow:   ["dom","lun","mar","mié","jue","vie","sáb"].indexOf(parts.weekday.toLowerCase().replace(".",""))
+    };
+  }
+
+  // Helper: construir un Date UTC a partir de fecha AR (año, mes 0-idx, dia) y hora AR (h, m)
+  function arToUTC(year, month0, day, hourAR, minAR) {
+    // Argentina es UTC-3 fijo
+    return new Date(Date.UTC(year, month0, day, hourAR + 3, minAR, 0, 0));
+  }
+
   const slots = [];
-  const desde = new Date(fecha_desde);
-  const hasta = new Date(fecha_hasta);
   const ahora = new Date();
 
-  for (let d = new Date(desde); d < hasta; d.setDate(d.getDate() + 1)) {
-    const diaSemana = d.getDay();
-    if (diaSemana === 0 || diaSemana === 6) continue;
+  // Iterar cada día del rango
+  let cursor = new Date(desdeDia);
+  cursor.setUTCHours(12, 0, 0, 0); // mediodía UTC para que en AR sea siempre el mismo día
 
-    const franjas = [
-      { inicio: 9, inicioMin: 30, fin: 13, finMin: 0 },
-      { inicio: 14, inicioMin: 0, fin: 17, finMin: 0 },
-    ];
+  const hastaRef = new Date(hastaDia);
+  hastaRef.setUTCHours(12, 0, 0, 0);
 
-    for (const franja of franjas) {
-      let slotStart = new Date(d);
-      slotStart.setHours(franja.inicio, franja.inicioMin, 0, 0);
-      const franjaFin = new Date(d);
-      franjaFin.setHours(franja.fin, franja.finMin, 0, 0);
+  while (cursor <= hastaRef) {
+    const p = arParts(cursor);
+    
+    // Solo lunes (1) a viernes (5)
+    if (p.dow >= 1 && p.dow <= 5) {
+      // Franjas: 9:30-13:00 y 14:00-17:00 en hora AR
+      const franjas = [
+        { hIni: 9, mIni: 30, hFin: 13, mFin: 0 },
+        { hIni: 14, mIni: 0, hFin: 17, mFin: 0 },
+      ];
 
-      while (slotStart < franjaFin) {
-        const slotEnd = new Date(slotStart.getTime() + duracion_minutos * 60000);
+      for (const franja of franjas) {
+        let slotStart = arToUTC(p.year, p.month, p.day, franja.hIni, franja.mIni);
+        const franjaFin = arToUTC(p.year, p.month, p.day, franja.hFin, franja.mFin);
 
-        if (slotStart > ahora && slotEnd <= franjaFin) {
-          const hayConflicto = eventos.some((ev) => {
-            const evStart = new Date(ev.start.dateTime || ev.start.date);
-            const evEnd = new Date(ev.end.dateTime || ev.end.date);
-            return slotStart < evEnd && slotEnd > evStart;
+        while (slotStart < franjaFin) {
+          const slotEnd = new Date(slotStart.getTime() + duracion_minutos * 60 * 1000);
+          
+          if (slotEnd > franjaFin) break;
+          if (slotStart <= ahora) {
+            slotStart = new Date(slotStart.getTime() + 30 * 60 * 1000);
+            continue;
+          }
+
+          const hayConflicto = eventos.some(ev => {
+            const evS = new Date(ev.start.dateTime || ev.start.date);
+            const evE = new Date(ev.end.dateTime   || ev.end.date);
+            const overlap = slotStart < evE && slotEnd > evS;
+            if (overlap) console.log(`  [bloqueado] ${slotStart.toISOString()} por "${ev.summary}" (${evS.toISOString()}→${evE.toISOString()})`);
+            return overlap;
           });
 
           if (!hayConflicto) {
             slots.push({
               inicio: slotStart.toISOString(),
               label: slotStart.toLocaleString("es-AR", {
-                weekday: "long",
-                day: "numeric",
-                month: "long",
-                hour: "2-digit",
-                minute: "2-digit",
+                weekday: "long", day: "numeric", month: "long",
+                hour: "2-digit", minute: "2-digit",
                 timeZone: "America/Argentina/Buenos_Aires",
               }),
             });
           }
-        }
 
-        slotStart = new Date(slotStart.getTime() + 30 * 60000);
+          slotStart = new Date(slotStart.getTime() + 30 * 60 * 1000);
+        }
       }
     }
+
+    // Avanzar al día siguiente (sumar 24hs exactas)
+    cursor = new Date(cursor.getTime() + 24 * 60 * 60 * 1000);
   }
 
+  console.log(`[checkAvailability] slots libres: ${slots.map(s => s.label).join(", ")}`);
   return slots.slice(0, 6);
 }
 

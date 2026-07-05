@@ -164,20 +164,22 @@ async function runAgent(userMessage, telefono) {
   });
 
   while (response.stop_reason === "tool_use") {
-    const toolUseBlock = response.content.find((b) => b.type === "tool_use");
-    const toolResult = await executeTool(toolUseBlock.name, toolUseBlock.input, telefono);
+    // Claude puede pedir múltiples tools en paralelo — procesarlas todas
+    const toolUseBlocks = response.content.filter((b) => b.type === "tool_use");
+
+    const toolResults = await Promise.all(
+      toolUseBlocks.map(async (block) => {
+        const result = await executeTool(block.name, block.input, telefono);
+        return {
+          type: "tool_result",
+          tool_use_id: block.id,
+          content: JSON.stringify(result),
+        };
+      })
+    );
 
     patient.claudeHistory.push({ role: "assistant", content: response.content });
-    patient.claudeHistory.push({
-      role: "user",
-      content: [
-        {
-          type: "tool_result",
-          tool_use_id: toolUseBlock.id,
-          content: JSON.stringify(toolResult),
-        },
-      ],
-    });
+    patient.claudeHistory.push({ role: "user", content: toolResults });
 
     response = await anthropic.messages.create({
       model: "claude-sonnet-4-6",
