@@ -1,0 +1,46 @@
+{
+  "consultorio": {
+    "nombre": "Consultorio Odontológico Dr. Diego",
+    "direccion": ""
+  },
+  "asistente": {
+    "nombre": "Mía"
+  },
+  "profesionales": [
+    {
+      "id": "dr_diego",
+      "nombre": "Dr. Diego",
+      "horarios": {
+        "dias": "Lunes a Viernes",
+        "manana": { "desde": "09:30", "hasta": "13:00" },
+        "tarde":  { "desde": "14:00", "hasta": "18:00", "ultimo_turno": "17:00" }
+      }
+    }
+  ],
+  "precio_consulta": 50000,
+  "practicas": [
+    { "nombre": "Control de rutina",     "duracion": 30, "requiere": [] },
+    { "nombre": "Limpieza dental",       "duracion": 45, "requiere": [] },
+    { "nombre": "Extracción simple",     "duracion": 60, "requiere": [] },
+    { "nombre": "Blanqueamiento",        "duracion": 60, "requiere": [] },
+    { "nombre": "Control de ortodoncia", "duracion": 30, "requiere": [] },
+    {
+      "nombre": "Implante",
+      "duracion": 90,
+      "requiere": [
+        "Radiografía panorámica (menos de 6 meses)",
+        "Tomografía reciente",
+        "Consulta previa obligatoria"
+      ]
+    }
+  ],
+  "politica": {
+    "cancelacion_anticipacion_hs": 24,
+    "tolerancia_llegada_tarde_min": 15,
+    "anticipacion_llegada_nuevo_min": 10
+  },
+  "palabras_alarma": [
+    "dolor agudo", "hinchazón", "sangrado", "fiebre",
+    "trauma", "golpe", "accidente", "absceso", "no puedo cerrar la boca"
+  ]
+}

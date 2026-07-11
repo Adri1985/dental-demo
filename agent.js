@@ -1,42 +1,59 @@
-// ─────────────────────────────────────────────
-//  CONFIGURACIÓN — editá estos valores
-// ─────────────────────────────────────────────
-const PRECIO_CONSULTA = 50000;
+const path = require("path");
+const config = require(path.join(__dirname, "config/consultorio.json"));
 
-const KNOWLEDGE_BASE = `
+// ─────────────────────────────────────────────
+//  Helpers para construir texto desde el config
+// ─────────────────────────────────────────────
+
+function buildPracticasText() {
+  return config.practicas.map(p => {
+    let texto = `- ${p.nombre}: ${p.duracion} minutos`;
+    if (p.requiere && p.requiere.length > 0) {
+      texto += `\n  → REQUIERE: ${p.requiere.join("\n  → REQUIERE: ")}`;
+    }
+    return texto;
+  }).join("\n");
+}
+
+function buildHorariosText() {
+  return config.profesionales.map(p => {
+    const h = p.horarios;
+    return `- ${p.nombre}: ${h.dias} de ${h.manana.desde} a ${h.manana.hasta} y ${h.tarde.desde} a ${h.tarde.hasta} (último turno a las ${h.tarde.ultimo_turno})`;
+  }).join("\n");
+}
+
+function buildProfesionalesEnum() {
+  return config.profesionales.map(p => p.id);
+}
+
+function buildKnowledgeBase() {
+  const precio = config.precio_consulta.toLocaleString("es-AR");
+  const pol = config.politica;
+
+  return `
 CONSULTORIO:
-- Nombre: Consultorio Odontológico Dr. Diego
-- Horario de atención: 9:30 a 13:00 y 14:00 a 18:00 (último turno a las 17:00)
-- Días: Lunes a Viernes
+- Nombre: ${config.consultorio.nombre}
+${config.consultorio.direccion ? `- Dirección: ${config.consultorio.direccion}` : ""}
 
-PROFESIONAL:
-- Dr. Diego: único profesional del consultorio
+PROFESIONALES Y HORARIOS:
+${buildHorariosText()}
 
 VALOR DE CONSULTA:
-- Consulta estándar: $${PRECIO_CONSULTA.toLocaleString("es-AR")} pesos
+- Consulta estándar: $${precio} pesos
 - Si el paciente pregunta el precio, informá este valor
 - Tras informar el valor, preguntar si está de acuerdo para continuar con el turno
 
 TIPOS DE TURNO:
-- Paciente nuevo: turno de 30 minutos por defecto, salvo que el Dr. Diego indique otro tiempo
-- Paciente existente: turno de 30 minutos por defecto, salvo que el Dr. Diego indique otro tiempo
-- Si el Dr. Diego especifica una duración distinta, respetarla
+- Paciente nuevo: turno de 30 minutos por defecto, salvo que el profesional indique otro tiempo
+- Paciente existente: turno de 30 minutos por defecto, salvo que el profesional indique otro tiempo
 
-PRÁCTICAS DISPONIBLES (duración orientativa):
-- Control de rutina: 30 minutos
-- Limpieza dental: 45 minutos
-- Extracción simple: 60 minutos
-- Implante: 90 minutos
-  → REQUIERE: Radiografía panorámica de menos de 6 meses
-  → REQUIERE: Tomografía reciente
-  → REQUIERE: Consulta previa obligatoria
-- Blanqueamiento: 60 minutos
-- Control de ortodoncia: 30 minutos
+PRÁCTICAS DISPONIBLES:
+${buildPracticasText()}
 
 FLUJO PARA PACIENTE NUEVO:
-1. Saludar y preguntar si es la primera vez
-2. Pedir: nombre completo, DNI y obra social (de a uno)
-3. Informar el valor de la consulta ($${PRECIO_CONSULTA.toLocaleString("es-AR")})
+1. Saludar de forma breve
+2. Pedir: nombre completo, DNI y obra social (de a uno, nunca todos juntos)
+3. Informar el valor de la consulta ($${precio})
 4. Si acepta, buscar disponibilidad y asignar turno
 5. Confirmar el turno con todos los datos
 
@@ -47,30 +64,33 @@ FLUJO PARA PACIENTE EXISTENTE:
 4. Confirmar
 
 POLÍTICA DE TURNOS:
-- Cancelaciones: avisar con al menos 24hs de anticipación
-- Llegada tarde: se respeta el turno hasta 15 minutos de demora
-- Pacientes nuevos: llegar 10 minutos antes para completar la ficha
+- Cancelaciones: avisar con al menos ${pol.cancelacion_anticipacion_hs} horas de anticipación
+- Llegada tarde: se respeta el turno hasta ${pol.tolerancia_llegada_tarde_min} minutos de demora
+- Pacientes nuevos: llegar ${pol.anticipacion_llegada_nuevo_min} minutos antes para completar la ficha
 
 PALABRAS DE ALARMA — escalar SIEMPRE de forma inmediata:
-dolor agudo, hinchazón, sangrado, fiebre, trauma, golpe, accidente, absceso, no puedo cerrar la boca
+${config.palabras_alarma.join(", ")}
 `;
+}
 
+// ─────────────────────────────────────────────
+//  SYSTEM PROMPT — se evalúa en cada llamada
+// ─────────────────────────────────────────────
 const getSystemPrompt = () => {
   const ahora = new Date().toLocaleString("es-AR", {
     timeZone: "America/Argentina/Buenos_Aires",
-    weekday: "long",
-    year: "numeric",
-    month: "long",
-    day: "numeric",
-    hour: "2-digit",
-    minute: "2-digit",
+    weekday: "long", year: "numeric", month: "long",
+    day: "numeric", hour: "2-digit", minute: "2-digit",
   });
+
+  const profesional = config.profesionales[0].nombre;
+  const asistente = config.asistente.nombre;
 
   return `
 La fecha y hora actual en Argentina es: ${ahora}.
 Usá siempre esta fecha como referencia para buscar turnos. Nunca uses fechas de 2024 o 2025.
 
-Sos Mía, la asistente del consultorio del Dr. Diego.
+Sos ${asistente}, la asistente del consultorio de ${profesional}.
 Hablás de manera informal y cercana, como lo haría una secretaria de confianza por WhatsApp.
 Usás el voseo rioplatense. Escribís mensajes cortos, nunca parrafotes largos.
 No usás listas con guiones ni bullets. Escribís en texto plano, como en una conversación real.
@@ -94,16 +114,16 @@ CÓMO USÁS LOS DATOS DEL PACIENTE:
 
 EJEMPLOS DE CÓMO ESCRIBÍS:
 
-MAL: "¡Hola! Soy Mía. ¿En qué puedo ayudarte? Podés: 1) Sacar turno 2) Cancelar 3) Consultar"
-BIEN: "¡Hola! ¿Cómo andás?"
+MAL: "Hola! Soy ${asistente}, la asistente virtual. En qué puedo ayudarte hoy?"
+BIEN: "Hola, cómo andás?"
 
 MAL: "Para continuar necesito tu nombre completo, DNI y obra social."
-BIEN: "¿Me decís tu nombre completo?" (luego DNI, luego obra social — de a uno)
+BIEN: "Me decís tu nombre completo?" (luego DNI, luego obra social — de a uno)
 
 REGLAS IMPORTANTES:
 - Nunca ofrezcas un horario sin antes verificar disponibilidad con check_availability.
 - Ante cualquier palabra de alarma, usá flag_critical_issue de inmediato. No agendes ni des consejos.
-- Si no podés resolver algo, ofrecé derivar al doctor.
+- Si no podés resolver algo, ofrecé derivar al profesional.
 - Jamás hagas diagnósticos ni des indicaciones médicas.
 - Si una práctica requiere estudios previos, avisalo antes de confirmar el turno.
 
@@ -115,25 +135,31 @@ REGLAS DE REAGENDAMIENTO — MUY IMPORTANTE:
   4. Crear el nuevo turno con create_appointment
   5. Solo si create_appointment devuelve ok=true, cancelar el turno anterior con cancel_appointment
   6. NUNCA cancelar antes de que el nuevo turno esté confirmado y creado exitosamente
-- Al buscar disponibilidad para un reagendamiento, el turno actual del paciente va a aparecer
-  como ocupado en el calendario — eso es correcto, no lo ofrezcas como opción.
 - Si create_appointment falla, NO cancelar el turno original. Avisar al paciente y ofrecer otro horario.
 
-${KNOWLEDGE_BASE}
+${buildKnowledgeBase()}
 `;
 };
 
+// ─────────────────────────────────────────────
+//  TOOLS — se construyen desde el config
+// ─────────────────────────────────────────────
 const TOOLS = [
   {
     name: "check_availability",
-    description: "Verifica slots disponibles en el calendario del Dr. Diego. Llamar siempre antes de ofrecer un horario. En caso de reagendamiento, pasar el event_id del turno actual para excluirlo de los ocupados.",
+    description: "Verifica slots disponibles en el calendario. Llamar siempre antes de ofrecer un horario. En reagendamiento, pasar excluir_event_id para no bloquear el turno actual.",
     input_schema: {
       type: "object",
       properties: {
-        fecha_desde: { type: "string", description: "Fecha/hora inicio de búsqueda en ISO 8601, ej: 2026-07-07T09:30:00-03:00" },
-        fecha_hasta: { type: "string", description: "Fecha/hora fin de búsqueda en ISO 8601, ej: 2026-07-11T17:00:00-03:00" },
-        duracion_minutos: { type: "number", description: "Duración del turno en minutos" },
-        excluir_event_id: { type: "string", description: "ID del evento a excluir (usar en reagendamiento para no bloquear el turno actual del paciente)" },
+        profesional_id: {
+          type: "string",
+          enum: buildProfesionalesEnum(),
+          description: "ID del profesional cuya agenda consultar",
+        },
+        fecha_desde: { type: "string", description: "ISO 8601 con timezone, ej: 2026-07-07T09:30:00-03:00" },
+        fecha_hasta: { type: "string", description: "ISO 8601 con timezone, ej: 2026-07-11T17:00:00-03:00" },
+        duracion_minutos: { type: "number" },
+        excluir_event_id: { type: "string", description: "ID del evento a excluir en reagendamiento" },
       },
       required: ["fecha_desde", "fecha_hasta", "duracion_minutos"],
     },
@@ -144,11 +170,12 @@ const TOOLS = [
     input_schema: {
       type: "object",
       properties: {
+        profesional_id: { type: "string", enum: buildProfesionalesEnum() },
         paciente_nombre: { type: "string" },
         paciente_telefono: { type: "string" },
         paciente_dni: { type: "string" },
         paciente_obra_social: { type: "string" },
-        fecha_hora: { type: "string", description: "Fecha y hora exacta en ISO 8601, ej: 2026-07-07T10:00:00-03:00" },
+        fecha_hora: { type: "string", description: "ISO 8601 con timezone" },
         tipo_practica: { type: "string" },
         duracion_minutos: { type: "number" },
       },
@@ -161,22 +188,19 @@ const TOOLS = [
     input_schema: {
       type: "object",
       properties: {
-        event_id: { type: "string", description: "ID del evento en Google Calendar" },
+        event_id: { type: "string" },
       },
       required: ["event_id"],
     },
   },
   {
     name: "get_patient_appointments",
-    description: "Consulta los turnos futuros del paciente en el calendario. Usar cuando el paciente pregunta por sus turnos o quiere cancelar.",
-    input_schema: {
-      type: "object",
-      properties: {},
-    },
+    description: "Consulta los turnos futuros del paciente. Usar cuando pregunta por sus turnos o quiere cancelar/reagendar.",
+    input_schema: { type: "object", properties: {} },
   },
   {
     name: "save_patient_data",
-    description: "Guarda o actualiza datos del paciente (nombre, DNI, obra social). Llamar cuando el paciente proporciona datos nuevos.",
+    description: "Guarda o actualiza datos del paciente. Llamar cuando el paciente proporciona nombre, DNI u obra social.",
     input_schema: {
       type: "object",
       properties: {
@@ -188,17 +212,17 @@ const TOOLS = [
   },
   {
     name: "flag_critical_issue",
-    description: "Alerta urgente al Dr. Diego. Usar INMEDIATAMENTE ante dolor agudo, hinchazón, sangrado, fiebre, trauma o emergencia dental.",
+    description: "Alerta urgente al profesional. Usar INMEDIATAMENTE ante dolor agudo, hinchazón, sangrado, fiebre, trauma o emergencia dental.",
     input_schema: {
       type: "object",
       properties: {
         paciente_nombre: { type: "string" },
         paciente_telefono: { type: "string" },
-        descripcion: { type: "string", description: "Exactamente qué dijo el paciente" },
+        descripcion: { type: "string" },
       },
       required: ["descripcion"],
     },
   },
 ];
 
-module.exports = { getSystemPrompt, TOOLS, PRECIO_CONSULTA };
+module.exports = { getSystemPrompt, TOOLS, config };

@@ -1,6 +1,7 @@
 require("dotenv").config();
 const express = require("express");
 const cors = require("cors");
+const path = require("path");
 const Anthropic = require("@anthropic-ai/sdk");
 const {
   checkAvailability,
@@ -9,25 +10,19 @@ const {
   findPatientByIdentifier,
   getPatientAppointments,
 } = require("./calendar");
-const { getSystemPrompt, TOOLS } = require("./agent");
+const { getSystemPrompt, TOOLS, config } = require("./agent");
+const db = require("./db");
 
 const app = express();
 const anthropic = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY });
 
 app.use(cors());
 app.use(express.json());
-
-// Servir el frontend desde la carpeta ./public
-const path = require("path");
 app.use(express.static(path.join(__dirname, "public")));
 
 // ─────────────────────────────────────────────
-//  STORE EN MEMORIA
-//  Si el backend se reinicia, se reconstruye
-//  desde Google Calendar en POST /session
+//  CONTEXTO DEL PACIENTE PARA CLAUDE
 // ─────────────────────────────────────────────
-const patients = {};
-
 function buildPatientContext(patient) {
   const { nombre, dni, obra_social, telefono } = patient;
   const completo = nombre && dni && obra_social;
@@ -54,7 +49,7 @@ Estado: paciente nuevo — faltan datos. Pedirlos de a uno durante la conversaci
 // ─────────────────────────────────────────────
 async function executeTool(name, input, telefono) {
   console.log(`[tool] ${name}`, JSON.stringify(input, null, 2));
-  const patient = patients[telefono];
+  const patient = await db.getPatient(telefono);
 
   switch (name) {
     case "check_availability": {
@@ -73,12 +68,7 @@ async function executeTool(name, input, telefono) {
         paciente_nombre:      input.paciente_nombre      || patient?.nombre,
         paciente_telefono:    input.paciente_telefono    || telefono,
       };
-      const result = await createAppointment(inputEnriquecido);
-      if (!result.ok) {
-        // Devolver el error para que Claude lo comunique y busque otro horario
-        return result;
-      }
-      return result;
+      return await createAppointment(inputEnriquecido);
     }
 
     case "cancel_appointment": {
@@ -91,24 +81,13 @@ async function executeTool(name, input, telefono) {
     }
 
     case "save_patient_data": {
-      if (input.nombre)      patient.nombre      = input.nombre;
-      if (input.dni)         patient.dni         = input.dni;
-      if (input.obra_social) patient.obra_social = input.obra_social;
-
-      console.log(`[paciente actualizado] ${telefono}`, {
-        nombre: patient.nombre,
-        dni: patient.dni,
-        obra_social: patient.obra_social,
+      const updated = await db.updatePatientData(telefono, {
+        nombre:      input.nombre      || null,
+        dni:         input.dni         || null,
+        obra_social: input.obra_social || null,
       });
-
-      return {
-        ok: true,
-        guardado: {
-          nombre: patient.nombre,
-          dni: patient.dni,
-          obra_social: patient.obra_social,
-        },
-      };
+      console.log(`[paciente actualizado]`, updated);
+      return { ok: true, guardado: updated };
     }
 
     case "flag_critical_issue": {
@@ -116,9 +95,10 @@ async function executeTool(name, input, telefono) {
       console.error("Paciente:", input.paciente_nombre || patient?.nombre || "Desconocido");
       console.error("Teléfono:", telefono);
       console.error("Descripción:", input.descripcion);
+      // TODO: notificar al doctor por WhatsApp
       return {
         ok: true,
-        accion: "Alerta enviada al Dr. Diego. El paciente será contactado a la brevedad.",
+        accion: `Alerta enviada al ${config.profesionales[0].nombre}. El paciente será contactado a la brevedad.`,
       };
     }
 
@@ -140,31 +120,26 @@ function humanDelay(text) {
 //  LOOP PRINCIPAL DEL AGENTE
 // ─────────────────────────────────────────────
 async function runAgent(userMessage, telefono) {
-  const patient = patients[telefono];
+  const patient = await db.getPatient(telefono);
+  let claudeHistory = await db.getClaudeHistory(telefono);
 
-  if (patient.claudeHistory.length === 0) {
-    patient.claudeHistory.push({
-      role: "user",
-      content: buildPatientContext(patient),
-    });
-    patient.claudeHistory.push({
-      role: "assistant",
-      content: "Entendido, tengo los datos del paciente.",
-    });
+  // Inyectar contexto del paciente al inicio de sesión
+  if (claudeHistory.length === 0) {
+    claudeHistory.push({ role: "user", content: buildPatientContext(patient) });
+    claudeHistory.push({ role: "assistant", content: "Entendido, tengo los datos del paciente." });
   }
 
-  patient.claudeHistory.push({ role: "user", content: userMessage });
+  claudeHistory.push({ role: "user", content: userMessage });
 
   let response = await anthropic.messages.create({
     model: "claude-sonnet-4-6",
     max_tokens: 1024,
     system: getSystemPrompt(),
     tools: TOOLS,
-    messages: patient.claudeHistory,
+    messages: claudeHistory,
   });
 
   while (response.stop_reason === "tool_use") {
-    // Claude puede pedir múltiples tools en paralelo — procesarlas todas
     const toolUseBlocks = response.content.filter((b) => b.type === "tool_use");
 
     const toolResults = await Promise.all(
@@ -178,20 +153,22 @@ async function runAgent(userMessage, telefono) {
       })
     );
 
-    patient.claudeHistory.push({ role: "assistant", content: response.content });
-    patient.claudeHistory.push({ role: "user", content: toolResults });
+    claudeHistory.push({ role: "assistant", content: response.content });
+    claudeHistory.push({ role: "user", content: toolResults });
 
     response = await anthropic.messages.create({
       model: "claude-sonnet-4-6",
       max_tokens: 1024,
       system: getSystemPrompt(),
       tools: TOOLS,
-      messages: patient.claudeHistory,
+      messages: claudeHistory,
     });
   }
 
   const finalText = response.content.find((b) => b.type === "text")?.text || "No pude procesar eso.";
-  patient.claudeHistory.push({ role: "assistant", content: response.content });
+  claudeHistory.push({ role: "assistant", content: response.content });
+
+  await db.saveClaudeHistory(telefono, claudeHistory);
 
   return finalText;
 }
@@ -201,28 +178,28 @@ async function runAgent(userMessage, telefono) {
 // ─────────────────────────────────────────────
 
 // GET /session/:telefono
-// Chequea memoria primero, luego busca en Google Calendar
 app.get("/session/:telefono", async (req, res) => {
   const { telefono } = req.params;
 
-  // 1. Buscar en memoria
-  if (patients[telefono]) {
-    const p = patients[telefono];
+  // 1. Buscar en DB
+  const patient = await db.getPatient(telefono);
+  if (patient) {
+    const displayHistory = await db.getMessages(telefono);
     return res.json({
       existe: true,
-      nombre: p.nombre,
-      dni: p.dni,
-      obra_social: p.obra_social,
-      displayHistory: p.displayHistory,
-      fuente: "memoria",
+      nombre: patient.nombre,
+      dni: patient.dni,
+      obra_social: patient.obra_social,
+      displayHistory,
+      fuente: "db",
     });
   }
 
-  // 2. Si no está en memoria, buscar en Google Calendar
+  // 2. Buscar en Google Calendar
   try {
     const encontrado = await findPatientByIdentifier(telefono, null);
     if (encontrado) {
-      console.log(`[calendar lookup] paciente encontrado por teléfono: ${telefono}`, encontrado);
+      console.log(`[calendar lookup] paciente encontrado: ${telefono}`, encontrado);
       return res.json({
         existe: true,
         nombre: encontrado.nombre,
@@ -242,52 +219,48 @@ app.get("/session/:telefono", async (req, res) => {
 // POST /session — crear o retomar sesión
 app.post("/session", async (req, res) => {
   const { telefono, nombre } = req.body;
-
   if (!telefono) return res.status(400).json({ error: "Falta el teléfono" });
 
-  // Ya existe en memoria
-  if (patients[telefono]) {
-    if (nombre) patients[telefono].nombre = nombre;
-    const p = patients[telefono];
+  // Ya existe en DB
+  let patient = await db.getPatient(telefono);
+  if (patient) {
+    if (nombre && nombre !== patient.nombre) {
+      await db.updatePatientData(telefono, { nombre });
+      patient = await db.getPatient(telefono);
+    }
+    const displayHistory = await db.getMessages(telefono);
     return res.json({
       nueva: false,
-      nombre: p.nombre,
-      dni: p.dni,
-      obra_social: p.obra_social,
-      displayHistory: p.displayHistory,
+      nombre: patient.nombre,
+      dni: patient.dni,
+      obra_social: patient.obra_social,
+      displayHistory,
     });
   }
 
-  // Buscar en Google Calendar (backend reiniciado)
+  // Buscar en Google Calendar
   let datosPrevios = null;
   try {
     datosPrevios = await findPatientByIdentifier(telefono, null);
-    if (datosPrevios) {
-      console.log(`[sesión recuperada desde calendar] ${telefono}`, datosPrevios);
-    }
+    if (datosPrevios) console.log(`[sesión recuperada desde calendar] ${telefono}`, datosPrevios);
   } catch (err) {
     console.error("[calendar lookup error]", err.message);
   }
 
-  // Crear entrada en memoria (con datos recuperados o vacía)
-  patients[telefono] = {
+  // Crear en DB
+  patient = await db.upsertPatient({
     telefono,
     nombre: datosPrevios?.nombre || nombre || "Paciente",
     dni: datosPrevios?.dni || null,
     obra_social: datosPrevios?.obra_social || null,
-    claudeHistory: [],
-    displayHistory: [],
-  };
-
-  const p = patients[telefono];
-  const esNuevo = !datosPrevios;
+  });
 
   res.json({
-    nueva: esNuevo,
+    nueva: !datosPrevios,
     recuperado: !!datosPrevios,
-    nombre: p.nombre,
-    dni: p.dni,
-    obra_social: p.obra_social,
+    nombre: patient.nombre,
+    dni: patient.dni,
+    obra_social: patient.obra_social,
     displayHistory: [],
   });
 });
@@ -295,25 +268,20 @@ app.post("/session", async (req, res) => {
 // POST /chat
 app.post("/chat", async (req, res) => {
   const { mensaje, telefono } = req.body;
+  if (!mensaje || !telefono) return res.status(400).json({ error: "Faltan campos: mensaje y telefono" });
 
-  if (!mensaje || !telefono) {
-    return res.status(400).json({ error: "Faltan campos: mensaje y telefono" });
-  }
+  const patient = await db.getPatient(telefono);
+  if (!patient) return res.status(404).json({ error: "Sesión no encontrada. Llamá a POST /session primero." });
 
-  if (!patients[telefono]) {
-    return res.status(404).json({ error: "Sesión no encontrada. Llamá a POST /session primero." });
-  }
-
-  const patient = patients[telefono];
   const ahora = new Date().toISOString();
-  patient.displayHistory.push({ role: "user", text: mensaje, ts: ahora });
+  await db.addMessage(telefono, "user", mensaje, ahora);
 
   try {
     const reply = await runAgent(mensaje, telefono);
     await humanDelay(reply);
 
     const tsReply = new Date().toISOString();
-    patient.displayHistory.push({ role: "assistant", text: reply, ts: tsReply });
+    await db.addMessage(telefono, "assistant", reply, tsReply);
 
     res.json({ reply, ts: tsReply });
   } catch (err) {
@@ -323,29 +291,35 @@ app.post("/chat", async (req, res) => {
 });
 
 // DELETE /session/:telefono — borrar historial, mantener datos del paciente
-app.delete("/session/:telefono", (req, res) => {
+app.delete("/session/:telefono", async (req, res) => {
   const { telefono } = req.params;
-  if (patients[telefono]) {
-    patients[telefono].claudeHistory = [];
-    patients[telefono].displayHistory = [];
-  }
+  await db.clearMessages(telefono);
+  await db.clearClaudeHistory(telefono);
   res.json({ ok: true });
 });
 
-// GET /patients — ver todos los pacientes (debug)
-app.get("/patients", (req, res) => {
-  const resumen = Object.values(patients).map((p) => ({
-    telefono: p.telefono,
-    nombre: p.nombre,
-    dni: p.dni,
-    obra_social: p.obra_social,
-    mensajes: p.displayHistory.length,
-  }));
-  res.json(resumen);
+// GET /patients — todos los pacientes (para panel admin)
+app.get("/patients", async (req, res) => {
+  res.json(await db.getAllPatients());
+});
+
+// GET /patients/:telefono/messages — mensajes de un paciente (para panel admin)
+app.get("/patients/:telefono/messages", async (req, res) => {
+  res.json(await db.getMessages(req.params.telefono));
 });
 
 // Health check
 app.get("/health", (_, res) => res.json({ status: "ok" }));
 
-const PORT = process.env.PORT || 3000;
-app.listen(PORT, () => console.log(`Backend corriendo en http://localhost:${PORT}`));
+// ─────────────────────────────────────────────
+//  ARRANQUE — primero init DB, luego servidor
+// ─────────────────────────────────────────────
+db.initDB()
+  .then(() => {
+    const PORT = process.env.PORT || 3000;
+    app.listen(PORT, () => console.log(`Backend corriendo en http://localhost:${PORT}`));
+  })
+  .catch((err) => {
+    console.error("[db] Error al inicializar:", err);
+    process.exit(1);
+  });

@@ -1,6 +1,14 @@
 const { google } = require("googleapis");
+const path = require("path");
+const config = require(path.join(__dirname, "config/consultorio.json"));
 
-const CALENDAR_ID = process.env.CALENDAR_ID_DR_DIEGO;
+// Mapa de profesional_id -> variable de entorno del Calendar ID
+const CALENDAR_IDS = {
+  dr_diego: process.env.CALENDAR_ID_DR_DIEGO,
+};
+
+// Por ahora usamos el primero por defecto (para cuando hay un solo profesional)
+const CALENDAR_ID = CALENDAR_IDS[config.profesionales[0].id] || process.env.CALENDAR_ID_DR_DIEGO;
 
 function getAuthClient() {
   const credentials = JSON.parse(process.env.GOOGLE_SERVICE_ACCOUNT_JSON);
