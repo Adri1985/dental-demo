@@ -3,6 +3,7 @@ const { Pool } = require("pg");
 // Una sola variable de entorno maneja todo:
 // local:  DATABASE_URL=postgresql://localhost:5432/dental_demo
 // Render: DATABASE_URL=postgresql://user:pass@host:5432/dbname
+console.log("[db] DATABASE_URL:", process.env.DATABASE_URL ? "definida" : "UNDEFINED");
 const pool = new Pool({
   connectionString: process.env.DATABASE_URL,
   // En Render la conexión es SSL, localmente no
