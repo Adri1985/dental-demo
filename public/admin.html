@@ -1,0 +1,470 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Panel Admin — Mía</title>
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      background: #0b141a;
+      color: #e9edef;
+      height: 100vh;
+      height: 100dvh;
+      display: flex;
+      flex-direction: column;
+      overflow: hidden;
+    }
+
+    /* ── Header global ── */
+    .header {
+      background: #202c33;
+      padding: 14px 20px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      border-bottom: 1px solid #2a3942;
+      flex-shrink: 0;
+    }
+    .header-left { display: flex; align-items: center; gap: 10px; }
+    .back-btn {
+      background: none;
+      border: none;
+      color: #00a884;
+      font-size: 22px;
+      cursor: pointer;
+      padding: 0 4px;
+      display: none;
+    }
+    .header-title { font-size: 17px; font-weight: 600; }
+    .header-sub { font-size: 12px; color: #8696a0; margin-top: 1px; }
+    .live-badge {
+      background: #00a884;
+      color: white;
+      font-size: 11px;
+      padding: 3px 10px;
+      border-radius: 12px;
+      font-weight: 600;
+      flex-shrink: 0;
+    }
+
+    /* ── Layout principal ── */
+    .main {
+      display: flex;
+      flex: 1;
+      overflow: hidden;
+    }
+
+    /* ── Sidebar ── */
+    .sidebar {
+      width: 320px;
+      flex-shrink: 0;
+      border-right: 1px solid #2a3942;
+      display: flex;
+      flex-direction: column;
+      overflow: hidden;
+      transition: transform 0.25s ease;
+    }
+
+    .sidebar-header {
+      padding: 12px 16px;
+      background: #202c33;
+      border-bottom: 1px solid #2a3942;
+      font-size: 13px;
+      color: #8696a0;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      flex-shrink: 0;
+    }
+
+    .patient-list { overflow-y: auto; flex: 1; }
+    .patient-list::-webkit-scrollbar { width: 4px; }
+    .patient-list::-webkit-scrollbar-thumb { background: #2a3942; border-radius: 2px; }
+
+    .patient-item {
+      padding: 14px 16px;
+      border-bottom: 1px solid #1a2530;
+      cursor: pointer;
+      transition: background 0.15s;
+      display: flex;
+      align-items: center;
+      gap: 12px;
+    }
+    .patient-item:hover { background: #182229; }
+    .patient-item.active { background: #2a3942; }
+
+    .patient-avatar {
+      width: 44px; height: 44px;
+      border-radius: 50%;
+      background: #2a3942;
+      display: flex; align-items: center; justify-content: center;
+      font-size: 20px;
+      flex-shrink: 0;
+      position: relative;
+    }
+    .modo-badge {
+      position: absolute; bottom: -2px; right: -2px;
+      width: 14px; height: 14px;
+      border-radius: 50%;
+      border: 2px solid #0b141a;
+    }
+    .modo-badge.bot    { background: #00a884; }
+    .modo-badge.humano { background: #f59e0b; }
+
+    .patient-info { flex: 1; min-width: 0; }
+    .patient-name {
+      font-size: 15px; font-weight: 500;
+      white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+    }
+    .patient-preview {
+      font-size: 12px; color: #8696a0; margin-top: 2px;
+      white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+    }
+    .patient-meta { text-align: right; flex-shrink: 0; }
+    .patient-time { font-size: 11px; color: #8696a0; }
+    .patient-msgs { font-size: 11px; color: #8696a0; margin-top: 2px; }
+    .pausado-tag {
+      background: #f59e0b; color: #0b141a;
+      font-size: 10px; padding: 2px 6px;
+      border-radius: 8px; margin-top: 3px;
+      display: inline-block; font-weight: 600;
+    }
+
+    /* ── Panel conversación ── */
+    .convo-panel {
+      flex: 1;
+      display: flex;
+      flex-direction: column;
+      overflow: hidden;
+    }
+
+    .convo-header {
+      background: #202c33;
+      padding: 12px 16px;
+      border-bottom: 1px solid #2a3942;
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      flex-shrink: 0;
+    }
+    .convo-avatar {
+      width: 40px; height: 40px;
+      border-radius: 50%; background: #2a3942;
+      display: flex; align-items: center; justify-content: center;
+      font-size: 18px; flex-shrink: 0;
+    }
+    .convo-name { font-size: 15px; font-weight: 600; }
+    .convo-detail { font-size: 11px; color: #8696a0; margin-top: 1px; }
+    .convo-actions { margin-left: auto; display: flex; gap: 6px; flex-shrink: 0; }
+
+    .btn {
+      padding: 6px 12px;
+      border-radius: 8px; border: none;
+      font-size: 12px; font-weight: 600;
+      cursor: pointer; transition: opacity 0.15s;
+      white-space: nowrap;
+    }
+    .btn:hover { opacity: 0.85; }
+    .btn-pause  { background: #f59e0b; color: #0b141a; }
+    .btn-resume { background: #00a884; color: white; }
+    .btn-clear  { background: #2a3942; color: #e9edef; }
+
+    .messages-area {
+      flex: 1; overflow-y: auto;
+      padding: 16px;
+      display: flex; flex-direction: column; gap: 6px;
+    }
+    .messages-area::-webkit-scrollbar { width: 4px; }
+    .messages-area::-webkit-scrollbar-thumb { background: #2a3942; border-radius: 2px; }
+
+    .msg-wrap { display: flex; }
+    .msg-wrap.user      { justify-content: flex-end; }
+    .msg-wrap.assistant { justify-content: flex-start; }
+
+    .msg-bubble {
+      max-width: 70%;
+      padding: 8px 12px;
+      border-radius: 8px;
+      font-size: 14px; line-height: 1.45;
+      word-break: break-word;
+    }
+    .msg-wrap.user .msg-bubble      { background: #005c4b; border-top-right-radius: 2px; }
+    .msg-wrap.assistant .msg-bubble { background: #202c33; border-top-left-radius: 2px; }
+    .msg-time { font-size: 10px; color: #8696a0; margin-top: 3px; text-align: right; }
+
+    .date-sep { text-align: center; margin: 8px 0; }
+    .date-sep span {
+      background: #182229; color: #8696a0;
+      font-size: 11px; padding: 3px 10px; border-radius: 6px;
+    }
+
+    .patient-data-bar {
+      background: #182229;
+      border-top: 1px solid #2a3942;
+      padding: 8px 16px;
+      display: flex; flex-wrap: wrap; gap: 16px;
+      flex-shrink: 0;
+      font-size: 12px; color: #8696a0;
+    }
+    .patient-data-bar span { color: #e9edef; }
+
+    .empty {
+      flex: 1; display: flex;
+      flex-direction: column; align-items: center; justify-content: center;
+      color: #8696a0; gap: 12px;
+    }
+    .empty-icon { font-size: 48px; }
+    .empty-text { font-size: 15px; }
+
+    .no-patients {
+      padding: 32px 16px; text-align: center;
+      color: #8696a0; font-size: 14px;
+    }
+
+    /* ── MOBILE ── */
+    @media (max-width: 640px) {
+      .sidebar {
+        width: 100%;
+        position: absolute;
+        inset: 0;
+        top: 57px; /* altura del header */
+        z-index: 10;
+        background: #0b141a;
+      }
+      .sidebar.hidden { display: none; }
+
+      .convo-panel {
+        position: absolute;
+        inset: 0;
+        top: 57px;
+        z-index: 10;
+        background: #0b141a;
+        display: none;
+      }
+      .convo-panel.visible { display: flex; }
+
+      .back-btn { display: block; }
+
+      /* En mobile ocultar la columna derecha del header cuando estamos en la lista */
+      .convo-actions { flex-wrap: wrap; }
+      .btn { font-size: 11px; padding: 5px 10px; }
+    }
+  </style>
+</head>
+<body>
+
+<div class="header">
+  <div class="header-left">
+    <button class="back-btn" id="backBtn" onclick="goBack()">←</button>
+    <div>
+      <div class="header-title" id="headerTitle">Panel Admin — Mía</div>
+      <div class="header-sub" id="lastUpdate">Actualizando...</div>
+    </div>
+  </div>
+  <div class="live-badge">EN VIVO</div>
+</div>
+
+<div class="main">
+
+  <!-- Sidebar -->
+  <div class="sidebar" id="sidebar">
+    <div class="sidebar-header">
+      <span>Conversaciones</span>
+      <span id="totalCount">—</span>
+    </div>
+    <div class="patient-list" id="patientList">
+      <div class="no-patients">Cargando...</div>
+    </div>
+  </div>
+
+  <!-- Panel conversación -->
+  <div class="convo-panel" id="convoPanel">
+    <div class="empty">
+      <div class="empty-icon">💬</div>
+      <div class="empty-text">Seleccioná una conversación</div>
+    </div>
+  </div>
+
+</div>
+
+<script>
+  const API = "";
+  let selectedTel = null;
+  let patients = [];
+  const isMobile = () => window.innerWidth <= 640;
+
+  function fmtTime(iso) {
+    if (!iso) return "";
+    return new Date(iso).toLocaleTimeString("es-AR", { hour: "2-digit", minute: "2-digit" });
+  }
+  function fmtDate(iso) {
+    if (!iso) return "";
+    return new Date(iso).toLocaleDateString("es-AR", { weekday: "short", day: "numeric", month: "short" });
+  }
+  function escHtml(t) {
+    return (t||"").replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;").replace(/\n/g,"<br>");
+  }
+
+  // ── Navegación mobile ─────────────────────
+  function goBack() {
+    selectedTel = null;
+    if (isMobile()) {
+      document.getElementById("sidebar").classList.remove("hidden");
+      document.getElementById("convoPanel").classList.remove("visible");
+      document.getElementById("backBtn").style.display = "none";
+      document.getElementById("headerTitle").textContent = "Panel Admin — Mía";
+    }
+  }
+
+  function showConvo(patient) {
+    if (isMobile()) {
+      document.getElementById("sidebar").classList.add("hidden");
+      document.getElementById("convoPanel").classList.add("visible");
+      document.getElementById("backBtn").style.display = "block";
+      document.getElementById("headerTitle").textContent = patient.nombre || patient.telefono;
+    }
+  }
+
+  // ── Cargar pacientes ──────────────────────
+  async function loadPatients() {
+    try {
+      const res = await fetch(`${API}/patients`);
+      patients = await res.json();
+      renderSidebar();
+      if (selectedTel) loadMessages(selectedTel, false);
+      document.getElementById("lastUpdate").textContent = `Actualizado ${fmtTime(new Date().toISOString())}`;
+    } catch(e) { console.error(e); }
+  }
+
+  // ── Sidebar ───────────────────────────────
+  function renderSidebar() {
+    const list = document.getElementById("patientList");
+    document.getElementById("totalCount").textContent =
+      `${patients.length} paciente${patients.length !== 1 ? "s" : ""}`;
+
+    if (!patients.length) {
+      list.innerHTML = '<div class="no-patients">Sin conversaciones todavía</div>';
+      return;
+    }
+
+    list.innerHTML = patients.map(p => `
+      <div class="patient-item ${p.telefono === selectedTel ? "active" : ""}"
+           onclick="selectPatient('${p.telefono}')">
+        <div class="patient-avatar">
+          👤
+          <div class="modo-badge ${p.modo}"></div>
+        </div>
+        <div class="patient-info">
+          <div class="patient-name">${escHtml(p.nombre)}</div>
+          <div class="patient-preview">${escHtml(p.telefono)}</div>
+          ${p.modo === "humano" ? '<span class="pausado-tag">Esperando intervención</span>' : ""}
+        </div>
+        <div class="patient-meta">
+          <div class="patient-time">${fmtDate(p.updated_at)}</div>
+          <div class="patient-msgs">${p.total_mensajes} msg</div>
+        </div>
+      </div>
+    `).join("");
+  }
+
+  // ── Seleccionar paciente ──────────────────
+  async function selectPatient(telefono) {
+    selectedTel = telefono;
+    renderSidebar();
+    const patient = patients.find(p => p.telefono === telefono);
+    if (patient) showConvo(patient);
+    await loadMessages(telefono, true);
+  }
+
+  // ── Mensajes ──────────────────────────────
+  async function loadMessages(telefono, scrollBottom = false) {
+    const patient = patients.find(p => p.telefono === telefono);
+    if (!patient) return;
+
+    const res = await fetch(`${API}/patients/${telefono}/messages`);
+    const messages = await res.json();
+
+    const panel = document.getElementById("convoPanel");
+    panel.innerHTML = `
+      <div class="convo-header">
+        <div class="convo-avatar">👤</div>
+        <div style="flex:1;min-width:0">
+          <div class="convo-name">${escHtml(patient.nombre)}</div>
+          <div class="convo-detail">
+            ${escHtml(patient.telefono)}
+            ${patient.dni ? ` · DNI ${patient.dni}` : ""}
+            ${patient.obra_social ? ` · ${patient.obra_social}` : ""}
+            · <strong>${patient.modo === "humano" ? "⏸ Pausado" : "🤖 Bot activo"}</strong>
+          </div>
+        </div>
+        <div class="convo-actions">
+          ${patient.modo === "bot"
+            ? `<button class="btn btn-pause" onclick="pauseConvo('${telefono}')">Pausar</button>`
+            : `<button class="btn btn-resume" onclick="resumeConvo('${telefono}')">Reanudar</button>`}
+          <button class="btn btn-clear" onclick="clearConvo('${telefono}')">Borrar</button>
+        </div>
+      </div>
+      <div class="messages-area" id="messagesArea">
+        ${renderMessages(messages)}
+      </div>
+      <div class="patient-data-bar">
+        <div>Tel: <span>${patient.telefono}</span></div>
+        ${patient.dni ? `<div>DNI: <span>${patient.dni}</span></div>` : ""}
+        ${patient.obra_social ? `<div>OS: <span>${patient.obra_social}</span></div>` : ""}
+        <div>Mensajes: <span>${patient.total_mensajes}</span></div>
+        <div>Desde: <span>${fmtDate(patient.created_at)}</span></div>
+      </div>
+    `;
+
+    if (scrollBottom) {
+      const area = document.getElementById("messagesArea");
+      if (area) area.scrollTop = area.scrollHeight;
+    }
+  }
+
+  function renderMessages(messages) {
+    if (!messages.length) return '<div style="text-align:center;color:#8696a0;padding:32px">Sin mensajes</div>';
+    let html = "";
+    let lastDate = null;
+    messages.forEach(msg => {
+      const d = msg.ts ? new Date(msg.ts).toLocaleDateString("es-AR") : null;
+      if (d && d !== lastDate) {
+        html += `<div class="date-sep"><span>${d}</span></div>`;
+        lastDate = d;
+      }
+      html += `
+        <div class="msg-wrap ${msg.role}">
+          <div class="msg-bubble">
+            ${escHtml(msg.text)}
+            <div class="msg-time">${fmtTime(msg.ts)}</div>
+          </div>
+        </div>`;
+    });
+    return html;
+  }
+
+  // ── Acciones ──────────────────────────────
+  async function pauseConvo(tel) {
+    await fetch(`${API}/admin/pause/${tel}`, { method: "POST" });
+    await loadPatients();
+  }
+  async function resumeConvo(tel) {
+    await fetch(`${API}/admin/resume/${tel}`, { method: "POST" });
+    await loadPatients();
+  }
+  async function clearConvo(tel) {
+    if (!confirm("Borrar historial de esta conversación?")) return;
+    await fetch(`${API}/session/${tel}`, { method: "DELETE" });
+    await loadPatients();
+    if (selectedTel === tel) loadMessages(tel, true);
+  }
+
+  // ── Arranque ──────────────────────────────
+  loadPatients();
+  setInterval(loadPatients, 3000);
+</script>
+</body>
+</html>

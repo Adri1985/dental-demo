@@ -642,7 +642,10 @@
       const data = await res.json();
       hideTyping();
 
-      if (data.reply) {
+      if (data.pausado) {
+        // Bot pausado — mostrar aviso sutil
+        addSysNote("El consultorio está revisando tu consulta. Te responden pronto.");
+      } else if (data.reply) {
         addBubble("assistant", data.reply, data.ts);
       } else {
         addBubble("assistant", "Ups, algo falló. Intentá de nuevo.", null);

@@ -276,6 +276,11 @@ app.post("/chat", async (req, res) => {
   const ahora = new Date().toISOString();
   await db.addMessage(telefono, "user", mensaje, ahora);
 
+  // Si la conversación está pausada, no responder
+  if (patient.modo === "humano") {
+    return res.json({ reply: null, pausado: true });
+  }
+
   try {
     const reply = await runAgent(mensaje, telefono);
     await humanDelay(reply);
@@ -306,6 +311,20 @@ app.get("/patients", async (req, res) => {
 // GET /patients/:telefono/messages — mensajes de un paciente (para panel admin)
 app.get("/patients/:telefono/messages", async (req, res) => {
   res.json(await db.getMessages(req.params.telefono));
+});
+
+// POST /admin/pause/:telefono — pausar bot para una conversación
+app.post("/admin/pause/:telefono", async (req, res) => {
+  await db.setPatientMode(req.params.telefono, "humano");
+  res.json({ ok: true });
+});
+
+// POST /admin/resume/:telefono — reanudar bot
+app.post("/admin/resume/:telefono", async (req, res) => {
+  await db.setPatientMode(req.params.telefono, "bot");
+  // Limpiar historial de Claude para que arranque fresco
+  await db.clearClaudeHistory(req.params.telefono);
+  res.json({ ok: true });
 });
 
 // Health check
