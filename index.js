@@ -21,6 +21,29 @@ app.use(express.json());
 app.use(express.static(path.join(__dirname, "public")));
 
 // ─────────────────────────────────────────────
+//  WHATSAPP — enviar mensaje
+// ─────────────────────────────────────────────
+async function sendWhatsAppMessage(to, text) {
+  const token     = process.env.WHATSAPP_TOKEN;
+  const phoneId   = process.env.WHATSAPP_PHONE_NUMBER_ID;
+  if (!token || !phoneId) return;
+
+  await fetch(`https://graph.facebook.com/v19.0/${phoneId}/messages`, {
+    method: "POST",
+    headers: {
+      "Authorization": `Bearer ${token}`,
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify({
+      messaging_product: "whatsapp",
+      to,
+      type: "text",
+      text: { body: text },
+    }),
+  });
+}
+
+// ─────────────────────────────────────────────
 //  CONTEXTO DEL PACIENTE PARA CLAUDE
 // ─────────────────────────────────────────────
 function buildPatientContext(patient) {
@@ -95,7 +118,12 @@ async function executeTool(name, input, telefono) {
       console.error("Paciente:", input.paciente_nombre || patient?.nombre || "Desconocido");
       console.error("Teléfono:", telefono);
       console.error("Descripción:", input.descripcion);
-      // TODO: notificar al doctor por WhatsApp
+      // Notificar al doctor por WhatsApp si está configurado
+      const doctorTel = process.env.WHATSAPP_DOCTOR_TELEFONO;
+      if (doctorTel) {
+        const msg = `URGENCIA — ${input.paciente_nombre || patient?.nombre || "Paciente"} (${telefono})\n${input.descripcion}`;
+        await sendWhatsAppMessage(doctorTel, msg);
+      }
       return {
         ok: true,
         accion: `Alerta enviada al ${config.profesionales[0].nombre}. El paciente será contactado a la brevedad.`,
@@ -123,7 +151,6 @@ async function runAgent(userMessage, telefono) {
   const patient = await db.getPatient(telefono);
   let claudeHistory = await db.getClaudeHistory(telefono);
 
-  // Inyectar contexto del paciente al inicio de sesión
   if (claudeHistory.length === 0) {
     claudeHistory.push({ role: "user", content: buildPatientContext(patient) });
     claudeHistory.push({ role: "assistant", content: "Entendido, tengo los datos del paciente." });
@@ -174,120 +201,129 @@ async function runAgent(userMessage, telefono) {
 }
 
 // ─────────────────────────────────────────────
-//  ENDPOINTS
+//  WEBHOOK WHATSAPP
 // ─────────────────────────────────────────────
 
-// GET /session/:telefono
+// GET /webhook — verificación de Meta (se hace una sola vez al registrar)
+app.get("/webhook", (req, res) => {
+  const mode      = req.query["hub.mode"];
+  const token     = req.query["hub.verify_token"];
+  const challenge = req.query["hub.challenge"];
+
+  if (mode === "subscribe" && token === process.env.WHATSAPP_VERIFY_TOKEN) {
+    console.log("[webhook] verificado por Meta");
+    return res.status(200).send(challenge);
+  }
+
+  res.sendStatus(403);
+});
+
+// POST /webhook — mensajes entrantes de WhatsApp
+app.post("/webhook", async (req, res) => {
+  // Responder 200 inmediatamente para que Meta no reintente
+  res.sendStatus(200);
+
+  try {
+    const entry   = req.body?.entry?.[0];
+    const change  = entry?.changes?.[0];
+    const value   = change?.value;
+    const message = value?.messages?.[0];
+
+    // Solo procesar mensajes de texto
+    if (!message || message.type !== "text") return;
+
+    const telefono = message.from; // número del paciente en formato internacional
+    const texto    = message.text.body;
+
+    console.log(`[whatsapp] mensaje de ${telefono}: ${texto}`);
+
+    // Crear sesión si no existe
+    let patient = await db.getPatient(telefono);
+    if (!patient) {
+      // Intentar recuperar desde Google Calendar
+      let datosPrevios = null;
+      try {
+        datosPrevios = await findPatientByIdentifier(telefono, null);
+      } catch (e) {}
+
+      patient = await db.upsertPatient({
+        telefono,
+        nombre:      datosPrevios?.nombre      || "Paciente",
+        dni:         datosPrevios?.dni         || null,
+        obra_social: datosPrevios?.obra_social || null,
+      });
+    }
+
+    // Guardar mensaje del paciente
+    await db.addMessage(telefono, "user", texto, new Date().toISOString());
+
+    // Si está pausado, no responder
+    if (patient.modo === "humano") {
+      console.log(`[whatsapp] conversación pausada para ${telefono}`);
+      return;
+    }
+
+    // Procesar con el agente
+    const reply = await runAgent(texto, telefono);
+    await humanDelay(reply);
+
+    // Guardar y enviar respuesta
+    await db.addMessage(telefono, "assistant", reply, new Date().toISOString());
+    await sendWhatsAppMessage(telefono, reply);
+
+  } catch (err) {
+    console.error("[webhook error]", err);
+  }
+});
+
+// ─────────────────────────────────────────────
+//  ENDPOINTS WEB (chat HTML)
+// ─────────────────────────────────────────────
+
 app.get("/session/:telefono", async (req, res) => {
   const { telefono } = req.params;
-
-  // 1. Buscar en DB
   const patient = await db.getPatient(telefono);
   if (patient) {
     const displayHistory = await db.getMessages(telefono);
-    return res.json({
-      existe: true,
-      nombre: patient.nombre,
-      dni: patient.dni,
-      obra_social: patient.obra_social,
-      displayHistory,
-      fuente: "db",
-    });
+    return res.json({ existe: true, nombre: patient.nombre, dni: patient.dni, obra_social: patient.obra_social, displayHistory, fuente: "db" });
   }
-
-  // 2. Buscar en Google Calendar
   try {
     const encontrado = await findPatientByIdentifier(telefono, null);
     if (encontrado) {
-      console.log(`[calendar lookup] paciente encontrado: ${telefono}`, encontrado);
-      return res.json({
-        existe: true,
-        nombre: encontrado.nombre,
-        dni: encontrado.dni,
-        obra_social: encontrado.obra_social,
-        displayHistory: [],
-        fuente: "calendar",
-      });
+      return res.json({ existe: true, nombre: encontrado.nombre, dni: encontrado.dni, obra_social: encontrado.obra_social, displayHistory: [], fuente: "calendar" });
     }
-  } catch (err) {
-    console.error("[calendar lookup error]", err.message);
-  }
-
+  } catch (err) { console.error("[calendar lookup error]", err.message); }
   res.json({ existe: false });
 });
 
-// POST /session — crear o retomar sesión
 app.post("/session", async (req, res) => {
   const { telefono, nombre } = req.body;
   if (!telefono) return res.status(400).json({ error: "Falta el teléfono" });
-
-  // Ya existe en DB
   let patient = await db.getPatient(telefono);
   if (patient) {
-    if (nombre && nombre !== patient.nombre) {
-      await db.updatePatientData(telefono, { nombre });
-      patient = await db.getPatient(telefono);
-    }
+    if (nombre && nombre !== patient.nombre) { await db.updatePatientData(telefono, { nombre }); patient = await db.getPatient(telefono); }
     const displayHistory = await db.getMessages(telefono);
-    return res.json({
-      nueva: false,
-      nombre: patient.nombre,
-      dni: patient.dni,
-      obra_social: patient.obra_social,
-      displayHistory,
-    });
+    return res.json({ nueva: false, nombre: patient.nombre, dni: patient.dni, obra_social: patient.obra_social, displayHistory });
   }
-
-  // Buscar en Google Calendar
   let datosPrevios = null;
-  try {
-    datosPrevios = await findPatientByIdentifier(telefono, null);
-    if (datosPrevios) console.log(`[sesión recuperada desde calendar] ${telefono}`, datosPrevios);
-  } catch (err) {
-    console.error("[calendar lookup error]", err.message);
-  }
-
-  // Crear en DB
-  patient = await db.upsertPatient({
-    telefono,
-    nombre: datosPrevios?.nombre || nombre || "Paciente",
-    dni: datosPrevios?.dni || null,
-    obra_social: datosPrevios?.obra_social || null,
-  });
-
-  res.json({
-    nueva: !datosPrevios,
-    recuperado: !!datosPrevios,
-    nombre: patient.nombre,
-    dni: patient.dni,
-    obra_social: patient.obra_social,
-    displayHistory: [],
-  });
+  try { datosPrevios = await findPatientByIdentifier(telefono, null); } catch (err) {}
+  patient = await db.upsertPatient({ telefono, nombre: datosPrevios?.nombre || nombre || "Paciente", dni: datosPrevios?.dni || null, obra_social: datosPrevios?.obra_social || null });
+  res.json({ nueva: !datosPrevios, recuperado: !!datosPrevios, nombre: patient.nombre, dni: patient.dni, obra_social: patient.obra_social, displayHistory: [] });
 });
 
-// POST /chat
 app.post("/chat", async (req, res) => {
   const { mensaje, telefono } = req.body;
   if (!mensaje || !telefono) return res.status(400).json({ error: "Faltan campos: mensaje y telefono" });
-
   const patient = await db.getPatient(telefono);
-  if (!patient) return res.status(404).json({ error: "Sesión no encontrada. Llamá a POST /session primero." });
-
+  if (!patient) return res.status(404).json({ error: "Sesión no encontrada." });
   const ahora = new Date().toISOString();
   await db.addMessage(telefono, "user", mensaje, ahora);
-
-  // Si la conversación está pausada, no responder
-  if (patient.modo === "humano") {
-    return res.json({ reply: null, pausado: true });
-  }
-
+  if (patient.modo === "humano") return res.json({ reply: null, pausado: true });
   try {
     const reply = await runAgent(mensaje, telefono);
     await humanDelay(reply);
-
     const tsReply = new Date().toISOString();
     await db.addMessage(telefono, "assistant", reply, tsReply);
-
     res.json({ reply, ts: tsReply });
   } catch (err) {
     console.error("[error]", err);
@@ -295,43 +331,20 @@ app.post("/chat", async (req, res) => {
   }
 });
 
-// DELETE /session/:telefono — borrar historial, mantener datos del paciente
 app.delete("/session/:telefono", async (req, res) => {
-  const { telefono } = req.params;
-  await db.clearMessages(telefono);
-  await db.clearClaudeHistory(telefono);
-  res.json({ ok: true });
-});
-
-// GET /patients — todos los pacientes (para panel admin)
-app.get("/patients", async (req, res) => {
-  res.json(await db.getAllPatients());
-});
-
-// GET /patients/:telefono/messages — mensajes de un paciente (para panel admin)
-app.get("/patients/:telefono/messages", async (req, res) => {
-  res.json(await db.getMessages(req.params.telefono));
-});
-
-// POST /admin/pause/:telefono — pausar bot para una conversación
-app.post("/admin/pause/:telefono", async (req, res) => {
-  await db.setPatientMode(req.params.telefono, "humano");
-  res.json({ ok: true });
-});
-
-// POST /admin/resume/:telefono — reanudar bot
-app.post("/admin/resume/:telefono", async (req, res) => {
-  await db.setPatientMode(req.params.telefono, "bot");
-  // Limpiar historial de Claude para que arranque fresco
+  await db.clearMessages(req.params.telefono);
   await db.clearClaudeHistory(req.params.telefono);
   res.json({ ok: true });
 });
 
-// Health check
+app.get("/patients", async (req, res) => { res.json(await db.getAllPatients()); });
+app.get("/patients/:telefono/messages", async (req, res) => { res.json(await db.getMessages(req.params.telefono)); });
+app.post("/admin/pause/:telefono", async (req, res) => { await db.setPatientMode(req.params.telefono, "humano"); res.json({ ok: true }); });
+app.post("/admin/resume/:telefono", async (req, res) => { await db.setPatientMode(req.params.telefono, "bot"); await db.clearClaudeHistory(req.params.telefono); res.json({ ok: true }); });
 app.get("/health", (_, res) => res.json({ status: "ok" }));
 
 // ─────────────────────────────────────────────
-//  ARRANQUE — primero init DB, luego servidor
+//  ARRANQUE
 // ─────────────────────────────────────────────
 db.initDB()
   .then(() => {
