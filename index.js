@@ -26,9 +26,12 @@ app.use(express.static(path.join(__dirname, "public")));
 async function sendWhatsAppMessage(to, text) {
   const token     = process.env.WHATSAPP_TOKEN;
   const phoneId   = process.env.WHATSAPP_PHONE_NUMBER_ID;
-  if (!token || !phoneId) return;
+  if (!token || !phoneId) {
+    console.error("[wa-send] falta WHATSAPP_TOKEN o WHATSAPP_PHONE_NUMBER_ID");
+    return;
+  }
 
-  await fetch(`https://graph.facebook.com/v19.0/${phoneId}/messages`, {
+  const resp = await fetch(`https://graph.facebook.com/v19.0/${phoneId}/messages`, {
     method: "POST",
     headers: {
       "Authorization": `Bearer ${token}`,
@@ -41,6 +44,13 @@ async function sendWhatsAppMessage(to, text) {
       text: { body: text },
     }),
   });
+
+  const body = await resp.text();
+  if (!resp.ok) {
+    console.error(`[wa-send] Meta respondió ${resp.status}:`, body);
+  } else {
+    console.log("[wa-send] OK:", body);
+  }
 }
 
 // ─────────────────────────────────────────────
@@ -238,13 +248,25 @@ app.post("/webhook", async (req, res) => {
     console.log(`[whatsapp] mensaje de ${telefono}: ${texto}`);
 
     // Crear sesión si no existe
+    console.log("[wh] buscando paciente en db...");
     let patient = await db.getPatient(telefono);
+    console.log("[wh] paciente db:", patient ? "encontrado" : "no encontrado");
+
     if (!patient) {
-      // Intentar recuperar desde Google Calendar
+      // Intentar recuperar desde Google Calendar (con timeout para no colgar el webhook)
       let datosPrevios = null;
+      console.log("[wh] consultando Google Calendar...");
       try {
-        datosPrevios = await findPatientByIdentifier(telefono, null);
-      } catch (e) {}
+        datosPrevios = await Promise.race([
+          findPatientByIdentifier(telefono, null),
+          new Promise((_, reject) =>
+            setTimeout(() => reject(new Error("timeout Google Calendar (8s)")), 8000)
+          ),
+        ]);
+        console.log("[wh] respuesta de Calendar:", datosPrevios ? "encontrado" : "no encontrado");
+      } catch (e) {
+        console.error("[wh] error/timeout consultando Calendar:", e.message);
+      }
 
       patient = await db.upsertPatient({
         telefono,
@@ -252,10 +274,12 @@ app.post("/webhook", async (req, res) => {
         dni:         datosPrevios?.dni         || null,
         obra_social: datosPrevios?.obra_social || null,
       });
+      console.log("[wh] paciente creado en db");
     }
 
     // Guardar mensaje del paciente
     await db.addMessage(telefono, "user", texto, new Date().toISOString());
+    console.log("[wh] mensaje guardado");
 
     // Si está pausado, no responder
     if (patient.modo === "humano") {
@@ -264,15 +288,19 @@ app.post("/webhook", async (req, res) => {
     }
 
     // Procesar con el agente
+    console.log("[wh] llamando a runAgent...");
     const reply = await runAgent(texto, telefono);
+    console.log("[wh] runAgent respondió:", reply?.slice(0, 80));
     await humanDelay(reply);
 
     // Guardar y enviar respuesta
     await db.addMessage(telefono, "assistant", reply, new Date().toISOString());
+    console.log("[wh] enviando por WhatsApp...");
     await sendWhatsAppMessage(telefono, reply);
+    console.log("[wh] enviado OK");
 
   } catch (err) {
-    console.error("[webhook error]", err);
+    console.error("[webhook error]", err.message, err.stack);
   }
 });
 
