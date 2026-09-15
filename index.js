@@ -23,12 +23,28 @@ app.use(express.static(path.join(__dirname, "public")));
 // ─────────────────────────────────────────────
 //  WHATSAPP — enviar mensaje
 // ─────────────────────────────────────────────
+
+// Los números argentinos llegan como "549<area><numero>" (con el 9 móvil),
+// pero para ENVIAR hay que sacarle el 9: "54<area><numero>".
+// Ver: https://developers.facebook.com/community/threads/ (bug histórico de Meta con AR)
+function normalizarParaEnvioAR(numero) {
+  if (numero && numero.startsWith("549") && numero.length === 13) {
+    return "54" + numero.slice(3); // saca el "9"
+  }
+  return numero;
+}
+
 async function sendWhatsAppMessage(to, text) {
   const token     = process.env.WHATSAPP_TOKEN;
   const phoneId   = process.env.WHATSAPP_PHONE_NUMBER_ID;
   if (!token || !phoneId) {
     console.error("[wa-send] falta WHATSAPP_TOKEN o WHATSAPP_PHONE_NUMBER_ID");
     return;
+  }
+
+  const destinatario = normalizarParaEnvioAR(to);
+  if (destinatario !== to) {
+    console.log(`[wa-send] normalizado AR: ${to} -> ${destinatario}`);
   }
 
   const resp = await fetch(`https://graph.facebook.com/v19.0/${phoneId}/messages`, {
@@ -39,7 +55,7 @@ async function sendWhatsAppMessage(to, text) {
     },
     body: JSON.stringify({
       messaging_product: "whatsapp",
-      to,
+      to: destinatario,
       type: "text",
       text: { body: text },
     }),
