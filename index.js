@@ -159,7 +159,7 @@ async function runAgent(userMessage, telefono) {
   claudeHistory.push({ role: "user", content: userMessage });
 
   let response = await anthropic.messages.create({
-    model: "claude-sonnet-4-6",
+    model: "claude-sonnet-4-5",
     max_tokens: 1024,
     system: getSystemPrompt(),
     tools: TOOLS,
@@ -184,7 +184,7 @@ async function runAgent(userMessage, telefono) {
     claudeHistory.push({ role: "user", content: toolResults });
 
     response = await anthropic.messages.create({
-      model: "claude-sonnet-4-6",
+      model: "claude-sonnet-4-5",
       max_tokens: 1024,
       system: getSystemPrompt(),
       tools: TOOLS,
