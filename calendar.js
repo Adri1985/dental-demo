@@ -218,7 +218,7 @@ async function checkAvailability({ fecha_desde, fecha_hasta, duracion_minutos, e
   }
 
   console.log(`[checkAvailability] slots libres: ${slots.map(s => s.label).join(", ")}`);
-  return slots.slice(0, 6);
+  return slots.slice(0, 12);
 }
 
 /**
