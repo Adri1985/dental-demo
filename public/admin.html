@@ -234,13 +234,46 @@
 
 <!-- Modal configuración -->
 <div class="modal-overlay" id="configOverlay">
-  <div class="modal">
-    <div class="modal-title">Configuración</div>
+  <div class="modal" style="width:400px;max-width:95vw">
+    <div class="modal-title">Configuracion del consultorio</div>
 
+    <div style="font-size:12px;color:#8696a0;margin-top:-8px">Estilo de conversacion</div>
     <div class="modal-field">
-      <label class="modal-label">Número de WhatsApp del bot</label>
+      <select class="modal-input" id="cfgEstilo">
+        <option value="cercano">Cercano — informal, muletillas, como un amigo</option>
+        <option value="amigable">Amigable — voseo prolijo, cálida sin excesos</option>
+        <option value="profesional_amigable">Profesional amigable — cordial y clara, sin "che"</option>
+        <option value="formal">Formal — usted, tono médico profesional</option>
+        <option value="muy_formal">Muy formal — lenguaje clínico, máximo profesionalismo</option>
+      </select>
+    </div>
+
+    <div style="font-size:12px;color:#8696a0;margin-top:4px">Horarios de atención</div>
+    <div class="modal-row">
+      <div class="modal-field">
+        <label class="modal-label">Mañana desde</label>
+        <input class="modal-input" id="cfgMananaDesde" type="time" />
+      </div>
+      <div class="modal-field">
+        <label class="modal-label">Mañana hasta</label>
+        <input class="modal-input" id="cfgMananaHasta" type="time" />
+      </div>
+    </div>
+    <div class="modal-row">
+      <div class="modal-field">
+        <label class="modal-label">Tarde desde</label>
+        <input class="modal-input" id="cfgTardeDesde" type="time" />
+      </div>
+      <div class="modal-field">
+        <label class="modal-label">Tarde hasta</label>
+        <input class="modal-input" id="cfgTardeHasta" type="time" />
+      </div>
+    </div>
+
+    <div style="font-size:12px;color:#8696a0;margin-top:4px">WhatsApp</div>
+    <div class="modal-field">
+      <label class="modal-label">Número del bot (sin + ni espacios)</label>
       <input class="modal-input" id="cfgBotNumber" type="text" placeholder="15551445115" />
-      <span style="font-size:11px;color:#8696a0;margin-top:4px">Sin + ni espacios. Ej: 15551445115</span>
     </div>
 
     <div class="modal-actions">
@@ -254,7 +287,8 @@
   const API = "";
 
   // ── IMPORTANTE: cambiá este número por el del bot (sin + ni espacios) ──
-  const BOT_NUMBER = localStorage.getItem("cfg_bot_number") || "15551445115";
+  let BOT_NUMBER = "15551445115"; // se actualiza al cargar config
+  fetch(`${API}/config`).then(r => r.json()).then(cfg => { if (cfg.bot_whatsapp_number) BOT_NUMBER = cfg.bot_whatsapp_number; }).catch(() => {});
 
   let selectedTel   = null;
   let patients      = [];
@@ -534,8 +568,17 @@
   }
 
   // ── Configuración ─────────────────────────
-  function abrirConfig() {
-    document.getElementById("cfgBotNumber").value = localStorage.getItem("cfg_bot_number") || "15551445115";
+  async function abrirConfig() {
+    try {
+      const res = await fetch(`${API}/config`);
+      const cfg = await res.json();
+      document.getElementById("cfgEstilo").value       = cfg.estilo_conversacion  || "profesional_amigable";
+      document.getElementById("cfgMananaDesde").value  = cfg.horario_manana_desde || "09:30";
+      document.getElementById("cfgMananaHasta").value  = cfg.horario_manana_hasta || "13:00";
+      document.getElementById("cfgTardeDesde").value   = cfg.horario_tarde_desde  || "14:00";
+      document.getElementById("cfgTardeHasta").value   = cfg.horario_tarde_hasta  || "17:00";
+      document.getElementById("cfgBotNumber").value    = cfg.bot_whatsapp_number  || "15551445115";
+    } catch(e) { console.error("Error cargando config:", e); }
     document.getElementById("configOverlay").classList.add("show");
   }
 
@@ -543,12 +586,30 @@
     document.getElementById("configOverlay").classList.remove("show");
   }
 
-  function guardarConfig() {
+  async function guardarConfig() {
     const num = document.getElementById("cfgBotNumber").value.trim().replace(/\D/g, "");
     if (!num) { showToast("Ingresá un número válido"); return; }
-    localStorage.setItem("cfg_bot_number", num);
-    cerrarConfig();
-    showToast("Configuración guardada");
+
+    const payload = {
+      estilo_conversacion:  document.getElementById("cfgEstilo").value,
+      horario_manana_desde: document.getElementById("cfgMananaDesde").value,
+      horario_manana_hasta: document.getElementById("cfgMananaHasta").value,
+      horario_tarde_desde:  document.getElementById("cfgTardeDesde").value,
+      horario_tarde_hasta:  document.getElementById("cfgTardeHasta").value,
+      bot_whatsapp_number:  num,
+    };
+
+    try {
+      await fetch(`${API}/config`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(payload),
+      });
+      cerrarConfig();
+      showToast("Configuración guardada. Efectiva en el próximo mensaje.");
+    } catch(e) {
+      showToast("Error guardando configuración");
+    }
   }
 
   document.getElementById("configOverlay").addEventListener("click", (e) => {
