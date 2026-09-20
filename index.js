@@ -10,7 +10,7 @@ const {
   findPatientByIdentifier,
   getPatientAppointments,
 } = require("./calendar");
-const { getSystemPrompt, TOOLS, config } = require("./agent");
+const { getSystemPrompt, TOOLS, config, ESTILOS } = require("./agent");
 const db = require("./db");
 
 const app = express();
@@ -394,6 +394,26 @@ app.get("/patients", async (req, res) => { res.json(await db.getAllPatients()); 
 app.get("/patients/:telefono/messages", async (req, res) => { res.json(await db.getMessages(req.params.telefono)); });
 app.post("/admin/pause/:telefono", async (req, res) => { await db.setPatientMode(req.params.telefono, "humano"); res.json({ ok: true }); });
 app.post("/admin/resume/:telefono", async (req, res) => { await db.setPatientMode(req.params.telefono, "bot"); await db.clearClaudeHistory(req.params.telefono); res.json({ ok: true }); });
+// GET /config — leer configuración del consultorio
+app.get("/config", async (req, res) => {
+  res.json(await db.getConfig());
+});
+
+// PATCH /config — actualizar uno o varios valores
+app.patch("/config", async (req, res) => {
+  const campos = req.body;
+  const permitidos = ["horario_manana_desde","horario_manana_hasta","horario_tarde_desde","horario_tarde_hasta","estilo_conversacion","bot_whatsapp_number"];
+  for (const [clave, valor] of Object.entries(campos)) {
+    if (permitidos.includes(clave)) await db.setConfig(clave, valor);
+  }
+  res.json({ ok: true, config: await db.getConfig() });
+});
+
+// GET /config/estilos — lista de estilos disponibles
+app.get("/config/estilos", (req, res) => {
+  res.json(Object.entries(ESTILOS).map(([key, e]) => ({ key, label: e.label })));
+});
+
 app.get("/health", (_, res) => res.json({ status: "ok" }));
 
 // ─────────────────────────────────────────────
