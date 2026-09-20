@@ -23,36 +23,26 @@ app.use(express.static(path.join(__dirname, "public")));
 // ─────────────────────────────────────────────
 //  WHATSAPP — enviar mensaje
 // ─────────────────────────────────────────────
-
-// Los números argentinos llegan como "549<area><numero>" (con el 9 móvil),
-// pero para ENVIAR hay que sacarle el 9: "54<area><numero>".
-// Ver: https://developers.facebook.com/community/threads/ (bug histórico de Meta con AR)
 function normalizarParaEnvioAR(numero) {
   if (numero && numero.startsWith("549") && numero.length === 13) {
-    return "54" + numero.slice(3); // saca el "9"
+    return "54" + numero.slice(3);
   }
   return numero;
 }
 
 async function sendWhatsAppMessage(to, text) {
-  const token     = process.env.WHATSAPP_TOKEN;
-  const phoneId   = process.env.WHATSAPP_PHONE_NUMBER_ID;
+  const token   = process.env.WHATSAPP_TOKEN;
+  const phoneId = process.env.WHATSAPP_PHONE_NUMBER_ID;
   if (!token || !phoneId) {
     console.error("[wa-send] falta WHATSAPP_TOKEN o WHATSAPP_PHONE_NUMBER_ID");
     return;
   }
-
   const destinatario = normalizarParaEnvioAR(to);
-  if (destinatario !== to) {
-    console.log(`[wa-send] normalizado AR: ${to} -> ${destinatario}`);
-  }
+  if (destinatario !== to) console.log(`[wa-send] normalizado AR: ${to} -> ${destinatario}`);
 
   const resp = await fetch(`https://graph.facebook.com/v19.0/${phoneId}/messages`, {
     method: "POST",
-    headers: {
-      "Authorization": `Bearer ${token}`,
-      "Content-Type": "application/json",
-    },
+    headers: { "Authorization": `Bearer ${token}`, "Content-Type": "application/json" },
     body: JSON.stringify({
       messaging_product: "whatsapp",
       to: destinatario,
@@ -60,13 +50,9 @@ async function sendWhatsAppMessage(to, text) {
       text: { body: text },
     }),
   });
-
   const body = await resp.text();
-  if (!resp.ok) {
-    console.error(`[wa-send] Meta respondió ${resp.status}:`, body);
-  } else {
-    console.log("[wa-send] OK:", body);
-  }
+  if (!resp.ok) console.error(`[wa-send] Meta respondió ${resp.status}:`, body);
+  else console.log("[wa-send] OK:", body);
 }
 
 // ─────────────────────────────────────────────
@@ -75,7 +61,6 @@ async function sendWhatsAppMessage(to, text) {
 function buildPatientContext(patient) {
   const { nombre, dni, obra_social, telefono } = patient;
   const completo = nombre && dni && obra_social;
-
   if (completo) {
     return `[DATOS DEL PACIENTE]
 Nombre: ${nombre}
@@ -84,7 +69,6 @@ Obra social: ${obra_social}
 Teléfono: ${telefono}
 Estado: paciente existente — NO pedir estos datos nuevamente.`;
   }
-
   return `[DATOS DEL PACIENTE]
 Nombre: ${nombre || "desconocido"}
 DNI: ${dni || "pendiente"}
@@ -103,12 +87,9 @@ async function executeTool(name, input, telefono) {
   switch (name) {
     case "check_availability": {
       const slots = await checkAvailability(input);
-      if (slots.length === 0) {
-        return { disponible: false, mensaje: "No encontré turnos libres en ese período." };
-      }
+      if (slots.length === 0) return { disponible: false, mensaje: "No encontré turnos libres en ese período." };
       return { disponible: true, slots };
     }
-
     case "create_appointment": {
       const inputEnriquecido = {
         ...input,
@@ -119,16 +100,12 @@ async function executeTool(name, input, telefono) {
       };
       return await createAppointment(inputEnriquecido);
     }
-
-    case "cancel_appointment": {
+    case "cancel_appointment":
       return await cancelAppointment(input);
-    }
-
     case "get_patient_appointments": {
       const turnos = await getPatientAppointments(telefono, patient?.dni);
       return { turnos };
     }
-
     case "save_patient_data": {
       const updated = await db.updatePatientData(telefono, {
         nombre:      input.nombre      || null,
@@ -138,24 +115,18 @@ async function executeTool(name, input, telefono) {
       console.log(`[paciente actualizado]`, updated);
       return { ok: true, guardado: updated };
     }
-
     case "flag_critical_issue": {
       console.error("🚨 URGENCIA DENTAL 🚨");
       console.error("Paciente:", input.paciente_nombre || patient?.nombre || "Desconocido");
       console.error("Teléfono:", telefono);
       console.error("Descripción:", input.descripcion);
-      // Notificar al doctor por WhatsApp si está configurado
       const doctorTel = process.env.WHATSAPP_DOCTOR_TELEFONO;
       if (doctorTel) {
         const msg = `URGENCIA — ${input.paciente_nombre || patient?.nombre || "Paciente"} (${telefono})\n${input.descripcion}`;
         await sendWhatsAppMessage(doctorTel, msg);
       }
-      return {
-        ok: true,
-        accion: `Alerta enviada al ${config.profesionales[0].nombre}. El paciente será contactado a la brevedad.`,
-      };
+      return { ok: true, accion: `Alerta enviada al ${config.profesionales[0].nombre}. El paciente será contactado a la brevedad.` };
     }
-
     default:
       return { error: `Tool desconocida: ${name}` };
   }
@@ -171,7 +142,7 @@ function humanDelay(text) {
 }
 
 // ─────────────────────────────────────────────
-//  LOOP PRINCIPAL DEL AGENTE
+//  LOOP PRINCIPAL DEL AGENTE — con prompt caching
 // ─────────────────────────────────────────────
 async function runAgent(userMessage, telefono) {
   const patient = await db.getPatient(telefono);
@@ -184,10 +155,20 @@ async function runAgent(userMessage, telefono) {
 
   claudeHistory.push({ role: "user", content: userMessage });
 
+  // ── Prompt caching: el system prompt y las tools se cachean ──
+  // Reduce el costo de tokens de input hasta un 90% en conversaciones largas
+  const systemWithCache = [
+    {
+      type: "text",
+      text: getSystemPrompt(),
+      cache_control: { type: "ephemeral" },
+    },
+  ];
+
   let response = await anthropic.messages.create({
     model: "claude-sonnet-4-5",
     max_tokens: 1024,
-    system: getSystemPrompt(),
+    system: systemWithCache,
     tools: TOOLS,
     messages: claudeHistory,
   });
@@ -198,11 +179,7 @@ async function runAgent(userMessage, telefono) {
     const toolResults = await Promise.all(
       toolUseBlocks.map(async (block) => {
         const result = await executeTool(block.name, block.input, telefono);
-        return {
-          type: "tool_result",
-          tool_use_id: block.id,
-          content: JSON.stringify(result),
-        };
+        return { type: "tool_result", tool_use_id: block.id, content: JSON.stringify(result) };
       })
     );
 
@@ -212,7 +189,7 @@ async function runAgent(userMessage, telefono) {
     response = await anthropic.messages.create({
       model: "claude-sonnet-4-5",
       max_tokens: 1024,
-      system: getSystemPrompt(),
+      system: systemWithCache,
       tools: TOOLS,
       messages: claudeHistory,
     });
@@ -220,7 +197,6 @@ async function runAgent(userMessage, telefono) {
 
   const finalText = response.content.find((b) => b.type === "text")?.text || "No pude procesar eso.";
   claudeHistory.push({ role: "assistant", content: response.content });
-
   await db.saveClaudeHistory(telefono, claudeHistory);
 
   return finalText;
@@ -229,61 +205,47 @@ async function runAgent(userMessage, telefono) {
 // ─────────────────────────────────────────────
 //  WEBHOOK WHATSAPP
 // ─────────────────────────────────────────────
-
-// GET /webhook — verificación de Meta (se hace una sola vez al registrar)
 app.get("/webhook", (req, res) => {
   const mode      = req.query["hub.mode"];
   const token     = req.query["hub.verify_token"];
   const challenge = req.query["hub.challenge"];
-
   if (mode === "subscribe" && token === process.env.WHATSAPP_VERIFY_TOKEN) {
     console.log("[webhook] verificado por Meta");
     return res.status(200).send(challenge);
   }
-
   res.sendStatus(403);
 });
 
-// POST /webhook — mensajes entrantes de WhatsApp
 app.post("/webhook", async (req, res) => {
-  // Responder 200 inmediatamente para que Meta no reintente
   res.sendStatus(200);
-
   try {
     const entry   = req.body?.entry?.[0];
     const change  = entry?.changes?.[0];
     const value   = change?.value;
     const message = value?.messages?.[0];
 
-    // Solo procesar mensajes de texto
     if (!message || message.type !== "text") return;
 
-    const telefono = message.from; // número del paciente en formato internacional
+    const telefono = message.from;
     const texto    = message.text.body;
-
     console.log(`[whatsapp] mensaje de ${telefono}: ${texto}`);
 
-    // Crear sesión si no existe
     console.log("[wh] buscando paciente en db...");
     let patient = await db.getPatient(telefono);
     console.log("[wh] paciente db:", patient ? "encontrado" : "no encontrado");
 
     if (!patient) {
-      // Intentar recuperar desde Google Calendar (con timeout para no colgar el webhook)
       let datosPrevios = null;
       console.log("[wh] consultando Google Calendar...");
       try {
         datosPrevios = await Promise.race([
           findPatientByIdentifier(telefono, null),
-          new Promise((_, reject) =>
-            setTimeout(() => reject(new Error("timeout Google Calendar (8s)")), 8000)
-          ),
+          new Promise((_, reject) => setTimeout(() => reject(new Error("timeout Google Calendar (8s)")), 8000)),
         ]);
         console.log("[wh] respuesta de Calendar:", datosPrevios ? "encontrado" : "no encontrado");
       } catch (e) {
         console.error("[wh] error/timeout consultando Calendar:", e.message);
       }
-
       patient = await db.upsertPatient({
         telefono,
         nombre:      datosPrevios?.nombre      || "Paciente",
@@ -293,23 +255,19 @@ app.post("/webhook", async (req, res) => {
       console.log("[wh] paciente creado en db");
     }
 
-    // Guardar mensaje del paciente
     await db.addMessage(telefono, "user", texto, new Date().toISOString());
     console.log("[wh] mensaje guardado");
 
-    // Si está pausado, no responder
     if (patient.modo === "humano") {
       console.log(`[whatsapp] conversación pausada para ${telefono}`);
       return;
     }
 
-    // Procesar con el agente
     console.log("[wh] llamando a runAgent...");
     const reply = await runAgent(texto, telefono);
     console.log("[wh] runAgent respondió:", reply?.slice(0, 80));
-    await humanDelay(reply);
 
-    // Guardar y enviar respuesta
+    await humanDelay(reply);
     await db.addMessage(telefono, "assistant", reply, new Date().toISOString());
     console.log("[wh] enviando por WhatsApp...");
     await sendWhatsAppMessage(telefono, reply);
@@ -323,7 +281,6 @@ app.post("/webhook", async (req, res) => {
 // ─────────────────────────────────────────────
 //  ENDPOINTS WEB (chat HTML)
 // ─────────────────────────────────────────────
-
 app.get("/session/:telefono", async (req, res) => {
   const { telefono } = req.params;
   const patient = await db.getPatient(telefono);
@@ -333,9 +290,7 @@ app.get("/session/:telefono", async (req, res) => {
   }
   try {
     const encontrado = await findPatientByIdentifier(telefono, null);
-    if (encontrado) {
-      return res.json({ existe: true, nombre: encontrado.nombre, dni: encontrado.dni, obra_social: encontrado.obra_social, displayHistory: [], fuente: "calendar" });
-    }
+    if (encontrado) return res.json({ existe: true, nombre: encontrado.nombre, dni: encontrado.dni, obra_social: encontrado.obra_social, displayHistory: [], fuente: "calendar" });
   } catch (err) { console.error("[calendar lookup error]", err.message); }
   res.json({ existe: false });
 });
