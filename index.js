@@ -230,6 +230,60 @@ app.post("/webhook", async (req, res) => {
     const texto    = message.text.body;
     console.log(`[whatsapp] mensaje de ${telefono}: ${texto}`);
 
+    // ── Detección de turno directo (generado desde el panel admin) ──
+    // Formato: TURNO_DIRECTO|Nombre Paciente|Práctica|YYYY-MM-DD|HH:MM
+    if (texto.startsWith("TURNO_DIRECTO|")) {
+      const partes = texto.split("|");
+      if (partes.length === 5) {
+        const [, nombrePaciente, practica, fecha, hora] = partes;
+        const fechaHora = `${fecha}T${hora}:00-03:00`;
+
+        // Duraciones por práctica
+        const duraciones = {
+          "Control de rutina": 30, "Limpieza dental": 45,
+          "Extracción simple": 60, "Blanqueamiento": 60,
+          "Control de ortodoncia": 30, "Implante": 90,
+        };
+        const duracion = duraciones[practica] || 30;
+
+        // Crear o retomar sesión del paciente
+        let patient = await db.getPatient(telefono);
+        if (!patient) {
+          patient = await db.upsertPatient({ telefono, nombre: nombrePaciente, dni: null, obra_social: null });
+        }
+        await db.addMessage(telefono, "user", texto, new Date().toISOString());
+
+        // Intentar crear el turno directamente
+        const { createAppointment } = require("./calendar");
+        const resultado = await createAppointment({
+          paciente_nombre:      patient.nombre || nombrePaciente,
+          paciente_telefono:    telefono,
+          paciente_dni:         patient.dni,
+          paciente_obra_social: patient.obra_social,
+          fecha_hora:           fechaHora,
+          tipo_practica:        practica,
+          duracion_minutos:     duracion,
+        });
+
+        let reply;
+        if (resultado.ok) {
+          const fechaLegible = new Date(fechaHora).toLocaleString("es-AR", {
+            weekday: "long", day: "numeric", month: "long",
+            hour: "2-digit", minute: "2-digit",
+            timeZone: "America/Argentina/Buenos_Aires",
+          });
+          reply = `Turno confirmado. Te esperamos el ${fechaLegible} para ${practica.toLowerCase()}. Si necesitas cancelar o cambiar el horario, avisanos con 24hs de anticipación.`;
+        } else {
+          reply = `El horario solicitado ya no está disponible. Pedile al doctor que te mande un nuevo link con otro horario libre.`;
+        }
+
+        await db.addMessage(telefono, "assistant", reply, new Date().toISOString());
+        await sendWhatsAppMessage(telefono, reply);
+        console.log("[wh] turno directo procesado");
+        return;
+      }
+    }
+
     console.log("[wh] buscando paciente en db...");
     let patient = await db.getPatient(telefono);
     console.log("[wh] paciente db:", patient ? "encontrado" : "no encontrado");
