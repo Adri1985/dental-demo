@@ -2,9 +2,44 @@ const path = require("path");
 const config = require(path.join(__dirname, "config/consultorio.json"));
 
 // ─────────────────────────────────────────────
+//  Estilos de conversación disponibles
+// ─────────────────────────────────────────────
+const ESTILOS = {
+  cercano: {
+    label: "Cercano",
+    prompt: `Hablás de manera muy informal y cercana, como un amigo de confianza.
+Usás el voseo rioplatense con muletillas frecuentes: "dale", "re bien", "genial", "buenísimo".
+Frases cortas, tono de chat entre amigos.`,
+  },
+  amigable: {
+    label: "Amigable",
+    prompt: `Hablás de manera informal pero prolija, como una secretaria simpática.
+Usás el voseo rioplatense. Sos cálida pero sin excesos.
+Alguna muletilla ocasional ("perfecto", "anotado") pero sin abusar.`,
+  },
+  profesional_amigable: {
+    label: "Profesional amigable",
+    prompt: `Hablás de manera profesional pero cálida, como una secretaria de consultorio médico bien entrenada.
+Usás el voseo pero con moderación. No usás "che" ni muletillas informales.
+Sos cordial, clara y directa. Transmitís confianza sin ser fría.`,
+  },
+  formal: {
+    label: "Formal",
+    prompt: `Hablás de manera formal, usando "usted" para dirigirte al paciente.
+Oraciones completas, tono de atención médica profesional.
+Cordial pero estructurado. Sin contracciones ni coloquialismos.`,
+  },
+  muy_formal: {
+    label: "Muy formal",
+    prompt: `Hablás con lenguaje clínico y muy formal, usando "usted" siempre.
+Respuestas estructuradas y precisas. Tono de consultorio especializado.
+Sin nada informal. Máxima claridad y profesionalismo.`,
+  },
+};
+
+// ─────────────────────────────────────────────
 //  Helpers para construir texto desde el config
 // ─────────────────────────────────────────────
-
 function buildPracticasText() {
   return config.practicas.map(p => {
     let texto = `- ${p.nombre}: ${p.duracion} minutos`;
@@ -15,20 +50,19 @@ function buildPracticasText() {
   }).join("\n");
 }
 
-function buildHorariosText() {
-  return config.profesionales.map(p => {
-    const h = p.horarios;
-    return `- ${p.nombre}: ${h.dias} de ${h.manana.desde} a ${h.manana.hasta} y ${h.tarde.desde} a ${h.tarde.hasta} (último turno a las ${h.tarde.ultimo_turno})`;
-  }).join("\n");
-}
-
 function buildProfesionalesEnum() {
   return config.profesionales.map(p => p.id);
 }
 
-function buildKnowledgeBase() {
+function buildKnowledgeBase(cfg = {}) {
   const precio = config.precio_consulta.toLocaleString("es-AR");
   const pol = config.politica;
+
+  // Horarios: primero desde DB config, fallback a consultorio.json
+  const mananaDesde = cfg.horario_manana_desde || config.profesionales[0].horarios.manana.desde;
+  const mananaHasta = cfg.horario_manana_hasta || config.profesionales[0].horarios.manana.hasta;
+  const tardeDesde  = cfg.horario_tarde_desde  || config.profesionales[0].horarios.tarde.desde;
+  const tardeHasta  = cfg.horario_tarde_hasta  || config.profesionales[0].horarios.tarde.hasta;
 
   return `
 CONSULTORIO:
@@ -36,7 +70,7 @@ CONSULTORIO:
 ${config.consultorio.direccion ? `- Dirección: ${config.consultorio.direccion}` : ""}
 
 PROFESIONALES Y HORARIOS:
-${buildHorariosText()}
+- ${config.profesionales[0].nombre}: ${config.profesionales[0].horarios.dias} de ${mananaDesde} a ${mananaHasta} y ${tardeDesde} a ${tardeHasta} (último turno a las ${tardeHasta})
 
 VALOR DE CONSULTA:
 - Consulta estándar: $${precio} pesos
@@ -74,9 +108,9 @@ ${config.palabras_alarma.join(", ")}
 }
 
 // ─────────────────────────────────────────────
-//  SYSTEM PROMPT — se evalúa en cada llamada
+//  SYSTEM PROMPT — acepta config de DB
 // ─────────────────────────────────────────────
-const getSystemPrompt = () => {
+const getSystemPrompt = (cfg = {}) => {
   const ahora = new Date().toLocaleString("es-AR", {
     timeZone: "America/Argentina/Buenos_Aires",
     weekday: "long", year: "numeric", month: "long",
@@ -86,21 +120,23 @@ const getSystemPrompt = () => {
   const profesional = config.profesionales[0].nombre;
   const asistente   = config.asistente.nombre;
 
+  // Estilo desde DB, fallback a profesional_amigable
+  const estiloKey = cfg.estilo_conversacion || "profesional_amigable";
+  const estilo    = ESTILOS[estiloKey] || ESTILOS.profesional_amigable;
+
   return `
 La fecha y hora actual en Argentina es: ${ahora}.
 Usá siempre esta fecha como referencia para buscar turnos. Nunca uses fechas de 2024 o 2025.
 
 Sos ${asistente}, la asistente del consultorio de ${profesional}.
-Hablás de manera informal y cercana, como lo haría una secretaria de confianza por WhatsApp.
-Usás el voseo rioplatense. Escribís mensajes cortos, nunca parrafotes largos.
+${estilo.prompt}
+
+Escribís mensajes cortos, nunca parrafotes largos.
 No usás listas con guiones ni bullets. Escribís en texto plano, como en una conversación real.
-Usás muletillas naturales como "dale", "perfecto", "anotado", "listo", "re bien".
-Si el paciente escribe informal, respondés igual de informal.
 
 ESTILO DE ESCRITURA — MUY IMPORTANTE:
 - NUNCA uses emojis. Ni uno solo.
-- NUNCA abras signos de puntuación: escribís "Hola, cómo andás?" no "¡Hola, cómo andás!". Solo cerrás.
-- No uses signos de exclamación de apertura (¡) ni de interrogación de apertura (¿).
+- NUNCA abras signos de puntuación. Solo cerrás: "Hola, cómo andás?" no "¡Hola!"
 - No uses negritas (**texto**) ni ningún formato markdown.
 - Escribís como si fuera un mensaje de WhatsApp real de una persona, no de un asistente.
 - Nada de frases grandilocuentes como "Por supuesto!", "Claro que sí!", "Encantada de ayudarte!".
@@ -111,14 +147,6 @@ CÓMO USÁS LOS DATOS DEL PACIENTE:
 - Si el paciente ya tiene nombre, DNI y obra social guardados, NO los volvás a pedir.
 - Si faltan datos (paciente nuevo), pedís uno por vez, no todos juntos.
 - Cuando guardés datos nuevos o actualizados, usá la tool save_patient_data.
-
-EJEMPLOS DE CÓMO ESCRIBÍS:
-
-MAL: "Hola! Soy ${asistente}, la asistente virtual. En qué puedo ayudarte hoy?"
-BIEN: "Hola, cómo andás?"
-
-MAL: "Para continuar necesito tu nombre completo, DNI y obra social."
-BIEN: "Me decís tu nombre completo?" (luego DNI, luego obra social — de a uno)
 
 REGLAS IMPORTANTES:
 - Nunca ofrezcas un horario sin antes verificar disponibilidad con check_availability.
@@ -137,13 +165,12 @@ REGLAS DE REAGENDAMIENTO — MUY IMPORTANTE:
   6. NUNCA cancelar antes de que el nuevo turno esté confirmado y creado exitosamente
 - Si create_appointment falla, NO cancelar el turno original. Avisar al paciente y ofrecer otro horario.
 
-${buildKnowledgeBase()}
+${buildKnowledgeBase(cfg)}
 `;
 };
 
 // ─────────────────────────────────────────────
-//  TOOLS — con cache_control en el último tool
-//  para activar prompt caching en Anthropic API
+//  TOOLS
 // ─────────────────────────────────────────────
 const TOOLS = [
   {
@@ -152,15 +179,11 @@ const TOOLS = [
     input_schema: {
       type: "object",
       properties: {
-        profesional_id: {
-          type: "string",
-          enum: buildProfesionalesEnum(),
-          description: "ID del profesional cuya agenda consultar",
-        },
-        fecha_desde:       { type: "string", description: "ISO 8601 con timezone, ej: 2026-07-07T09:30:00-03:00" },
-        fecha_hasta:       { type: "string", description: "ISO 8601 con timezone, ej: 2026-07-11T17:00:00-03:00" },
-        duracion_minutos:  { type: "number" },
-        excluir_event_id:  { type: "string", description: "ID del evento a excluir en reagendamiento" },
+        profesional_id:   { type: "string", enum: buildProfesionalesEnum(), description: "ID del profesional cuya agenda consultar" },
+        fecha_desde:      { type: "string", description: "ISO 8601 con timezone, ej: 2026-07-07T09:30:00-03:00" },
+        fecha_hasta:      { type: "string", description: "ISO 8601 con timezone, ej: 2026-07-11T17:00:00-03:00" },
+        duracion_minutos: { type: "number" },
+        excluir_event_id: { type: "string", description: "ID del evento a excluir en reagendamiento" },
       },
       required: ["fecha_desde", "fecha_hasta", "duracion_minutos"],
     },
@@ -186,11 +209,7 @@ const TOOLS = [
   {
     name: "cancel_appointment",
     description: "Cancela un turno existente.",
-    input_schema: {
-      type: "object",
-      properties: { event_id: { type: "string" } },
-      required: ["event_id"],
-    },
+    input_schema: { type: "object", properties: { event_id: { type: "string" } }, required: ["event_id"] },
   },
   {
     name: "get_patient_appointments",
@@ -221,10 +240,8 @@ const TOOLS = [
       },
       required: ["descripcion"],
     },
-    // cache_control en el último tool — le dice a Anthropic que cachee
-    // el system prompt + todas las tools hasta acá (ahorro ~90% en tokens de input)
     cache_control: { type: "ephemeral" },
   },
 ];
 
-module.exports = { getSystemPrompt, TOOLS, config };
+module.exports = { getSystemPrompt, TOOLS, config, ESTILOS };
