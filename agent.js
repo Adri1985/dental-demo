@@ -84,7 +84,7 @@ const getSystemPrompt = () => {
   });
 
   const profesional = config.profesionales[0].nombre;
-  const asistente = config.asistente.nombre;
+  const asistente   = config.asistente.nombre;
 
   return `
 La fecha y hora actual en Argentina es: ${ahora}.
@@ -142,7 +142,8 @@ ${buildKnowledgeBase()}
 };
 
 // ─────────────────────────────────────────────
-//  TOOLS — se construyen desde el config
+//  TOOLS — con cache_control en el último tool
+//  para activar prompt caching en Anthropic API
 // ─────────────────────────────────────────────
 const TOOLS = [
   {
@@ -156,10 +157,10 @@ const TOOLS = [
           enum: buildProfesionalesEnum(),
           description: "ID del profesional cuya agenda consultar",
         },
-        fecha_desde: { type: "string", description: "ISO 8601 con timezone, ej: 2026-07-07T09:30:00-03:00" },
-        fecha_hasta: { type: "string", description: "ISO 8601 con timezone, ej: 2026-07-11T17:00:00-03:00" },
-        duracion_minutos: { type: "number" },
-        excluir_event_id: { type: "string", description: "ID del evento a excluir en reagendamiento" },
+        fecha_desde:       { type: "string", description: "ISO 8601 con timezone, ej: 2026-07-07T09:30:00-03:00" },
+        fecha_hasta:       { type: "string", description: "ISO 8601 con timezone, ej: 2026-07-11T17:00:00-03:00" },
+        duracion_minutos:  { type: "number" },
+        excluir_event_id:  { type: "string", description: "ID del evento a excluir en reagendamiento" },
       },
       required: ["fecha_desde", "fecha_hasta", "duracion_minutos"],
     },
@@ -170,14 +171,14 @@ const TOOLS = [
     input_schema: {
       type: "object",
       properties: {
-        profesional_id: { type: "string", enum: buildProfesionalesEnum() },
-        paciente_nombre: { type: "string" },
-        paciente_telefono: { type: "string" },
-        paciente_dni: { type: "string" },
+        profesional_id:       { type: "string", enum: buildProfesionalesEnum() },
+        paciente_nombre:      { type: "string" },
+        paciente_telefono:    { type: "string" },
+        paciente_dni:         { type: "string" },
         paciente_obra_social: { type: "string" },
-        fecha_hora: { type: "string", description: "ISO 8601 con timezone" },
-        tipo_practica: { type: "string" },
-        duracion_minutos: { type: "number" },
+        fecha_hora:           { type: "string", description: "ISO 8601 con timezone" },
+        tipo_practica:        { type: "string" },
+        duracion_minutos:     { type: "number" },
       },
       required: ["paciente_nombre", "paciente_telefono", "fecha_hora", "tipo_practica", "duracion_minutos"],
     },
@@ -187,9 +188,7 @@ const TOOLS = [
     description: "Cancela un turno existente.",
     input_schema: {
       type: "object",
-      properties: {
-        event_id: { type: "string" },
-      },
+      properties: { event_id: { type: "string" } },
       required: ["event_id"],
     },
   },
@@ -204,8 +203,8 @@ const TOOLS = [
     input_schema: {
       type: "object",
       properties: {
-        nombre: { type: "string" },
-        dni: { type: "string" },
+        nombre:      { type: "string" },
+        dni:         { type: "string" },
         obra_social: { type: "string" },
       },
     },
@@ -216,12 +215,15 @@ const TOOLS = [
     input_schema: {
       type: "object",
       properties: {
-        paciente_nombre: { type: "string" },
+        paciente_nombre:   { type: "string" },
         paciente_telefono: { type: "string" },
-        descripcion: { type: "string" },
+        descripcion:       { type: "string" },
       },
       required: ["descripcion"],
     },
+    // cache_control en el último tool — le dice a Anthropic que cachee
+    // el system prompt + todas las tools hasta acá (ahorro ~90% en tokens de input)
+    cache_control: { type: "ephemeral" },
   },
 ];
 
