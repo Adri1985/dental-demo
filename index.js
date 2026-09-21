@@ -10,7 +10,7 @@ const {
   findPatientByIdentifier,
   getPatientAppointments,
 } = require("./calendar");
-const { getSystemPrompt, TOOLS, config, ESTILOS } = require("./agent");
+const { getStaticPrompt, getCurrentDate, getSystemPrompt, TOOLS, config, ESTILOS } = require("./agent");
 const db = require("./db");
 
 const app = express();
