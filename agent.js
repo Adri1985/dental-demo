@@ -108,27 +108,19 @@ ${config.palabras_alarma.join(", ")}
 }
 
 // ─────────────────────────────────────────────
-//  SYSTEM PROMPT — acepta config de DB
+//  SYSTEM PROMPT — separado en parte estática
+//  (cacheada) y fecha (dinámica, no cacheada)
 // ─────────────────────────────────────────────
-const getSystemPrompt = (cfg = {}) => {
-  const ahora = new Date().toLocaleString("es-AR", {
-    timeZone: "America/Argentina/Buenos_Aires",
-    weekday: "long", year: "numeric", month: "long",
-    day: "numeric", hour: "2-digit", minute: "2-digit",
-  });
 
+// Parte estática — se cachea, no cambia entre llamadas
+const getStaticPrompt = (cfg = {}) => {
   const profesional = config.profesionales[0].nombre;
   const asistente   = config.asistente.nombre;
 
-  // Estilo desde DB, fallback a profesional_amigable
   const estiloKey = cfg.estilo_conversacion || "profesional_amigable";
   const estilo    = ESTILOS[estiloKey] || ESTILOS.profesional_amigable;
 
-  return `
-La fecha y hora actual en Argentina es: ${ahora}.
-Usá siempre esta fecha como referencia para buscar turnos. Nunca uses fechas de 2024 o 2025.
-
-Sos ${asistente}, la asistente del consultorio de ${profesional}.
+  return `Sos ${asistente}, la asistente del consultorio de ${profesional}.
 ${estilo.prompt}
 
 Escribís mensajes cortos, nunca parrafotes largos.
@@ -244,4 +236,18 @@ const TOOLS = [
   },
 ];
 
-module.exports = { getSystemPrompt, TOOLS, config, ESTILOS };
+// Fecha actual — parte dinámica, NO se cachea
+const getCurrentDate = () => new Date().toLocaleString("es-AR", {
+  timeZone: "America/Argentina/Buenos_Aires",
+  weekday: "long", year: "numeric", month: "long",
+  day: "numeric", hour: "2-digit", minute: "2-digit",
+});
+
+// Alias para compatibilidad — devuelve todo junto (sin caching)
+const getSystemPrompt = (cfg = {}) =>
+  `La fecha y hora actual en Argentina es: ${getCurrentDate()}.
+Usá siempre esta fecha como referencia. Nunca uses fechas de 2024 o 2025.
+
+${getStaticPrompt(cfg)}`;
+
+module.exports = { getStaticPrompt, getCurrentDate, getSystemPrompt, TOOLS, config, ESTILOS };
