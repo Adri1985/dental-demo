@@ -94,6 +94,9 @@
     .link-box { background: #182229; border: 1px solid #2a3942; border-radius: 8px; padding: 12px; font-size: 12px; word-break: break-all; color: #8696a0; display: none; }
     .link-box strong { color: #00a884; display: block; margin-bottom: 6px; font-size: 11px; }
     .section-label { font-size: 12px; color: #8696a0; }
+    .cfg-tab { background: none; border: none; color: #8696a0; font-size: 13px; font-weight: 600; padding: 8px 14px; cursor: pointer; border-bottom: 2px solid transparent; margin-bottom: -1px; }
+    .cfg-tab.active { color: #00a884; border-bottom-color: #00a884; }
+    .cfg-tab:hover { color: #e9edef; }
     .toast { position: fixed; bottom: 24px; left: 50%; transform: translateX(-50%); background: #2a3942; color: #e9edef; font-size: 13px; padding: 10px 20px; border-radius: 20px; opacity: 0; transition: opacity 0.3s; pointer-events: none; z-index: 999; }
     .toast.show { opacity: 1; }
     .fab { position: fixed; bottom: 24px; right: 24px; background: #00a884; color: white; border: none; border-radius: 50px; padding: 14px 20px; font-size: 14px; font-weight: 600; cursor: pointer; box-shadow: 0 4px 16px rgba(0,0,0,0.4); z-index: 50; }
@@ -123,18 +126,12 @@
     </div>
   </div>
   <div class="header-right">
-    <button class="btn btn-sm" onclick="abrirPracticas()">Prácticas</button>
-    <button class="btn btn-sm" onclick="abrirEquipo()">Equipo</button>
-    <button class="btn btn-sm" onclick="abrirConfig()">⚙ Config</button>
     <div class="live-badge">EN VIVO</div>
+    <button class="btn btn-sm" onclick="abrirConfig()">⚙ Config</button>
     <button class="btn btn-sm btn-danger" onclick="logout()">Salir</button>
-    <!-- Botón menú móvil -->
     <button class="menu-btn" onclick="toggleMenu()">⋮</button>
   </div>
-  <!-- Dropdown móvil -->
   <div class="dropdown-menu" id="dropdownMenu">
-    <button class="dropdown-item" onclick="closeMenu();abrirPracticas()">Prácticas</button>
-    <button class="dropdown-item" onclick="closeMenu();abrirEquipo()">Equipo</button>
     <button class="dropdown-item" onclick="closeMenu();abrirConfig()">⚙ Config</button>
     <button class="dropdown-item danger" onclick="closeMenu();logout()">Salir</button>
   </div>
@@ -186,86 +183,90 @@
   </div>
 </div>
 
-<!-- Modal configuración -->
+<!-- Modal configuración unificado con tabs -->
 <div class="modal-overlay" id="configOverlay">
-  <div class="modal" style="width:420px">
-    <div class="modal-title">Configuración del consultorio</div>
-    <div class="modal-field">
-      <label class="modal-label">Estilo de conversación</label>
-      <select class="select" id="cfgEstilo">
-        <option value="cercano">Cercano — informal, muletillas</option>
-        <option value="amigable">Amigable — voseo prolijo, cálida</option>
-        <option value="profesional_amigable">Profesional amigable — cordial y clara</option>
-        <option value="formal">Formal — usted, tono médico</option>
-        <option value="muy_formal">Muy formal — lenguaje clínico</option>
-      </select>
-    </div>
-    <div class="section-label">Horarios de atención</div>
-    <div class="modal-row">
-      <div class="modal-field"><label class="modal-label">Mañana desde</label><input class="modal-input" id="cfgMananaDesde" type="time" /></div>
-      <div class="modal-field"><label class="modal-label">Mañana hasta</label><input class="modal-input" id="cfgMananaHasta" type="time" /></div>
-    </div>
-    <div class="modal-row">
-      <div class="modal-field"><label class="modal-label">Tarde desde</label><input class="modal-input" id="cfgTardeDesde" type="time" /></div>
-      <div class="modal-field"><label class="modal-label">Tarde hasta</label><input class="modal-input" id="cfgTardeHasta" type="time" /></div>
-    </div>
-    <div class="modal-field"><label class="modal-label">Número del bot (sin + ni espacios)</label><input class="modal-input" id="cfgBotNumber" type="text" placeholder="15551445115" /></div>
-    <div class="modal-actions">
-      <button class="btn btn-cancel" onclick="document.getElementById('configOverlay').classList.remove('show')">Cancelar</button>
-      <button class="btn btn-primary" onclick="guardarConfig()">Guardar</button>
-    </div>
-  </div>
-</div>
+  <div class="modal" style="width:480px;max-height:90vh;display:flex;flex-direction:column">
+    <div class="modal-title">Configuración</div>
 
-<!-- Modal equipo -->
-<div class="modal-overlay" id="equipoOverlay">
-  <div class="modal" style="width:420px">
-    <div class="modal-title">Equipo del consultorio</div>
-    <div id="equipoList" style="font-size:13px;color:#8696a0">Cargando...</div>
-    <div style="border-top:1px solid #2a3942;padding-top:14px">
-      <div style="font-size:13px;font-weight:600;margin-bottom:10px">Invitar usuario</div>
-      <div class="modal-field"><label class="modal-label">Email</label><input class="modal-input" id="invEmail" type="email" placeholder="colega@email.com" /></div>
-      <div class="link-box" id="invLinkBox">
-        <strong>Link de invitación (copialo y mandalo):</strong>
-        <span id="invLinkText"></span>
-        <div style="margin-top:8px"><span style="cursor:pointer;color:#00a884;font-size:12px" onclick="copiarInvLink()">Copiar link</span></div>
-      </div>
+    <!-- Tabs -->
+    <div style="display:flex;gap:4px;margin-bottom:16px;border-bottom:1px solid #2a3942;padding-bottom:0">
+      <button class="cfg-tab active" onclick="switchTab('horarios')">Horarios</button>
+      <button class="cfg-tab" onclick="switchTab('estilo')">Estilo</button>
+      <button class="cfg-tab" onclick="switchTab('practicas')">Prácticas</button>
+      <button class="cfg-tab" onclick="switchTab('equipo')">Equipo</button>
     </div>
-    <div class="modal-actions">
-      <button class="btn btn-cancel" onclick="document.getElementById('equipoOverlay').classList.remove('show')">Cerrar</button>
-      <button class="btn btn-primary" onclick="invitar()">Generar invitación</button>
-    </div>
-  </div>
-</div>
 
-<!-- Modal prácticas -->
-<div class="modal-overlay" id="practicasOverlay">
-  <div class="modal" style="width:480px;max-height:85vh;overflow-y:auto">
-    <div class="modal-title">Prácticas del consultorio</div>
-    <div id="practicasList" style="font-size:13px;margin-bottom:14px">Cargando...</div>
-    <div style="border-top:1px solid #2a3942;padding-top:14px">
-      <div style="font-size:13px;font-weight:600;margin-bottom:10px" id="practicasFormTitle">Nueva práctica</div>
-      <input type="hidden" id="practicaEditId" />
+    <!-- Tab: Horarios -->
+    <div class="cfg-panel" id="tab-horarios" style="overflow-y:auto;flex:1">
       <div class="modal-row">
-        <div class="modal-field" style="flex:2">
-          <label class="modal-label">Nombre</label>
-          <input class="modal-input" id="pNombre" type="text" placeholder="Ej: Limpieza dental" />
-        </div>
-        <div class="modal-field" style="flex:1">
-          <label class="modal-label">Duración (min)</label>
-          <input class="modal-input" id="pDuracion" type="number" min="10" step="10" placeholder="30" />
-        </div>
+        <div class="modal-field"><label class="modal-label">Mañana desde</label><input class="modal-input" id="cfgMananaDesde" type="time" /></div>
+        <div class="modal-field"><label class="modal-label">Mañana hasta</label><input class="modal-input" id="cfgMananaHasta" type="time" /></div>
       </div>
+      <div class="modal-row">
+        <div class="modal-field"><label class="modal-label">Tarde desde</label><input class="modal-input" id="cfgTardeDesde" type="time" /></div>
+        <div class="modal-field"><label class="modal-label">Tarde hasta</label><input class="modal-input" id="cfgTardeHasta" type="time" /></div>
+      </div>
+      <div class="modal-field"><label class="modal-label">Número del bot (sin + ni espacios)</label><input class="modal-input" id="cfgBotNumber" type="text" placeholder="15551445115" /></div>
+      <div class="modal-actions" style="margin-top:8px">
+        <button class="btn btn-cancel" onclick="cerrarConfig()">Cancelar</button>
+        <button class="btn btn-primary" onclick="guardarConfig()">Guardar</button>
+      </div>
+    </div>
+
+    <!-- Tab: Estilo -->
+    <div class="cfg-panel" id="tab-estilo" style="display:none;overflow-y:auto;flex:1">
       <div class="modal-field">
-        <label class="modal-label">Requiere (opcional)</label>
-        <input class="modal-input" id="pRequiere" type="text" placeholder="Ej: Radiografía previa" />
+        <label class="modal-label">Estilo de conversación del agente</label>
+        <select class="select" id="cfgEstilo">
+          <option value="cercano">Cercano — informal, muletillas</option>
+          <option value="amigable">Amigable — voseo prolijo, cálida</option>
+          <option value="profesional_amigable">Profesional amigable — cordial y clara</option>
+          <option value="formal">Formal — usted, tono médico</option>
+          <option value="muy_formal">Muy formal — lenguaje clínico</option>
+        </select>
+      </div>
+      <div class="modal-actions" style="margin-top:8px">
+        <button class="btn btn-cancel" onclick="cerrarConfig()">Cancelar</button>
+        <button class="btn btn-primary" onclick="guardarConfig()">Guardar</button>
       </div>
     </div>
-    <div class="modal-actions">
-      <button class="btn btn-cancel" onclick="cerrarPracticas()">Cerrar</button>
-      <button class="btn btn-cancel" id="pCancelarEdit" style="display:none" onclick="cancelarEditPractica()">Cancelar edición</button>
-      <button class="btn btn-primary" onclick="guardarPractica()">Guardar</button>
+
+    <!-- Tab: Prácticas -->
+    <div class="cfg-panel" id="tab-practicas" style="display:none;overflow-y:auto;flex:1">
+      <div id="practicasList" style="font-size:13px;margin-bottom:14px">Cargando...</div>
+      <div style="border-top:1px solid #2a3942;padding-top:14px">
+        <div style="font-size:13px;font-weight:600;margin-bottom:10px" id="practicasFormTitle">Nueva práctica</div>
+        <input type="hidden" id="practicaEditId" />
+        <div class="modal-row">
+          <div class="modal-field" style="flex:2"><label class="modal-label">Nombre</label><input class="modal-input" id="pNombre" type="text" placeholder="Ej: Limpieza dental" /></div>
+          <div class="modal-field" style="flex:1"><label class="modal-label">Duración (min)</label><input class="modal-input" id="pDuracion" type="number" min="10" step="10" placeholder="30" /></div>
+        </div>
+        <div class="modal-field"><label class="modal-label">Requiere (opcional)</label><input class="modal-input" id="pRequiere" type="text" placeholder="Ej: Radiografía previa" /></div>
+        <div class="modal-actions" style="margin-top:8px">
+          <button class="btn btn-cancel" id="pCancelarEdit" style="display:none" onclick="cancelarEditPractica()">Cancelar edición</button>
+          <button class="btn btn-primary" onclick="guardarPractica()">Agregar práctica</button>
+        </div>
+      </div>
     </div>
+
+    <!-- Tab: Equipo -->
+    <div class="cfg-panel" id="tab-equipo" style="display:none;overflow-y:auto;flex:1">
+      <div id="equipoList" style="font-size:13px;color:#8696a0;margin-bottom:14px">Cargando...</div>
+      <div style="border-top:1px solid #2a3942;padding-top:14px">
+        <div style="font-size:13px;font-weight:600;margin-bottom:10px">Invitar usuario</div>
+        <div class="modal-field"><label class="modal-label">Email</label><input class="modal-input" id="invEmail" type="email" placeholder="colega@email.com" /></div>
+        <div class="link-box" id="invLinkBox">
+          <strong>Link de invitación (copialo y mandalo):</strong>
+          <span id="invLinkText"></span>
+          <div style="margin-top:8px"><span style="cursor:pointer;color:#00a884;font-size:12px" onclick="copiarInvLink()">Copiar link</span></div>
+        </div>
+        <div class="modal-actions" style="margin-top:8px">
+          <button class="btn btn-cancel" onclick="cerrarConfig()">Cerrar</button>
+          <button class="btn btn-primary" onclick="invitar()">Generar invitación</button>
+        </div>
+      </div>
+    </div>
+
   </div>
 </div>
 
@@ -461,8 +462,8 @@
   }
   function copiarLink() { copiarTexto(document.getElementById("linkUrl").href); }
 
-  // Modal configuración
-  async function abrirConfig() {
+  // Modal configuración unificado
+  async function abrirConfig(tab) {
     try {
       const cfg = await fetch(`${API}/config`, { headers: authH() }).then(r => r.json());
       document.getElementById("cfgEstilo").value      = cfg.estilo_conversacion  || "profesional_amigable";
@@ -473,7 +474,20 @@
       document.getElementById("cfgBotNumber").value   = cfg.bot_whatsapp_number  || "15551445115";
       BOT_NUMBER = cfg.bot_whatsapp_number || BOT_NUMBER;
     } catch(e) { console.error("Error cargando config:", e); }
+    switchTab(tab || "horarios");
     document.getElementById("configOverlay").classList.add("show");
+  }
+  function cerrarConfig() { document.getElementById("configOverlay").classList.remove("show"); }
+
+  function switchTab(nombre) {
+    document.querySelectorAll(".cfg-tab").forEach((t, i) => {
+      const tabs = ["horarios","estilo","practicas","equipo"];
+      t.classList.toggle("active", tabs[i] === nombre);
+    });
+    document.querySelectorAll(".cfg-panel").forEach(p => p.style.display = "none");
+    document.getElementById(`tab-${nombre}`).style.display = "block";
+    if (nombre === "practicas") cargarPracticas();
+    if (nombre === "equipo") cargarEquipo();
   }
   async function guardarConfig() {
     const num = document.getElementById("cfgBotNumber").value.trim().replace(/\D/g, "");
@@ -488,13 +502,13 @@
         bot_whatsapp_number:  num,
       })});
       BOT_NUMBER = num;
-      document.getElementById("configOverlay").classList.remove("show");
+      cerrarConfig();
       showToast("Configuración guardada. Efectiva en el próximo mensaje.");
     } catch(e) { showToast("Error guardando configuración"); }
   }
 
-  // Modal equipo
-  async function abrirEquipo() {
+  // Cargar equipo (llamado desde switchTab)
+  async function cargarEquipo() {
     document.getElementById("invLinkBox").style.display = "none";
     document.getElementById("invEmail").value = "";
     try {
@@ -503,7 +517,6 @@
         ? team.map(u => `<div style="padding:8px 0;border-bottom:1px solid #2a3942;display:flex;justify-content:space-between"><span>${escHtml(u.nombre || u.email)}</span><span style="color:#8696a0;font-size:11px">${escHtml(u.email)}</span></div>`).join("")
         : '<div style="color:#8696a0">Sin usuarios en el equipo todavía</div>';
     } catch(e) { document.getElementById("equipoList").textContent = "Error cargando equipo"; }
-    document.getElementById("equipoOverlay").classList.add("show");
   }
   async function invitar() {
     const email = document.getElementById("invEmail").value.trim();
@@ -519,23 +532,11 @@
   function copiarInvLink() { copiarTexto(document.getElementById("invLinkText").textContent); }
 
   // Cerrar modales clickeando afuera
-  ["turnoOverlay","configOverlay","equipoOverlay","practicasOverlay"].forEach(id => {
+  ["turnoOverlay","configOverlay"].forEach(id => {
     document.getElementById(id).addEventListener("click", e => { if (e.target.id === id) document.getElementById(id).classList.remove("show"); });
   });
 
   // ── Prácticas ─────────────────────────────
-  async function abrirPracticas() {
-    document.getElementById("practicaEditId").value = "";
-    document.getElementById("pNombre").value = "";
-    document.getElementById("pDuracion").value = "";
-    document.getElementById("pRequiere").value = "";
-    document.getElementById("pCancelarEdit").style.display = "none";
-    document.getElementById("practicasFormTitle").textContent = "Nueva práctica";
-    await cargarPracticas();
-    document.getElementById("practicasOverlay").classList.add("show");
-  }
-
-  function cerrarPracticas() { document.getElementById("practicasOverlay").classList.remove("show"); }
 
   async function cargarPracticas() {
     try {
