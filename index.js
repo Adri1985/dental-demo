@@ -135,9 +135,12 @@ async function runAgent(userMessage, telefono) {
   }
   claudeHistory.push({ role: "user", content: userMessage });
 
+  // Leer config y prácticas de DB para personalizar el system prompt
+  const [cfg, practicas] = await Promise.all([db.getConfig(), db.getPracticas()]);
+
   let response = await anthropic.messages.create({
     model: "claude-sonnet-4-5", max_tokens: 1024,
-    system: getSystemPrompt(), tools: TOOLS, messages: claudeHistory,
+    system: getSystemPrompt(cfg, practicas), tools: TOOLS, messages: claudeHistory,
   });
 
   while (response.stop_reason === "tool_use") {
@@ -151,7 +154,7 @@ async function runAgent(userMessage, telefono) {
     claudeHistory.push({ role: "user", content: toolResults });
     response = await anthropic.messages.create({
       model: "claude-sonnet-4-5", max_tokens: 1024,
-      system: getSystemPrompt(), tools: TOOLS, messages: claudeHistory,
+      system: getSystemPrompt(cfg, practicas), tools: TOOLS, messages: claudeHistory,
     });
   }
 
@@ -368,6 +371,37 @@ app.patch("/config",                      authMiddleware, async (req, res) => {
   for (const [k, v] of Object.entries(req.body)) { if (permitidos.includes(k)) await db.setConfig(k, v); }
   res.json({ ok: true, config: await db.getConfig() });
 });
+// ─────────────────────────────────────────────
+//  PRÁCTICAS ENDPOINTS
+// ─────────────────────────────────────────────
+app.get("/practicas", authMiddleware, async (req, res) => {
+  try { res.json(await db.getPracticas()); }
+  catch(err) { console.error(err); res.status(500).json({ error: "Error interno" }); }
+});
+
+app.post("/practicas", authMiddleware, async (req, res) => {
+  try {
+    const { nombre, duracion_min, requiere } = req.body;
+    if (!nombre || !duracion_min) return res.status(400).json({ error: "nombre y duracion_min requeridos" });
+    const p = await db.createPractica({ nombre, duracion_min: parseInt(duracion_min), requiere });
+    res.json(p);
+  } catch(err) { console.error(err); res.status(500).json({ error: "Error interno" }); }
+});
+
+app.patch("/practicas/:id", authMiddleware, async (req, res) => {
+  try {
+    const { nombre, duracion_min, requiere } = req.body;
+    const p = await db.updatePractica(req.params.id, { nombre, duracion_min: duracion_min ? parseInt(duracion_min) : null, requiere });
+    if (!p) return res.status(404).json({ error: "Práctica no encontrada" });
+    res.json(p);
+  } catch(err) { console.error(err); res.status(500).json({ error: "Error interno" }); }
+});
+
+app.delete("/practicas/:id", authMiddleware, async (req, res) => {
+  try { await db.deletePractica(req.params.id); res.json({ ok: true }); }
+  catch(err) { console.error(err); res.status(500).json({ error: "Error interno" }); }
+});
+
 app.get("/health", (_, res) => res.json({ status: "ok" }));
 
 // ─────────────────────────────────────────────
