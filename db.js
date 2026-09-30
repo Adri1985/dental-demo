@@ -89,13 +89,15 @@ async function initDB() {
     );
 
     CREATE TABLE IF NOT EXISTS practicas (
-      id             SERIAL PRIMARY KEY,
-      nombre         TEXT NOT NULL,
-      duracion_min   INTEGER NOT NULL DEFAULT 30,
-      requiere       TEXT,
-      activa         BOOLEAN DEFAULT true,
-      orden          INTEGER DEFAULT 0,
-      created_at     TIMESTAMPTZ DEFAULT NOW()
+      id                  SERIAL PRIMARY KEY,
+      nombre              TEXT NOT NULL,
+      duracion_min        INTEGER NOT NULL DEFAULT 30,
+      requiere            TEXT,
+      para_agente         BOOLEAN DEFAULT true,
+      para_turno_directo  BOOLEAN DEFAULT true,
+      activa              BOOLEAN DEFAULT true,
+      orden               INTEGER DEFAULT 0,
+      created_at          TIMESTAMPTZ DEFAULT NOW()
     );
 
     INSERT INTO consultorio_config (clave, valor) VALUES
@@ -345,32 +347,43 @@ async function clearClaudeHistory(telefono) {
 //  PRÁCTICAS
 // ─────────────────────────────────────────────
 
-async function getPracticas() {
+async function getPracticas(filtro) {
+  // filtro: undefined = todas activas, "agente" = solo para_agente, "turno_directo" = solo para_turno_directo
   if (!USE_DB) return [];
+  let where = "activa = true";
+  if (filtro === "agente") where += " AND para_agente = true";
+  if (filtro === "turno_directo") where += " AND para_turno_directo = true";
   const { rows } = await pool.query(
-    "SELECT * FROM practicas WHERE activa = true ORDER BY orden ASC, id ASC"
+    `SELECT * FROM practicas WHERE ${where} ORDER BY orden ASC, id ASC`
   );
   return rows;
 }
 
-async function createPractica({ nombre, duracion_min, requiere }) {
+async function createPractica({ nombre, duracion_min, requiere, para_agente, para_turno_directo }) {
   if (!USE_DB) return null;
   const { rows } = await pool.query(
-    "INSERT INTO practicas (nombre, duracion_min, requiere) VALUES ($1, $2, $3) RETURNING *",
-    [nombre, duracion_min || 30, requiere || null]
+    `INSERT INTO practicas (nombre, duracion_min, requiere, para_agente, para_turno_directo)
+     VALUES ($1, $2, $3, $4, $5) RETURNING *`,
+    [nombre, duracion_min || 30, requiere || null,
+     para_agente !== false, para_turno_directo !== false]
   );
   return rows[0];
 }
 
-async function updatePractica(id, { nombre, duracion_min, requiere }) {
+async function updatePractica(id, { nombre, duracion_min, requiere, para_agente, para_turno_directo }) {
   if (!USE_DB) return null;
   const { rows } = await pool.query(
     `UPDATE practicas SET
-      nombre       = COALESCE($1, nombre),
-      duracion_min = COALESCE($2, duracion_min),
-      requiere     = $3
-     WHERE id = $4 RETURNING *`,
-    [nombre || null, duracion_min || null, requiere || null, id]
+      nombre              = COALESCE($1, nombre),
+      duracion_min        = COALESCE($2, duracion_min),
+      requiere            = $3,
+      para_agente         = $4,
+      para_turno_directo  = $5
+     WHERE id = $6 RETURNING *`,
+    [nombre || null, duracion_min || null, requiere || null,
+     para_agente !== undefined ? para_agente : true,
+     para_turno_directo !== undefined ? para_turno_directo : true,
+     id]
   );
   return rows[0];
 }
