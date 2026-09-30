@@ -136,7 +136,7 @@ async function runAgent(userMessage, telefono) {
   claudeHistory.push({ role: "user", content: userMessage });
 
   // Leer config y prácticas de DB para personalizar el system prompt
-  const [cfg, practicas] = await Promise.all([db.getConfig(), db.getPracticas()]);
+  const [cfg, practicas] = await Promise.all([db.getConfig(), db.getPracticas("agente")]);
 
   let response = await anthropic.messages.create({
     model: "claude-sonnet-4-5", max_tokens: 1024,
@@ -381,20 +381,29 @@ app.get("/practicas", authMiddleware, async (req, res) => {
 
 app.post("/practicas", authMiddleware, async (req, res) => {
   try {
-    const { nombre, duracion_min, requiere } = req.body;
+    const { nombre, duracion_min, requiere, para_agente, para_turno_directo } = req.body;
     if (!nombre || !duracion_min) return res.status(400).json({ error: "nombre y duracion_min requeridos" });
-    const p = await db.createPractica({ nombre, duracion_min: parseInt(duracion_min), requiere });
+    const p = await db.createPractica({ nombre, duracion_min: parseInt(duracion_min), requiere, para_agente, para_turno_directo });
     res.json(p);
   } catch(err) { console.error(err); res.status(500).json({ error: "Error interno" }); }
 });
 
 app.patch("/practicas/:id", authMiddleware, async (req, res) => {
   try {
-    const { nombre, duracion_min, requiere } = req.body;
-    const p = await db.updatePractica(req.params.id, { nombre, duracion_min: duracion_min ? parseInt(duracion_min) : null, requiere });
+    const { nombre, duracion_min, requiere, para_agente, para_turno_directo } = req.body;
+    const p = await db.updatePractica(req.params.id, {
+      nombre, duracion_min: duracion_min ? parseInt(duracion_min) : null,
+      requiere, para_agente, para_turno_directo
+    });
     if (!p) return res.status(404).json({ error: "Práctica no encontrada" });
     res.json(p);
   } catch(err) { console.error(err); res.status(500).json({ error: "Error interno" }); }
+});
+
+// GET /practicas/turno-directo — solo las marcadas para turno directo (para el dropdown del panel)
+app.get("/practicas/turno-directo", authMiddleware, async (req, res) => {
+  try { res.json(await db.getPracticas("turno_directo")); }
+  catch(err) { console.error(err); res.status(500).json({ error: "Error interno" }); }
 });
 
 app.delete("/practicas/:id", authMiddleware, async (req, res) => {
