@@ -6,22 +6,14 @@
   <title>Panel Admin — Mía</title>
   <style>
     * { box-sizing: border-box; margin: 0; padding: 0; }
-    body {
-      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
-      background: #0b141a; color: #e9edef;
-      height: 100vh; height: 100dvh;
-      display: flex; flex-direction: column; overflow: hidden;
-    }
-    .header {
-      background: #202c33; padding: 14px 20px;
-      display: flex; align-items: center; justify-content: space-between;
-      border-bottom: 1px solid #2a3942; flex-shrink: 0;
-    }
+    body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; background: #0b141a; color: #e9edef; height: 100vh; height: 100dvh; display: flex; flex-direction: column; overflow: hidden; }
+    .header { background: #202c33; padding: 14px 20px; display: flex; align-items: center; justify-content: space-between; border-bottom: 1px solid #2a3942; flex-shrink: 0; }
     .header-left { display: flex; align-items: center; gap: 10px; }
     .back-btn { background: none; border: none; color: #00a884; font-size: 22px; cursor: pointer; padding: 0 4px; display: none; }
     .header-title { font-size: 17px; font-weight: 600; }
     .header-sub { font-size: 12px; color: #8696a0; margin-top: 1px; }
-    .live-badge { background: #00a884; color: white; font-size: 11px; padding: 3px 10px; border-radius: 12px; font-weight: 600; flex-shrink: 0; }
+    .header-right { display: flex; align-items: center; gap: 8px; }
+    .live-badge { background: #00a884; color: white; font-size: 11px; padding: 3px 10px; border-radius: 12px; font-weight: 600; }
     .main { display: flex; flex: 1; overflow: hidden; }
     .sidebar { width: 320px; flex-shrink: 0; border-right: 1px solid #2a3942; display: flex; flex-direction: column; overflow: hidden; }
     .sidebar-header { padding: 12px 16px; background: #202c33; border-bottom: 1px solid #2a3942; font-size: 13px; color: #8696a0; display: flex; justify-content: space-between; align-items: center; flex-shrink: 0; }
@@ -47,15 +39,14 @@
     .convo-avatar { width: 40px; height: 40px; border-radius: 50%; background: #2a3942; display: flex; align-items: center; justify-content: center; font-size: 18px; flex-shrink: 0; }
     .convo-name { font-size: 15px; font-weight: 600; }
     .convo-detail { font-size: 11px; color: #8696a0; margin-top: 1px; }
-    .convo-actions { margin-left: auto; display: flex; gap: 6px; flex-shrink: 0; flex-wrap: wrap; justify-content: flex-end; }
+    .convo-actions { margin-left: auto; display: flex; gap: 6px; flex-shrink: 0; flex-wrap: wrap; }
     .btn { padding: 6px 12px; border-radius: 8px; border: none; font-size: 12px; font-weight: 600; cursor: pointer; transition: opacity 0.15s; white-space: nowrap; }
     .btn:hover { opacity: 0.85; }
-    .btn-pause  { background: #f59e0b; color: #0b141a; }
+    .btn-pause { background: #f59e0b; color: #0b141a; }
     .btn-resume { background: #00a884; color: white; }
-    .btn-clear  { background: #2a3942; color: #e9edef; }
-    .btn-wa     { background: #25d366; color: white; }
-    .btn-link   { background: #3b82f6; color: white; }
-
+    .btn-clear { background: #2a3942; color: #e9edef; }
+    .btn-sm { background: #2a3942; color: #8696a0; font-size: 11px; padding: 4px 10px; }
+    .btn-danger { color: #ff6b6b; }
     .messages-area { flex: 1; overflow-y: auto; padding: 16px; display: flex; flex-direction: column; gap: 6px; }
     .messages-area::-webkit-scrollbar { width: 4px; }
     .messages-area::-webkit-scrollbar-thumb { background: #2a3942; border-radius: 2px; }
@@ -74,65 +65,27 @@
     .empty-icon { font-size: 48px; }
     .empty-text { font-size: 15px; }
     .no-patients { padding: 32px 16px; text-align: center; color: #8696a0; font-size: 14px; }
-
-    /* ── Modal generar link ── */
-    .modal-overlay {
-      display: none; position: fixed; inset: 0;
-      background: rgba(0,0,0,0.7); z-index: 100;
-      align-items: center; justify-content: center;
-    }
+    .modal-overlay { display: none; position: fixed; inset: 0; background: rgba(0,0,0,0.7); z-index: 100; align-items: center; justify-content: center; }
     .modal-overlay.show { display: flex; }
-    .modal {
-      background: #202c33; border-radius: 12px;
-      padding: 24px; width: 340px; max-width: 90vw;
-      display: flex; flex-direction: column; gap: 16px;
-    }
-    .modal-title { font-size: 16px; font-weight: 600; color: #e9edef; }
+    .modal { background: #202c33; border-radius: 12px; padding: 24px; width: 380px; max-width: 95vw; display: flex; flex-direction: column; gap: 14px; }
+    .modal-title { font-size: 16px; font-weight: 600; }
     .modal-field { display: flex; flex-direction: column; gap: 6px; }
     .modal-label { font-size: 12px; color: #8696a0; }
-    .modal-input {
-      background: #2a3942; border: 1px solid #3a4952;
-      border-radius: 8px; padding: 10px 12px;
-      color: #e9edef; font-size: 14px; outline: none;
-      width: 100%;
-    }
+    .modal-input { background: #2a3942; border: 1px solid #3a4952; border-radius: 8px; padding: 10px 12px; color: #e9edef; font-size: 14px; outline: none; width: 100%; }
     .modal-input:focus { border-color: #00a884; }
     .modal-row { display: flex; gap: 10px; }
     .modal-row .modal-field { flex: 1; }
     .modal-actions { display: flex; gap: 8px; justify-content: flex-end; margin-top: 4px; }
     .btn-cancel { background: #2a3942; color: #8696a0; }
-    .btn-generate { background: #00a884; color: white; }
-
-    /* resultado del link */
-    .link-result {
-      background: #182229; border-radius: 8px;
-      padding: 12px; font-size: 12px; color: #8696a0;
-      word-break: break-all; display: none;
-    }
-    .link-result.show { display: block; }
-    .link-result a { color: #00a884; }
-
-    /* Toast */
-    .toast {
-      position: fixed; bottom: 24px; left: 50%; transform: translateX(-50%);
-      background: #2a3942; color: #e9edef; font-size: 13px;
-      padding: 10px 20px; border-radius: 20px;
-      opacity: 0; transition: opacity 0.3s; pointer-events: none; z-index: 999;
-    }
+    .btn-primary { background: #00a884; color: white; }
+    .select { background: #2a3942; border: 1px solid #3a4952; border-radius: 8px; padding: 10px 12px; color: #e9edef; font-size: 14px; outline: none; width: 100%; }
+    .link-box { background: #182229; border: 1px solid #2a3942; border-radius: 8px; padding: 12px; font-size: 12px; word-break: break-all; color: #8696a0; display: none; }
+    .link-box strong { color: #00a884; display: block; margin-bottom: 6px; font-size: 11px; }
+    .section-label { font-size: 12px; color: #8696a0; }
+    .toast { position: fixed; bottom: 24px; left: 50%; transform: translateX(-50%); background: #2a3942; color: #e9edef; font-size: 13px; padding: 10px 20px; border-radius: 20px; opacity: 0; transition: opacity 0.3s; pointer-events: none; z-index: 999; }
     .toast.show { opacity: 1; }
-
-    /* Botón flotante "Nuevo turno" */
-    .fab {
-      position: fixed; bottom: 24px; right: 24px;
-      background: #00a884; color: white;
-      border: none; border-radius: 50px;
-      padding: 14px 20px; font-size: 14px; font-weight: 600;
-      cursor: pointer; box-shadow: 0 4px 16px rgba(0,0,0,0.4);
-      display: flex; align-items: center; gap: 8px;
-      z-index: 50;
-    }
+    .fab { position: fixed; bottom: 24px; right: 24px; background: #00a884; color: white; border: none; border-radius: 50px; padding: 14px 20px; font-size: 14px; font-weight: 600; cursor: pointer; box-shadow: 0 4px 16px rgba(0,0,0,0.4); z-index: 50; }
     .fab:hover { background: #00c99d; }
-
     @media (max-width: 640px) {
       .sidebar { width: 100%; position: absolute; inset: 0; top: 57px; z-index: 10; background: #0b141a; }
       .sidebar.hidden { display: none; }
@@ -144,8 +97,6 @@
   </style>
 </head>
 <body>
-
-<!-- Header -->
 <div class="header">
   <div class="header-left">
     <button class="back-btn" id="backBtn" onclick="goBack()">←</button>
@@ -154,9 +105,11 @@
       <div class="header-sub" id="lastUpdate">Actualizando...</div>
     </div>
   </div>
-  <div style="display:flex;align-items:center;gap:10px">
-    <button class="btn" style="background:#2a3942;color:#8696a0;font-size:11px;padding:5px 10px" onclick="abrirConfig()">⚙ Config</button>
+  <div class="header-right">
+    <button class="btn btn-sm" onclick="abrirEquipo()">Equipo</button>
+    <button class="btn btn-sm" onclick="abrirConfig()">⚙ Config</button>
     <div class="live-badge">EN VIVO</div>
+    <button class="btn btn-sm btn-danger" onclick="logout()">Salir</button>
   </div>
 </div>
 
@@ -166,213 +119,119 @@
       <span>Conversaciones</span>
       <span id="totalCount">—</span>
     </div>
-    <div class="patient-list" id="patientList">
-      <div class="no-patients">Cargando...</div>
-    </div>
+    <div class="patient-list" id="patientList"><div class="no-patients">Cargando...</div></div>
   </div>
-
   <div class="convo-panel" id="convoPanel">
-    <div class="empty">
-      <div class="empty-icon">💬</div>
-      <div class="empty-text">Seleccioná una conversación</div>
+    <div class="empty"><div class="empty-icon">💬</div><div class="empty-text">Seleccioná una conversación</div></div>
+  </div>
+</div>
+
+<button class="fab" onclick="abrirNuevoTurno()">+ Nuevo turno</button>
+
+<!-- Modal nuevo turno -->
+<div class="modal-overlay" id="turnoOverlay">
+  <div class="modal">
+    <div class="modal-title">Generar link de turno</div>
+    <div class="modal-field"><label class="modal-label">Nombre del paciente</label><input class="modal-input" id="tNombre" type="text" placeholder="Juan Pérez" /></div>
+    <div class="modal-field">
+      <label class="modal-label">Práctica</label>
+      <select class="select" id="tPractica">
+        <option>Control de rutina</option><option>Limpieza dental</option><option>Extracción simple</option>
+        <option>Blanqueamiento</option><option>Control de ortodoncia</option><option>Implante</option>
+      </select>
+    </div>
+    <div class="modal-row">
+      <div class="modal-field"><label class="modal-label">Fecha</label><input class="modal-input" id="tFecha" type="date" /></div>
+      <div class="modal-field"><label class="modal-label">Hora</label><input class="modal-input" id="tHora" type="time" step="1800" /></div>
+    </div>
+    <div class="link-box" id="linkBox">
+      <strong>Mensaje que recibirá Mía:</strong>
+      <span id="linkMensaje"></span>
+      <div style="margin-top:8px;display:flex;gap:12px">
+        <a id="linkUrl" href="#" target="_blank" style="color:#00a884;font-size:12px">Abrir link</a>
+        <span style="cursor:pointer;color:#00a884;font-size:12px" onclick="copiarLink()">Copiar link</span>
+      </div>
+    </div>
+    <div class="modal-actions">
+      <button class="btn btn-cancel" onclick="document.getElementById('turnoOverlay').classList.remove('show')">Cancelar</button>
+      <button class="btn btn-primary" onclick="generarLink()">Generar link</button>
     </div>
   </div>
 </div>
 
-<!-- Botón flotante -->
-<button class="fab" onclick="abrirModal()">+ Nuevo turno</button>
-
-<!-- Modal generar link -->
-<div class="modal-overlay" id="modalOverlay">
-  <div class="modal">
-    <div class="modal-title">Generar link de turno</div>
-
+<!-- Modal configuración -->
+<div class="modal-overlay" id="configOverlay">
+  <div class="modal" style="width:420px">
+    <div class="modal-title">Configuración del consultorio</div>
     <div class="modal-field">
-      <label class="modal-label">Nombre del paciente</label>
-      <input class="modal-input" id="mNombre" type="text" placeholder="Juan Pérez" />
-    </div>
-
-    <div class="modal-field">
-      <label class="modal-label">Práctica</label>
-      <select class="modal-input" id="mPractica">
-        <option value="Control de rutina">Control de rutina</option>
-        <option value="Limpieza dental">Limpieza dental</option>
-        <option value="Extracción simple">Extracción simple</option>
-        <option value="Blanqueamiento">Blanqueamiento</option>
-        <option value="Control de ortodoncia">Control de ortodoncia</option>
-        <option value="Implante">Implante</option>
+      <label class="modal-label">Estilo de conversación</label>
+      <select class="select" id="cfgEstilo">
+        <option value="cercano">Cercano — informal, muletillas</option>
+        <option value="amigable">Amigable — voseo prolijo, cálida</option>
+        <option value="profesional_amigable">Profesional amigable — cordial y clara</option>
+        <option value="formal">Formal — usted, tono médico</option>
+        <option value="muy_formal">Muy formal — lenguaje clínico</option>
       </select>
     </div>
-
+    <div class="section-label">Horarios de atención</div>
     <div class="modal-row">
-      <div class="modal-field">
-        <label class="modal-label">Fecha</label>
-        <input class="modal-input" id="mFecha" type="date" />
-      </div>
-      <div class="modal-field">
-        <label class="modal-label">Hora</label>
-        <input class="modal-input" id="mHora" type="time" step="1800" />
-      </div>
+      <div class="modal-field"><label class="modal-label">Mañana desde</label><input class="modal-input" id="cfgMananaDesde" type="time" /></div>
+      <div class="modal-field"><label class="modal-label">Mañana hasta</label><input class="modal-input" id="cfgMananaHasta" type="time" /></div>
     </div>
-
-    <div class="link-result" id="linkResult">
-      Mensaje que recibirá Mía:<br><br>
-      <strong id="linkMensaje"></strong><br><br>
-      <a id="linkUrl" href="#" target="_blank">Abrir link</a>
-      &nbsp;·&nbsp;
-      <span style="cursor:pointer;color:#00a884" onclick="copiarLink()">Copiar link</span>
+    <div class="modal-row">
+      <div class="modal-field"><label class="modal-label">Tarde desde</label><input class="modal-input" id="cfgTardeDesde" type="time" /></div>
+      <div class="modal-field"><label class="modal-label">Tarde hasta</label><input class="modal-input" id="cfgTardeHasta" type="time" /></div>
     </div>
-
+    <div class="modal-field"><label class="modal-label">Número del bot (sin + ni espacios)</label><input class="modal-input" id="cfgBotNumber" type="text" placeholder="15551445115" /></div>
     <div class="modal-actions">
-      <button class="btn btn-cancel" onclick="cerrarModal()">Cancelar</button>
-      <button class="btn btn-generate" onclick="generarLink()">Generar link</button>
+      <button class="btn btn-cancel" onclick="document.getElementById('configOverlay').classList.remove('show')">Cancelar</button>
+      <button class="btn btn-primary" onclick="guardarConfig()">Guardar</button>
+    </div>
+  </div>
+</div>
+
+<!-- Modal equipo -->
+<div class="modal-overlay" id="equipoOverlay">
+  <div class="modal" style="width:420px">
+    <div class="modal-title">Equipo del consultorio</div>
+    <div id="equipoList" style="font-size:13px;color:#8696a0">Cargando...</div>
+    <div style="border-top:1px solid #2a3942;padding-top:14px">
+      <div style="font-size:13px;font-weight:600;margin-bottom:10px">Invitar usuario</div>
+      <div class="modal-field"><label class="modal-label">Email</label><input class="modal-input" id="invEmail" type="email" placeholder="colega@email.com" /></div>
+      <div class="link-box" id="invLinkBox">
+        <strong>Link de invitación (copialo y mandalo):</strong>
+        <span id="invLinkText"></span>
+        <div style="margin-top:8px"><span style="cursor:pointer;color:#00a884;font-size:12px" onclick="copiarInvLink()">Copiar link</span></div>
+      </div>
+    </div>
+    <div class="modal-actions">
+      <button class="btn btn-cancel" onclick="document.getElementById('equipoOverlay').classList.remove('show')">Cerrar</button>
+      <button class="btn btn-primary" onclick="invitar()">Generar invitación</button>
     </div>
   </div>
 </div>
 
 <div class="toast" id="toast"></div>
 
-<!-- Modal configuración -->
-<div class="modal-overlay" id="configOverlay">
-  <div class="modal" style="width:400px;max-width:95vw">
-    <div class="modal-title">Configuracion del consultorio</div>
-
-    <div style="font-size:12px;color:#8696a0;margin-top:-8px">Estilo de conversacion</div>
-    <div class="modal-field">
-      <select class="modal-input" id="cfgEstilo">
-        <option value="cercano">Cercano — informal, muletillas, como un amigo</option>
-        <option value="amigable">Amigable — voseo prolijo, cálida sin excesos</option>
-        <option value="profesional_amigable">Profesional amigable — cordial y clara, sin "che"</option>
-        <option value="formal">Formal — usted, tono médico profesional</option>
-        <option value="muy_formal">Muy formal — lenguaje clínico, máximo profesionalismo</option>
-      </select>
-    </div>
-
-    <div style="font-size:12px;color:#8696a0;margin-top:4px">Horarios de atención</div>
-    <div class="modal-row">
-      <div class="modal-field">
-        <label class="modal-label">Mañana desde</label>
-        <input class="modal-input" id="cfgMananaDesde" type="time" />
-      </div>
-      <div class="modal-field">
-        <label class="modal-label">Mañana hasta</label>
-        <input class="modal-input" id="cfgMananaHasta" type="time" />
-      </div>
-    </div>
-    <div class="modal-row">
-      <div class="modal-field">
-        <label class="modal-label">Tarde desde</label>
-        <input class="modal-input" id="cfgTardeDesde" type="time" />
-      </div>
-      <div class="modal-field">
-        <label class="modal-label">Tarde hasta</label>
-        <input class="modal-input" id="cfgTardeHasta" type="time" />
-      </div>
-    </div>
-
-    <div style="font-size:12px;color:#8696a0;margin-top:4px">WhatsApp</div>
-    <div class="modal-field">
-      <label class="modal-label">Número del bot (sin + ni espacios)</label>
-      <input class="modal-input" id="cfgBotNumber" type="text" placeholder="15551445115" />
-    </div>
-
-    <div class="modal-actions">
-      <button class="btn btn-cancel" onclick="cerrarConfig()">Cancelar</button>
-      <button class="btn btn-generate" onclick="guardarConfig()">Guardar</button>
-    </div>
-  </div>
-</div>
-
 <script>
   const API = "";
+  let BOT_NUMBER = "15551445115";
+  let authToken = localStorage.getItem("auth_token");
+  let selectedTel = null, patients = [];
+  let userScrolling = false, scrollTimer = null;
 
-  // ── IMPORTANTE: cambiá este número por el del bot (sin + ni espacios) ──
-  let BOT_NUMBER = "15551445115"; // se actualiza al cargar config
-  fetch(`${API}/config`).then(r => r.json()).then(cfg => { if (cfg.bot_whatsapp_number) BOT_NUMBER = cfg.bot_whatsapp_number; }).catch(() => {});
+  // Auth guard
+  if (!authToken) { window.location.href = "/login.html"; }
 
-  let selectedTel   = null;
-  let patients      = [];
-  let userScrolling = false;
-  let scrollTimer   = null;
+  function authH() { return { "Authorization": `Bearer ${authToken}`, "Content-Type": "application/json" }; }
+  function logout() { localStorage.removeItem("auth_token"); localStorage.removeItem("auth_user"); window.location.href = "/login.html"; }
 
   const isMobile = () => window.innerWidth <= 640;
+  function fmtTime(iso) { if (!iso) return ""; return new Date(iso).toLocaleTimeString("es-AR", { hour: "2-digit", minute: "2-digit" }); }
+  function fmtDate(iso) { if (!iso) return ""; return new Date(iso).toLocaleDateString("es-AR", { weekday: "short", day: "numeric", month: "short" }); }
+  function escHtml(t) { return (t||"").replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;").replace(/\n/g,"<br>"); }
+  function showToast(msg) { const t = document.getElementById("toast"); t.textContent = msg; t.classList.add("show"); setTimeout(() => t.classList.remove("show"), 2500); }
 
-  function fmtTime(iso) {
-    if (!iso) return "";
-    return new Date(iso).toLocaleTimeString("es-AR", { hour: "2-digit", minute: "2-digit" });
-  }
-  function fmtDate(iso) {
-    if (!iso) return "";
-    return new Date(iso).toLocaleDateString("es-AR", { weekday: "short", day: "numeric", month: "short" });
-  }
-  function escHtml(t) {
-    return (t||"").replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;").replace(/\n/g,"<br>");
-  }
-
-  function showToast(msg) {
-    const t = document.getElementById("toast");
-    t.textContent = msg;
-    t.classList.add("show");
-    setTimeout(() => t.classList.remove("show"), 2500);
-  }
-
-  // ── Modal generar link ────────────────────
-  function abrirModal() {
-    // Setear fecha de hoy por defecto
-    const hoy = new Date().toISOString().split("T")[0];
-    document.getElementById("mFecha").value = hoy;
-    document.getElementById("mHora").value = "09:30";
-    document.getElementById("linkResult").classList.remove("show");
-    document.getElementById("modalOverlay").classList.add("show");
-    document.getElementById("mNombre").focus();
-  }
-
-  function cerrarModal() {
-    document.getElementById("modalOverlay").classList.remove("show");
-  }
-
-  // Click fuera del modal lo cierra
-  document.getElementById("modalOverlay").addEventListener("click", (e) => {
-    if (e.target === document.getElementById("modalOverlay")) cerrarModal();
-  });
-
-  function generarLink() {
-    const nombre   = document.getElementById("mNombre").value.trim();
-    const practica = document.getElementById("mPractica").value;
-    const fecha    = document.getElementById("mFecha").value;
-    const hora     = document.getElementById("mHora").value;
-
-    if (!nombre || !fecha || !hora) {
-      showToast("Completá todos los campos");
-      return;
-    }
-
-    // Formato del mensaje que Mía va a detectar
-    // TURNO_DIRECTO es la palabra clave que usa el agente para reconocerlo
-    const mensaje = `TURNO_DIRECTO|${nombre}|${practica}|${fecha}|${hora}`;
-    const url = `https://wa.me/${BOT_NUMBER}?text=${encodeURIComponent(mensaje)}`;
-
-    document.getElementById("linkMensaje").textContent = mensaje;
-    document.getElementById("linkUrl").href = url;
-    document.getElementById("linkResult").classList.add("show");
-  }
-
-  function copiarLink() {
-    const url = document.getElementById("linkUrl").href;
-    navigator.clipboard.writeText(url)
-      .then(() => showToast("Link copiado"))
-      .catch(() => {
-        const el = document.createElement("textarea");
-        el.value = url;
-        document.body.appendChild(el);
-        el.select();
-        document.execCommand("copy");
-        document.body.removeChild(el);
-        showToast("Link copiado");
-      });
-  }
-
-  // ── Navegación mobile ─────────────────────
   function goBack() {
     selectedTel = null;
     if (isMobile()) {
@@ -382,8 +241,7 @@
       document.getElementById("headerTitle").textContent = "Panel Admin — Mía";
     }
   }
-
-  function showConvo(patient) {
+  function showConvoMobile(patient) {
     if (isMobile()) {
       document.getElementById("sidebar").classList.add("hidden");
       document.getElementById("convoPanel").classList.add("visible");
@@ -392,10 +250,10 @@
     }
   }
 
-  // ── Cargar pacientes ──────────────────────
   async function loadPatients() {
     try {
-      const res = await fetch(`${API}/patients`);
+      const res = await fetch(`${API}/patients`, { headers: authH() });
+      if (res.status === 401) { logout(); return; }
       patients = await res.json();
       renderSidebar();
       if (selectedTel && !userScrolling) await updateMessages(selectedTel);
@@ -403,24 +261,13 @@
     } catch(e) { console.error(e); }
   }
 
-  // ── Sidebar ───────────────────────────────
   function renderSidebar() {
     const list = document.getElementById("patientList");
-    document.getElementById("totalCount").textContent =
-      `${patients.length} paciente${patients.length !== 1 ? "s" : ""}`;
-
-    if (!patients.length) {
-      list.innerHTML = '<div class="no-patients">Sin conversaciones todavía</div>';
-      return;
-    }
-
+    document.getElementById("totalCount").textContent = `${patients.length} paciente${patients.length !== 1 ? "s" : ""}`;
+    if (!patients.length) { list.innerHTML = '<div class="no-patients">Sin conversaciones todavía</div>'; return; }
     list.innerHTML = patients.map(p => `
-      <div class="patient-item ${p.telefono === selectedTel ? "active" : ""}"
-           onclick="selectPatient('${p.telefono}')">
-        <div class="patient-avatar">
-          👤
-          <div class="modo-badge ${p.modo}"></div>
-        </div>
+      <div class="patient-item ${p.telefono === selectedTel ? "active" : ""}" onclick="selectPatient('${p.telefono}')">
+        <div class="patient-avatar">👤<div class="modo-badge ${p.modo}"></div></div>
         <div class="patient-info">
           <div class="patient-name">${escHtml(p.nombre)}</div>
           <div class="patient-preview">${escHtml(p.telefono)}</div>
@@ -430,102 +277,67 @@
           <div class="patient-time">${fmtDate(p.updated_at)}</div>
           <div class="patient-msgs">${p.total_mensajes} msg</div>
         </div>
-      </div>
-    `).join("");
+      </div>`).join("");
   }
 
-  // ── Seleccionar paciente ──────────────────
   async function selectPatient(telefono) {
-    selectedTel   = telefono;
-    userScrolling = false;
+    selectedTel = telefono; userScrolling = false;
     renderSidebar();
-    const patient = patients.find(p => p.telefono === telefono);
-    if (patient) showConvo(patient);
+    const p = patients.find(p => p.telefono === telefono);
+    if (p) showConvoMobile(p);
     await loadMessages(telefono, true);
   }
 
-  // ── Carga completa del panel ──────────────
   async function loadMessages(telefono, scrollBottom = false) {
     const patient = patients.find(p => p.telefono === telefono);
     if (!patient) return;
-
-    const res = await fetch(`${API}/patients/${telefono}/messages`);
+    const res = await fetch(`${API}/patients/${telefono}/messages`, { headers: authH() });
     const messages = await res.json();
-
     const panel = document.getElementById("convoPanel");
     panel.innerHTML = `
       <div class="convo-header">
         <div class="convo-avatar">👤</div>
         <div style="flex:1;min-width:0">
           <div class="convo-name">${escHtml(patient.nombre)}</div>
-          <div class="convo-detail">
-            ${escHtml(patient.telefono)}
-            ${patient.dni ? ` · DNI ${patient.dni}` : ""}
-            ${patient.obra_social ? ` · ${patient.obra_social}` : ""}
-            · <strong>${patient.modo === "humano" ? "⏸ Pausado" : "🤖 Bot activo"}</strong>
-          </div>
+          <div class="convo-detail">${escHtml(patient.telefono)}${patient.dni ? ` · DNI ${patient.dni}` : ""}${patient.obra_social ? ` · ${patient.obra_social}` : ""} · <strong>${patient.modo === "humano" ? "⏸ Pausado" : "🤖 Bot activo"}</strong></div>
         </div>
         <div class="convo-actions">
-          ${patient.modo === "bot"
-            ? `<button class="btn btn-pause" onclick="pauseConvo('${telefono}')">Pausar</button>`
-            : `<button class="btn btn-resume" onclick="resumeConvo('${telefono}')">Reanudar</button>`}
+          ${patient.modo === "bot" ? `<button class="btn btn-pause" onclick="pauseConvo('${telefono}')">Pausar</button>` : `<button class="btn btn-resume" onclick="resumeConvo('${telefono}')">Reanudar</button>`}
           <button class="btn btn-clear" onclick="clearConvo('${telefono}')">Borrar</button>
         </div>
       </div>
-      <div class="messages-area" id="messagesArea">
-        ${renderMessages(messages)}
-      </div>
+      <div class="messages-area" id="messagesArea">${renderMessages(messages)}</div>
       <div class="patient-data-bar">
         <div>Tel: <span>${patient.telefono}</span></div>
         ${patient.dni ? `<div>DNI: <span>${patient.dni}</span></div>` : ""}
         ${patient.obra_social ? `<div>OS: <span>${patient.obra_social}</span></div>` : ""}
         <div>Mensajes: <span>${patient.total_mensajes}</span></div>
         <div>Desde: <span>${fmtDate(patient.created_at)}</span></div>
-      </div>
-    `;
-
+      </div>`;
     const area = document.getElementById("messagesArea");
     if (area) {
-      area.addEventListener("scroll", () => {
-        userScrolling = true;
-        clearTimeout(scrollTimer);
-        scrollTimer = setTimeout(() => { userScrolling = false; }, 5000);
-      });
+      area.addEventListener("scroll", () => { userScrolling = true; clearTimeout(scrollTimer); scrollTimer = setTimeout(() => { userScrolling = false; }, 5000); });
       if (scrollBottom) area.scrollTop = area.scrollHeight;
     }
   }
 
-  // ── Actualización liviana (polling) ───────
   async function updateMessages(telefono) {
     const area = document.getElementById("messagesArea");
     if (!area) return;
-
-    const res = await fetch(`${API}/patients/${telefono}/messages`);
+    const res = await fetch(`${API}/patients/${telefono}/messages`, { headers: authH() });
     const messages = await res.json();
-
     const currentCount = area.querySelectorAll(".msg-wrap").length;
     if (messages.length > currentCount) {
-      const nuevos = messages.slice(currentCount);
       const fragment = document.createDocumentFragment();
-      nuevos.forEach(msg => {
+      messages.slice(currentCount).forEach(msg => {
         const div = document.createElement("div");
         div.className = `msg-wrap ${msg.role}`;
-        div.innerHTML = `
-          <div class="msg-bubble">
-            ${escHtml(msg.text)}
-            <div class="msg-time">${fmtTime(msg.ts)}</div>
-          </div>`;
+        div.innerHTML = `<div class="msg-bubble">${escHtml(msg.text)}<div class="msg-time">${fmtTime(msg.ts)}</div></div>`;
         fragment.appendChild(div);
       });
       const wasAtBottom = area.scrollHeight - area.scrollTop - area.clientHeight < 50;
       area.appendChild(fragment);
       if (wasAtBottom && !userScrolling) area.scrollTop = area.scrollHeight;
-    }
-
-    const detail = document.querySelector(".convo-detail strong");
-    const patient = patients.find(p => p.telefono === telefono);
-    if (detail && patient) {
-      detail.textContent = patient.modo === "humano" ? "⏸ Pausado" : "🤖 Bot activo";
     }
   }
 
@@ -534,90 +346,109 @@
     let html = "", lastDate = null;
     messages.forEach(msg => {
       const d = msg.ts ? new Date(msg.ts).toLocaleDateString("es-AR") : null;
-      if (d && d !== lastDate) {
-        html += `<div class="date-sep"><span>${d}</span></div>`;
-        lastDate = d;
-      }
-      html += `
-        <div class="msg-wrap ${msg.role}">
-          <div class="msg-bubble">
-            ${escHtml(msg.text)}
-            <div class="msg-time">${fmtTime(msg.ts)}</div>
-          </div>
-        </div>`;
+      if (d && d !== lastDate) { html += `<div class="date-sep"><span>${d}</span></div>`; lastDate = d; }
+      html += `<div class="msg-wrap ${msg.role}"><div class="msg-bubble">${escHtml(msg.text)}<div class="msg-time">${fmtTime(msg.ts)}</div></div></div>`;
     });
     return html;
   }
 
-  // ── Acciones ──────────────────────────────
-  async function pauseConvo(tel) {
-    await fetch(`${API}/admin/pause/${tel}`, { method: "POST" });
-    await loadPatients();
-    await loadMessages(tel, false);
-  }
-  async function resumeConvo(tel) {
-    await fetch(`${API}/admin/resume/${tel}`, { method: "POST" });
-    await loadPatients();
-    await loadMessages(tel, false);
-  }
+  async function pauseConvo(tel) { await fetch(`${API}/admin/pause/${tel}`, { method: "POST", headers: authH() }); await loadPatients(); await loadMessages(tel, false); }
+  async function resumeConvo(tel) { await fetch(`${API}/admin/resume/${tel}`, { method: "POST", headers: authH() }); await loadPatients(); await loadMessages(tel, false); }
   async function clearConvo(tel) {
     if (!confirm("Borrar historial de esta conversación?")) return;
-    await fetch(`${API}/session/${tel}`, { method: "DELETE" });
+    await fetch(`${API}/session/${tel}`, { method: "DELETE", headers: authH() });
     await loadPatients();
     if (selectedTel === tel) await loadMessages(tel, true);
   }
 
-  // ── Configuración ─────────────────────────
+  // Modal nuevo turno
+  function abrirNuevoTurno() {
+    document.getElementById("tFecha").value = new Date().toISOString().split("T")[0];
+    document.getElementById("tHora").value = "09:30";
+    document.getElementById("linkBox").style.display = "none";
+    document.getElementById("turnoOverlay").classList.add("show");
+    setTimeout(() => document.getElementById("tNombre").focus(), 100);
+  }
+  function generarLink() {
+    const nombre = document.getElementById("tNombre").value.trim();
+    const practica = document.getElementById("tPractica").value;
+    const fecha = document.getElementById("tFecha").value;
+    const hora = document.getElementById("tHora").value;
+    if (!nombre || !fecha || !hora) { showToast("Completá todos los campos"); return; }
+    const mensaje = `TURNO_DIRECTO|${nombre}|${practica}|${fecha}|${hora}`;
+    const url = `https://wa.me/${BOT_NUMBER}?text=${encodeURIComponent(mensaje)}`;
+    document.getElementById("linkMensaje").textContent = mensaje;
+    document.getElementById("linkUrl").href = url;
+    document.getElementById("linkBox").style.display = "block";
+  }
+  function copiarLink() { navigator.clipboard.writeText(document.getElementById("linkUrl").href).then(() => showToast("Link copiado")).catch(() => showToast("No se pudo copiar")); }
+
+  // Modal configuración
   async function abrirConfig() {
     try {
-      const res = await fetch(`${API}/config`);
-      const cfg = await res.json();
-      document.getElementById("cfgEstilo").value       = cfg.estilo_conversacion  || "profesional_amigable";
-      document.getElementById("cfgMananaDesde").value  = cfg.horario_manana_desde || "09:30";
-      document.getElementById("cfgMananaHasta").value  = cfg.horario_manana_hasta || "13:00";
-      document.getElementById("cfgTardeDesde").value   = cfg.horario_tarde_desde  || "14:00";
-      document.getElementById("cfgTardeHasta").value   = cfg.horario_tarde_hasta  || "17:00";
-      document.getElementById("cfgBotNumber").value    = cfg.bot_whatsapp_number  || "15551445115";
+      const cfg = await fetch(`${API}/config`, { headers: authH() }).then(r => r.json());
+      document.getElementById("cfgEstilo").value      = cfg.estilo_conversacion  || "profesional_amigable";
+      document.getElementById("cfgMananaDesde").value = cfg.horario_manana_desde || "09:30";
+      document.getElementById("cfgMananaHasta").value = cfg.horario_manana_hasta || "13:00";
+      document.getElementById("cfgTardeDesde").value  = cfg.horario_tarde_desde  || "14:00";
+      document.getElementById("cfgTardeHasta").value  = cfg.horario_tarde_hasta  || "17:00";
+      document.getElementById("cfgBotNumber").value   = cfg.bot_whatsapp_number  || "15551445115";
+      BOT_NUMBER = cfg.bot_whatsapp_number || BOT_NUMBER;
     } catch(e) { console.error("Error cargando config:", e); }
     document.getElementById("configOverlay").classList.add("show");
   }
-
-  function cerrarConfig() {
-    document.getElementById("configOverlay").classList.remove("show");
-  }
-
   async function guardarConfig() {
     const num = document.getElementById("cfgBotNumber").value.trim().replace(/\D/g, "");
     if (!num) { showToast("Ingresá un número válido"); return; }
-
-    const payload = {
-      estilo_conversacion:  document.getElementById("cfgEstilo").value,
-      horario_manana_desde: document.getElementById("cfgMananaDesde").value,
-      horario_manana_hasta: document.getElementById("cfgMananaHasta").value,
-      horario_tarde_desde:  document.getElementById("cfgTardeDesde").value,
-      horario_tarde_hasta:  document.getElementById("cfgTardeHasta").value,
-      bot_whatsapp_number:  num,
-    };
-
     try {
-      await fetch(`${API}/config`, {
-        method: "PATCH",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(payload),
-      });
-      cerrarConfig();
+      await fetch(`${API}/config`, { method: "PATCH", headers: authH(), body: JSON.stringify({
+        estilo_conversacion:  document.getElementById("cfgEstilo").value,
+        horario_manana_desde: document.getElementById("cfgMananaDesde").value,
+        horario_manana_hasta: document.getElementById("cfgMananaHasta").value,
+        horario_tarde_desde:  document.getElementById("cfgTardeDesde").value,
+        horario_tarde_hasta:  document.getElementById("cfgTardeHasta").value,
+        bot_whatsapp_number:  num,
+      })});
+      BOT_NUMBER = num;
+      document.getElementById("configOverlay").classList.remove("show");
       showToast("Configuración guardada. Efectiva en el próximo mensaje.");
-    } catch(e) {
-      showToast("Error guardando configuración");
-    }
+    } catch(e) { showToast("Error guardando configuración"); }
   }
 
-  document.getElementById("configOverlay").addEventListener("click", (e) => {
-    if (e.target === document.getElementById("configOverlay")) cerrarConfig();
+  // Modal equipo
+  async function abrirEquipo() {
+    document.getElementById("invLinkBox").style.display = "none";
+    document.getElementById("invEmail").value = "";
+    try {
+      const team = await fetch(`${API}/admin/team`, { headers: authH() }).then(r => r.json());
+      document.getElementById("equipoList").innerHTML = team.length
+        ? team.map(u => `<div style="padding:8px 0;border-bottom:1px solid #2a3942;display:flex;justify-content:space-between"><span>${escHtml(u.nombre || u.email)}</span><span style="color:#8696a0;font-size:11px">${escHtml(u.email)}</span></div>`).join("")
+        : '<div style="color:#8696a0">Sin usuarios en el equipo todavía</div>';
+    } catch(e) { document.getElementById("equipoList").textContent = "Error cargando equipo"; }
+    document.getElementById("equipoOverlay").classList.add("show");
+  }
+  async function invitar() {
+    const email = document.getElementById("invEmail").value.trim();
+    if (!email) { showToast("Ingresá un email"); return; }
+    try {
+      const res = await fetch(`${API}/auth/invitar`, { method: "POST", headers: authH(), body: JSON.stringify({ email }) });
+      const data = await res.json();
+      if (!res.ok) { showToast(data.error || "Error"); return; }
+      document.getElementById("invLinkText").textContent = data.link;
+      document.getElementById("invLinkBox").style.display = "block";
+    } catch(e) { showToast("Error generando invitación"); }
+  }
+  function copiarInvLink() { navigator.clipboard.writeText(document.getElementById("invLinkText").textContent).then(() => showToast("Link copiado")).catch(() => showToast("No se pudo copiar")); }
+
+  // Cerrar modales clickeando afuera
+  ["turnoOverlay","configOverlay","equipoOverlay"].forEach(id => {
+    document.getElementById(id).addEventListener("click", e => { if (e.target.id === id) document.getElementById(id).classList.remove("show"); });
   });
 
+  // Arranque
   loadPatients();
   setInterval(loadPatients, 3000);
+  fetch(`${API}/config`, { headers: authH() }).then(r => r.json()).then(cfg => { if (cfg.bot_whatsapp_number) BOT_NUMBER = cfg.bot_whatsapp_number; }).catch(() => {});
 </script>
 </body>
 </html>
