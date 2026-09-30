@@ -107,6 +107,7 @@
     </div>
   </div>
   <div class="header-right">
+    <button class="btn btn-sm" onclick="abrirPracticas()">Prácticas</button>
     <button class="btn btn-sm" onclick="abrirEquipo()">Equipo</button>
     <button class="btn btn-sm" onclick="abrirConfig()">⚙ Config</button>
     <div class="live-badge">EN VIVO</div>
@@ -208,6 +209,37 @@
     <div class="modal-actions">
       <button class="btn btn-cancel" onclick="document.getElementById('equipoOverlay').classList.remove('show')">Cerrar</button>
       <button class="btn btn-primary" onclick="invitar()">Generar invitación</button>
+    </div>
+  </div>
+</div>
+
+<!-- Modal prácticas -->
+<div class="modal-overlay" id="practicasOverlay">
+  <div class="modal" style="width:480px;max-height:85vh;overflow-y:auto">
+    <div class="modal-title">Prácticas del consultorio</div>
+    <div id="practicasList" style="font-size:13px;margin-bottom:14px">Cargando...</div>
+    <div style="border-top:1px solid #2a3942;padding-top:14px">
+      <div style="font-size:13px;font-weight:600;margin-bottom:10px" id="practicasFormTitle">Nueva práctica</div>
+      <input type="hidden" id="practicaEditId" />
+      <div class="modal-row">
+        <div class="modal-field" style="flex:2">
+          <label class="modal-label">Nombre</label>
+          <input class="modal-input" id="pNombre" type="text" placeholder="Ej: Limpieza dental" />
+        </div>
+        <div class="modal-field" style="flex:1">
+          <label class="modal-label">Duración (min)</label>
+          <input class="modal-input" id="pDuracion" type="number" min="10" step="10" placeholder="30" />
+        </div>
+      </div>
+      <div class="modal-field">
+        <label class="modal-label">Requiere (opcional)</label>
+        <input class="modal-input" id="pRequiere" type="text" placeholder="Ej: Radiografía previa" />
+      </div>
+    </div>
+    <div class="modal-actions">
+      <button class="btn btn-cancel" onclick="cerrarPracticas()">Cerrar</button>
+      <button class="btn btn-cancel" id="pCancelarEdit" style="display:none" onclick="cancelarEditPractica()">Cancelar edición</button>
+      <button class="btn btn-primary" onclick="guardarPractica()">Guardar</button>
     </div>
   </div>
 </div>
@@ -462,9 +494,91 @@
   function copiarInvLink() { copiarTexto(document.getElementById("invLinkText").textContent); }
 
   // Cerrar modales clickeando afuera
-  ["turnoOverlay","configOverlay","equipoOverlay"].forEach(id => {
+  ["turnoOverlay","configOverlay","equipoOverlay","practicasOverlay"].forEach(id => {
     document.getElementById(id).addEventListener("click", e => { if (e.target.id === id) document.getElementById(id).classList.remove("show"); });
   });
+
+  // ── Prácticas ─────────────────────────────
+  async function abrirPracticas() {
+    document.getElementById("practicaEditId").value = "";
+    document.getElementById("pNombre").value = "";
+    document.getElementById("pDuracion").value = "";
+    document.getElementById("pRequiere").value = "";
+    document.getElementById("pCancelarEdit").style.display = "none";
+    document.getElementById("practicasFormTitle").textContent = "Nueva práctica";
+    await cargarPracticas();
+    document.getElementById("practicasOverlay").classList.add("show");
+  }
+
+  function cerrarPracticas() { document.getElementById("practicasOverlay").classList.remove("show"); }
+
+  async function cargarPracticas() {
+    try {
+      const res = await fetch(`${API}/practicas`, { headers: authH() });
+      const lista = await res.json();
+      const el = document.getElementById("practicasList");
+      if (!lista.length) {
+        el.innerHTML = '<div style="color:#8696a0;margin-bottom:8px">Sin prácticas cargadas. El agente usará el listado por defecto.</div>';
+        return;
+      }
+      el.innerHTML = lista.map(p => `
+        <div style="display:flex;align-items:center;gap:8px;padding:8px 0;border-bottom:1px solid #2a3942">
+          <div style="flex:1">
+            <div style="font-size:14px;font-weight:500">${escHtml(p.nombre)}</div>
+            <div style="font-size:11px;color:#8696a0">${p.duracion_min} min${p.requiere ? ` · Requiere: ${escHtml(p.requiere)}` : ""}</div>
+          </div>
+          <button class="btn btn-sm" onclick="editarPractica(${p.id},'${escHtml(p.nombre)}',${p.duracion_min},'${escHtml(p.requiere||"")}')">Editar</button>
+          <button class="btn btn-sm" style="color:#ff6b6b" onclick="eliminarPractica(${p.id})">Eliminar</button>
+        </div>`).join("");
+    } catch(e) { document.getElementById("practicasList").textContent = "Error cargando prácticas"; }
+  }
+
+  function editarPractica(id, nombre, duracion, requiere) {
+    document.getElementById("practicaEditId").value = id;
+    document.getElementById("pNombre").value = nombre;
+    document.getElementById("pDuracion").value = duracion;
+    document.getElementById("pRequiere").value = requiere;
+    document.getElementById("practicasFormTitle").textContent = "Editar práctica";
+    document.getElementById("pCancelarEdit").style.display = "inline-block";
+    document.getElementById("pNombre").focus();
+  }
+
+  function cancelarEditPractica() {
+    document.getElementById("practicaEditId").value = "";
+    document.getElementById("pNombre").value = "";
+    document.getElementById("pDuracion").value = "";
+    document.getElementById("pRequiere").value = "";
+    document.getElementById("practicasFormTitle").textContent = "Nueva práctica";
+    document.getElementById("pCancelarEdit").style.display = "none";
+  }
+
+  async function guardarPractica() {
+    const id = document.getElementById("practicaEditId").value;
+    const nombre = document.getElementById("pNombre").value.trim();
+    const duracion_min = parseInt(document.getElementById("pDuracion").value);
+    const requiere = document.getElementById("pRequiere").value.trim() || null;
+    if (!nombre || !duracion_min) { showToast("Completá nombre y duración"); return; }
+    try {
+      if (id) {
+        await fetch(`${API}/practicas/${id}`, { method: "PATCH", headers: authH(), body: JSON.stringify({ nombre, duracion_min, requiere }) });
+        showToast("Práctica actualizada");
+      } else {
+        await fetch(`${API}/practicas`, { method: "POST", headers: authH(), body: JSON.stringify({ nombre, duracion_min, requiere }) });
+        showToast("Práctica agregada");
+      }
+      cancelarEditPractica();
+      await cargarPracticas();
+    } catch(e) { showToast("Error guardando práctica"); }
+  }
+
+  async function eliminarPractica(id) {
+    if (!confirm("Desactivar esta práctica?")) return;
+    try {
+      await fetch(`${API}/practicas/${id}`, { method: "DELETE", headers: authH() });
+      showToast("Práctica eliminada");
+      await cargarPracticas();
+    } catch(e) { showToast("Error eliminando práctica"); }
+  }
 
   // Arranque
   loadPatients();
