@@ -88,6 +88,16 @@ async function initDB() {
       updated_at TIMESTAMPTZ DEFAULT NOW()
     );
 
+    CREATE TABLE IF NOT EXISTS practicas (
+      id             SERIAL PRIMARY KEY,
+      nombre         TEXT NOT NULL,
+      duracion_min   INTEGER NOT NULL DEFAULT 30,
+      requiere       TEXT,
+      activa         BOOLEAN DEFAULT true,
+      orden          INTEGER DEFAULT 0,
+      created_at     TIMESTAMPTZ DEFAULT NOW()
+    );
+
     INSERT INTO consultorio_config (clave, valor) VALUES
       ('horario_manana_desde', '09:30'),
       ('horario_manana_hasta', '13:00'),
@@ -331,12 +341,54 @@ async function clearClaudeHistory(telefono) {
   await pool.query("DELETE FROM claude_history WHERE telefono = $1", [telefono]);
 }
 
+// ─────────────────────────────────────────────
+//  PRÁCTICAS
+// ─────────────────────────────────────────────
+
+async function getPracticas() {
+  if (!USE_DB) return [];
+  const { rows } = await pool.query(
+    "SELECT * FROM practicas WHERE activa = true ORDER BY orden ASC, id ASC"
+  );
+  return rows;
+}
+
+async function createPractica({ nombre, duracion_min, requiere }) {
+  if (!USE_DB) return null;
+  const { rows } = await pool.query(
+    "INSERT INTO practicas (nombre, duracion_min, requiere) VALUES ($1, $2, $3) RETURNING *",
+    [nombre, duracion_min || 30, requiere || null]
+  );
+  return rows[0];
+}
+
+async function updatePractica(id, { nombre, duracion_min, requiere }) {
+  if (!USE_DB) return null;
+  const { rows } = await pool.query(
+    `UPDATE practicas SET
+      nombre       = COALESCE($1, nombre),
+      duracion_min = COALESCE($2, duracion_min),
+      requiere     = $3
+     WHERE id = $4 RETURNING *`,
+    [nombre || null, duracion_min || null, requiere || null, id]
+  );
+  return rows[0];
+}
+
+async function deletePractica(id) {
+  if (!USE_DB) return;
+  // Soft delete — marcar como inactiva
+  await pool.query("UPDATE practicas SET activa = false WHERE id = $1", [id]);
+}
+
 module.exports = {
   initDB,
   // auth
   createConsultorio, getConsultorio,
   createUser, getUserByEmail, updateUserConsultorio, getUsersByConsultorio,
   createInvitacion, getInvitacion, usarInvitacion,
+  // practicas
+  getPracticas, createPractica, updatePractica, deletePractica,
   // config
   getConfig, setConfig,
   // patients
