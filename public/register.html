@@ -1,0 +1,103 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Crear cuenta — Mía</title>
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; background: #0b141a; color: #e9edef; min-height: 100vh; display: flex; align-items: center; justify-content: center; padding: 20px; }
+    .card { background: #202c33; border-radius: 16px; padding: 40px 36px; width: 100%; max-width: 400px; box-shadow: 0 16px 48px rgba(0,0,0,0.4); }
+    .logo { font-size: 40px; text-align: center; margin-bottom: 8px; }
+    .title { font-size: 22px; font-weight: 700; text-align: center; margin-bottom: 4px; }
+    .subtitle { font-size: 13px; color: #8696a0; text-align: center; margin-bottom: 28px; }
+    .field { margin-bottom: 16px; }
+    .label { font-size: 12px; color: #8696a0; margin-bottom: 6px; display: block; }
+    .input { width: 100%; background: #2a3942; border: 1px solid #3a4952; border-radius: 8px; padding: 12px 14px; color: #e9edef; font-size: 15px; outline: none; }
+    .input:focus { border-color: #00a884; }
+    .hint { font-size: 11px; color: #8696a0; margin-top: 4px; }
+    .btn { width: 100%; background: #00a884; border: none; border-radius: 24px; padding: 14px; color: white; font-size: 16px; font-weight: 600; cursor: pointer; margin-top: 8px; }
+    .btn:hover { background: #00c99d; }
+    .btn:disabled { background: #2a3942; color: #8696a0; cursor: default; }
+    .error { background: #3d1a1a; border: 1px solid #cc0000; border-radius: 8px; padding: 10px 14px; color: #ff6b6b; font-size: 13px; margin-bottom: 16px; display: none; }
+    .invite-banner { background: #1a2e1a; border: 1px solid #00a884; border-radius: 8px; padding: 10px 14px; color: #00a884; font-size: 13px; margin-bottom: 20px; display: none; }
+    .footer { text-align: center; margin-top: 20px; font-size: 13px; color: #8696a0; }
+    .link { color: #00a884; text-decoration: none; }
+    .link:hover { text-decoration: underline; }
+  </style>
+</head>
+<body>
+<div class="card">
+  <div class="logo">🦷</div>
+  <div class="title">Crear cuenta</div>
+  <div class="subtitle" id="subtitle">Ingresá tus datos para registrarte</div>
+  <div class="invite-banner" id="inviteBanner"></div>
+  <div class="error" id="error"></div>
+  <div class="field">
+    <label class="label">Nombre</label>
+    <input class="input" id="nombre" type="text" placeholder="Tu nombre" autocomplete="name" />
+  </div>
+  <div class="field" id="emailField">
+    <label class="label">Email</label>
+    <input class="input" id="email" type="email" placeholder="tu@email.com" autocomplete="email" />
+  </div>
+  <div class="field">
+    <label class="label">Password</label>
+    <input class="input" id="password" type="password" placeholder="Mínimo 8 caracteres" autocomplete="new-password" />
+    <div class="hint">Mínimo 8 caracteres, al menos un número</div>
+  </div>
+  <div class="field">
+    <label class="label">Repetir password</label>
+    <input class="input" id="password2" type="password" placeholder="Repetí tu password" autocomplete="new-password" />
+  </div>
+  <button class="btn" id="btn" onclick="register()">Crear cuenta</button>
+  <div class="footer">Ya tenés cuenta? <a class="link" href="/login.html">Iniciar sesión</a></div>
+</div>
+<script>
+  const params = new URLSearchParams(window.location.search);
+  const invToken = params.get("token");
+  let invEmail = null;
+
+  if (invToken) {
+    fetch(`/auth/invitacion/${invToken}`).then(r => r.json()).then(data => {
+      if (data.email) {
+        invEmail = data.email;
+        document.getElementById("email").value = data.email;
+        document.getElementById("email").disabled = true;
+        const b = document.getElementById("inviteBanner");
+        b.textContent = `Fuiste invitado al consultorio "${data.consultorio_nombre}". Creá tu cuenta para unirte.`;
+        b.style.display = "block";
+        document.getElementById("subtitle").textContent = "Aceptar invitación";
+      }
+    }).catch(() => {});
+  }
+
+  async function register() {
+    const nombre = document.getElementById("nombre").value.trim();
+    const email = invEmail || document.getElementById("email").value.trim();
+    const password = document.getElementById("password").value;
+    const password2 = document.getElementById("password2").value;
+    const btn = document.getElementById("btn");
+    document.getElementById("error").style.display = "none";
+    if (!nombre || !email || !password) { showError("Completá todos los campos"); return; }
+    if (password.length < 8) { showError("El password debe tener al menos 8 caracteres"); return; }
+    if (!/\d/.test(password)) { showError("El password debe tener al menos un número"); return; }
+    if (password !== password2) { showError("Los passwords no coinciden"); return; }
+    btn.disabled = true; btn.textContent = "Creando cuenta...";
+    try {
+      const url = invToken ? "/auth/aceptar-invitacion" : "/auth/register";
+      const body = invToken ? { token: invToken, password, nombre } : { email, password, nombre };
+      const res = await fetch(url, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) });
+      const data = await res.json();
+      if (!res.ok) { showError(data.error || "Error al crear la cuenta"); return; }
+      localStorage.setItem("auth_token", data.token);
+      localStorage.setItem("auth_user", JSON.stringify(data.user));
+      window.location.href = data.user.consultorio_id ? "/admin.html" : "/setup.html";
+    } catch { showError("No se pudo conectar al servidor"); }
+    finally { btn.disabled = false; btn.textContent = "Crear cuenta"; }
+  }
+
+  function showError(msg) { const e = document.getElementById("error"); e.textContent = msg; e.style.display = "block"; }
+</script>
+</body>
+</html>
