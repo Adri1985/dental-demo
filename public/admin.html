@@ -97,6 +97,7 @@
   </style>
 </head>
 <body>
+
 <div class="header">
   <div class="header-left">
     <button class="back-btn" id="backBtn" onclick="goBack()">←</button>
@@ -231,6 +232,26 @@
   function fmtDate(iso) { if (!iso) return ""; return new Date(iso).toLocaleDateString("es-AR", { weekday: "short", day: "numeric", month: "short" }); }
   function escHtml(t) { return (t||"").replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;").replace(/\n/g,"<br>"); }
   function showToast(msg) { const t = document.getElementById("toast"); t.textContent = msg; t.classList.add("show"); setTimeout(() => t.classList.remove("show"), 2500); }
+
+  // Clipboard con fallback
+  function copiarTexto(texto) {
+    if (navigator.clipboard && window.isSecureContext) {
+      navigator.clipboard.writeText(texto).then(() => showToast("Link copiado")).catch(() => fallbackCopy(texto));
+    } else {
+      fallbackCopy(texto);
+    }
+  }
+  function fallbackCopy(texto) {
+    const el = document.createElement("textarea");
+    el.value = texto;
+    el.style.position = "fixed";
+    el.style.opacity = "0";
+    document.body.appendChild(el);
+    el.focus(); el.select();
+    try { document.execCommand("copy"); showToast("Link copiado"); }
+    catch { showToast("Copiá el link manualmente"); }
+    document.body.removeChild(el);
+  }
 
   function goBack() {
     selectedTel = null;
@@ -381,7 +402,7 @@
     document.getElementById("linkUrl").href = url;
     document.getElementById("linkBox").style.display = "block";
   }
-  function copiarLink() { navigator.clipboard.writeText(document.getElementById("linkUrl").href).then(() => showToast("Link copiado")).catch(() => showToast("No se pudo copiar")); }
+  function copiarLink() { copiarTexto(document.getElementById("linkUrl").href); }
 
   // Modal configuración
   async function abrirConfig() {
@@ -438,7 +459,7 @@
       document.getElementById("invLinkBox").style.display = "block";
     } catch(e) { showToast("Error generando invitación"); }
   }
-  function copiarInvLink() { navigator.clipboard.writeText(document.getElementById("invLinkText").textContent).then(() => showToast("Link copiado")).catch(() => showToast("No se pudo copiar")); }
+  function copiarInvLink() { copiarTexto(document.getElementById("invLinkText").textContent); }
 
   // Cerrar modales clickeando afuera
   ["turnoOverlay","configOverlay","equipoOverlay"].forEach(id => {
