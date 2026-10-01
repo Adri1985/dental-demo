@@ -94,7 +94,7 @@
     .link-box { background: #182229; border: 1px solid #2a3942; border-radius: 8px; padding: 12px; font-size: 12px; word-break: break-all; color: #8696a0; display: none; }
     .link-box strong { color: #00a884; display: block; margin-bottom: 6px; font-size: 11px; }
     .section-label { font-size: 12px; color: #8696a0; }
-    .cfg-tab { background: none; border: none; color: #8696a0; font-size: 13px; font-weight: 600; padding: 8px 14px; cursor: pointer; border-bottom: 2px solid transparent; margin-bottom: -1px; }
+    .cfg-tab { background: none; border: none; color: #8696a0; font-size: 13px; font-weight: 600; padding: 8px 12px; cursor: pointer; border-bottom: 2px solid transparent; margin-bottom: -1px; white-space: nowrap; flex-shrink: 0; }
     .cfg-tab.active { color: #00a884; border-bottom-color: #00a884; }
     .cfg-tab:hover { color: #e9edef; }
     .toast { position: fixed; bottom: 24px; left: 50%; transform: translateX(-50%); background: #2a3942; color: #e9edef; font-size: 13px; padding: 10px 20px; border-radius: 20px; opacity: 0; transition: opacity 0.3s; pointer-events: none; z-index: 999; }
@@ -191,10 +191,11 @@
     <div class="modal-title">Configuración</div>
 
     <!-- Tabs -->
-    <div style="display:flex;gap:4px;margin-bottom:16px;border-bottom:1px solid #2a3942;padding-bottom:0">
+    <div style="display:flex;gap:0;margin-bottom:16px;border-bottom:1px solid #2a3942;overflow-x:auto;-webkit-overflow-scrolling:touch;scrollbar-width:none;">
       <button class="cfg-tab active" onclick="switchTab('horarios')">Horarios</button>
       <button class="cfg-tab" onclick="switchTab('estilo')">Estilo</button>
       <button class="cfg-tab" onclick="switchTab('practicas')">Prácticas</button>
+      <button class="cfg-tab" onclick="switchTab('coberturas')">Cobertura/Valores</button>
       <button class="cfg-tab" onclick="switchTab('flujos')">Flujos</button>
       <button class="cfg-tab" onclick="switchTab('equipo')">Equipo</button>
     </div>
@@ -258,6 +259,47 @@
         <div class="modal-actions" style="margin-top:8px">
           <button class="btn btn-cancel" id="pCancelarEdit" style="display:none" onclick="cancelarEditPractica()">Cancelar edición</button>
           <button class="btn btn-primary" onclick="guardarPractica()">Agregar práctica</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- Tab: Cobertura/Valores -->
+    <div class="cfg-panel" id="tab-coberturas" style="display:none;overflow-y:auto;flex:1">
+      <div class="modal-field">
+        <label class="modal-label">Precio base de la consulta ($)</label>
+        <input class="modal-input" id="cfgPrecioConsulta" type="number" min="0" step="100" placeholder="50000" />
+        <div style="font-size:11px;color:#8696a0;margin-top:4px">Valor en pesos que Mía informa al paciente</div>
+      </div>
+      <div class="modal-actions" style="margin-top:0;margin-bottom:14px">
+        <button class="btn btn-primary" onclick="guardarPrecio()">Guardar precio</button>
+      </div>
+
+      <div style="border-top:1px solid #2a3942;padding-top:14px">
+        <div style="font-size:13px;font-weight:600;margin-bottom:10px">Coberturas y descuentos</div>
+        <div id="coberturasList" style="font-size:13px;margin-bottom:14px">Cargando...</div>
+
+        <div style="border-top:1px solid #2a3942;padding-top:12px">
+          <div style="font-size:12px;font-weight:600;color:#8696a0;margin-bottom:10px" id="coberturaFormTitle">Nueva cobertura</div>
+          <input type="hidden" id="coberturaEditId" />
+          <div class="modal-row">
+            <div class="modal-field" style="flex:2">
+              <label class="modal-label">Obra social</label>
+              <input class="modal-input" id="cObraSocial" type="text" placeholder="Ej: OSDE" />
+            </div>
+            <div class="modal-field" style="flex:1">
+              <label class="modal-label">Descuento (%)</label>
+              <input class="modal-input" id="cDescuento" type="number" min="0" max="100" placeholder="100" />
+            </div>
+          </div>
+          <label style="display:flex;align-items:center;gap:8px;font-size:13px;cursor:pointer;margin-top:8px">
+            <input type="checkbox" id="cPrimeraConsulta" style="width:16px;height:16px;accent-color:#00a884" />
+            Solo primera consulta
+          </label>
+          <div style="font-size:11px;color:#8696a0;margin-top:4px">Si está marcado, el descuento aplica únicamente en la primera vez que atienden al paciente</div>
+          <div class="modal-actions" style="margin-top:12px">
+            <button class="btn btn-cancel" id="cCancelarEdit" style="display:none" onclick="cancelarEditCobertura()">Cancelar</button>
+            <button class="btn btn-primary" onclick="guardarCobertura()">Agregar cobertura</button>
+          </div>
         </div>
       </div>
     </div>
@@ -574,6 +616,89 @@
       cerrarConfig();
       showToast("Configuración guardada. Efectiva en el próximo mensaje.");
     } catch(e) { showToast("Error guardando configuración"); }
+  }
+
+  // ── Cobertura/Valores ────────────────────
+  async function cargarCoberturas() {
+    try {
+      const [cfg, lista] = await Promise.all([
+        fetch(`${API}/config`, { headers: authH() }).then(r => r.json()),
+        fetch(`${API}/coberturas`, { headers: authH() }).then(r => r.json()),
+      ]);
+      document.getElementById("cfgPrecioConsulta").value = cfg.precio_consulta || "";
+      const el = document.getElementById("coberturasList");
+      if (!lista.length) {
+        el.innerHTML = '<div style="color:#8696a0">Sin coberturas configuradas. El agente usa el precio base para todos.</div>';
+        return;
+      }
+      el.innerHTML = lista.map(c => `
+        <div style="display:flex;align-items:center;gap:8px;padding:8px 0;border-bottom:1px solid #2a3942">
+          <div style="flex:1">
+            <div style="font-size:14px;font-weight:500">${escHtml(c.obra_social)}</div>
+            <div style="font-size:11px;color:#8696a0;margin-top:2px">
+              ${c.descuento_pct}% de descuento
+              ${c.primera_consulta_only ? ' · <span style="color:#f59e0b">Solo 1era consulta</span>' : ' · <span style="color:#00a884">Siempre</span>'}
+            </div>
+          </div>
+          <button class="btn btn-sm" onclick="editarCobertura(${c.id},'${escHtml(c.obra_social)}',${c.descuento_pct},${!!c.primera_consulta_only})">Editar</button>
+          <button class="btn btn-sm" style="color:#ff6b6b" onclick="eliminarCobertura(${c.id})">Eliminar</button>
+        </div>`).join("");
+    } catch(e) { console.error("Error cargando coberturas:", e); }
+  }
+
+  async function guardarPrecio() {
+    const precio = document.getElementById("cfgPrecioConsulta").value;
+    try {
+      await fetch(`${API}/config`, { method: "PATCH", headers: authH(), body: JSON.stringify({ precio_consulta: precio }) });
+      showToast("Precio guardado");
+    } catch(e) { showToast("Error guardando precio"); }
+  }
+
+  function editarCobertura(id, obraSocial, descuento, primeraConsulta) {
+    document.getElementById("coberturaEditId").value = id;
+    document.getElementById("cObraSocial").value = obraSocial;
+    document.getElementById("cDescuento").value = descuento;
+    document.getElementById("cPrimeraConsulta").checked = primeraConsulta;
+    document.getElementById("coberturaFormTitle").textContent = "Editar cobertura";
+    document.getElementById("cCancelarEdit").style.display = "inline-block";
+    document.getElementById("cObraSocial").focus();
+  }
+
+  function cancelarEditCobertura() {
+    document.getElementById("coberturaEditId").value = "";
+    document.getElementById("cObraSocial").value = "";
+    document.getElementById("cDescuento").value = "";
+    document.getElementById("cPrimeraConsulta").checked = false;
+    document.getElementById("coberturaFormTitle").textContent = "Nueva cobertura";
+    document.getElementById("cCancelarEdit").style.display = "none";
+  }
+
+  async function guardarCobertura() {
+    const id = document.getElementById("coberturaEditId").value;
+    const obra_social = document.getElementById("cObraSocial").value.trim();
+    const descuento_pct = parseInt(document.getElementById("cDescuento").value) || 0;
+    const primera_consulta_only = document.getElementById("cPrimeraConsulta").checked;
+    if (!obra_social) { showToast("Ingresá el nombre de la obra social"); return; }
+    try {
+      if (id) {
+        await fetch(`${API}/coberturas/${id}`, { method: "PATCH", headers: authH(), body: JSON.stringify({ obra_social, descuento_pct, primera_consulta_only }) });
+        showToast("Cobertura actualizada");
+      } else {
+        await fetch(`${API}/coberturas`, { method: "POST", headers: authH(), body: JSON.stringify({ obra_social, descuento_pct, primera_consulta_only }) });
+        showToast("Cobertura agregada");
+      }
+      cancelarEditCobertura();
+      await cargarCoberturas();
+    } catch(e) { showToast("Error guardando cobertura"); }
+  }
+
+  async function eliminarCobertura(id) {
+    if (!confirm("Eliminar esta cobertura?")) return;
+    try {
+      await fetch(`${API}/coberturas/${id}`, { method: "DELETE", headers: authH() });
+      showToast("Cobertura eliminada");
+      await cargarCoberturas();
+    } catch(e) { showToast("Error eliminando cobertura"); }
   }
 
   // Cargar flujos (llamado desde switchTab)
