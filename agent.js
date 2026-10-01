@@ -4,6 +4,10 @@ const config = require(path.join(__dirname, "config/consultorio.json"));
 // ─────────────────────────────────────────────
 //  Helpers
 // ─────────────────────────────────────────────
+function buildProfesionalesEnum() {
+  return config.profesionales.map(p => p.id);
+}
+
 function buildHorariosText(cfg = {}) {
   const p = config.profesionales[0];
   const h = p.horarios;
@@ -14,16 +18,12 @@ function buildHorariosText(cfg = {}) {
   return `- ${p.nombre}: ${h.dias} de ${mananaDesde} a ${mananaHasta} y ${tardeDesde} a ${tardeHasta} (último turno a las ${tardeHasta})`;
 }
 
-function buildProfesionalesEnum() {
-  return config.profesionales.map(p => p.id);
-}
-
-// Construye el texto de prácticas a partir de la lista dinámica (DB) o fallback a consultorio.json
+// Construye el texto de prácticas desde DB (para_agente=true) o fallback a consultorio.json
 function buildPracticasText(practicas) {
   const lista = practicas && practicas.length > 0 ? practicas : config.practicas;
   return lista.map(p => {
     let texto = `- ${p.nombre}: ${p.duracion_min || p.duracion} minutos`;
-    if (p.requiere) texto += `\n  → REQUIERE: ${p.requiere}`;
+    if (p.requiere) texto += `\n  → REQUIERE: ${Array.isArray(p.requiere) ? p.requiere.join(", ") : p.requiere}`;
     return texto;
   }).join("\n");
 }
@@ -85,7 +85,8 @@ const ESTILOS = {
 
 // ─────────────────────────────────────────────
 //  SYSTEM PROMPT
-//  Acepta cfg (config de DB) y practicas (lista de DB)
+//  cfg: config de DB (horarios, estilo)
+//  practicas: lista filtrada con para_agente=true
 // ─────────────────────────────────────────────
 const getSystemPrompt = (cfg = {}, practicas = []) => {
   const ahora = new Date().toLocaleString("es-AR", {
@@ -125,7 +126,7 @@ CÓMO USÁS LOS DATOS DEL PACIENTE:
 
 REGLAS IMPORTANTES:
 - Nunca ofrezcas un horario sin antes verificar disponibilidad con check_availability.
-- Al llamar a check_availability y create_appointment, usá la duración exacta de la práctica según la lista de abajo. Si no coincide con ninguna, usá 30 minutos.
+- Al llamar a check_availability y create_appointment, usá la duración exacta de la práctica según la lista. Si no coincide con ninguna, usá 30 minutos.
 - Ante cualquier palabra de alarma, usá flag_critical_issue de inmediato. No agendes ni des consejos.
 - Si no podés resolver algo, ofrecé derivar al profesional.
 - Jamás hagas diagnósticos ni des indicaciones médicas.
