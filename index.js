@@ -137,15 +137,16 @@ async function runAgent(userMessage, telefono) {
   claudeHistory.push({ role: "user", content: userMessage });
 
   // Leer config y prácticas (solo las marcadas para_agente=true) de DB
-  const [cfg, practicas] = await Promise.all([
+  const [cfg, practicas, coberturas] = await Promise.all([
     db.getConfig(),
     db.getPracticas("agente"),
+    db.getCoberturas(),
   ]);
   console.log(`[agent] usando ${practicas.length} prácticas del catálogo`);
 
   let response = await anthropic.messages.create({
     model: "claude-sonnet-4-5", max_tokens: 1024,
-    system: getSystemPrompt(cfg, practicas),
+    system: getSystemPrompt(cfg, practicas, coberturas),
     tools: TOOLS, messages: claudeHistory,
   });
 
@@ -369,7 +370,7 @@ app.post("/admin/resume/:telefono",     authMiddleware, async (req, res) => { aw
 // Config
 app.get("/config",  authMiddleware, async (req, res) => { res.json(await db.getConfig()); });
 app.patch("/config", authMiddleware, async (req, res) => {
-  const permitidos = ["horario_manana_desde","horario_manana_hasta","horario_tarde_desde","horario_tarde_hasta","estilo_conversacion","bot_whatsapp_number","cancelacion_anticipacion_hs","tolerancia_llegada_min","anticipacion_nuevo_min","palabras_alarma","flujo_paciente_nuevo","flujo_paciente_existente","mensaje_bienvenida"];
+  const permitidos = ["horario_manana_desde","horario_manana_hasta","horario_tarde_desde","horario_tarde_hasta","estilo_conversacion","bot_whatsapp_number","cancelacion_anticipacion_hs","tolerancia_llegada_min","anticipacion_nuevo_min","palabras_alarma","flujo_paciente_nuevo","flujo_paciente_existente","mensaje_bienvenida","precio_consulta"];
   for (const [k, v] of Object.entries(req.body)) { if (permitidos.includes(k)) await db.setConfig(k, v); }
   res.json({ ok: true, config: await db.getConfig() });
 });
@@ -402,6 +403,35 @@ app.patch("/practicas/:id", authMiddleware, async (req, res) => {
 });
 app.delete("/practicas/:id", authMiddleware, async (req, res) => {
   try { await db.deletePractica(req.params.id); res.json({ ok: true }); }
+  catch(err) { console.error(err); res.status(500).json({ error: "Error interno" }); }
+});
+
+// Coberturas
+app.get("/coberturas", authMiddleware, async (req, res) => {
+  try { res.json(await db.getCoberturas()); }
+  catch(err) { console.error(err); res.status(500).json({ error: "Error interno" }); }
+});
+app.post("/coberturas", authMiddleware, async (req, res) => {
+  try {
+    const { obra_social, descuento_pct, primera_consulta_only } = req.body;
+    if (!obra_social) return res.status(400).json({ error: "obra_social requerida" });
+    res.json(await db.createCobertura({ obra_social, descuento_pct: parseInt(descuento_pct) || 0, primera_consulta_only }));
+  } catch(err) { console.error(err); res.status(500).json({ error: "Error interno" }); }
+});
+app.patch("/coberturas/:id", authMiddleware, async (req, res) => {
+  try {
+    const campos = {};
+    const b = req.body;
+    if (b.obra_social           !== undefined) campos.obra_social           = b.obra_social;
+    if (b.descuento_pct         !== undefined) campos.descuento_pct         = parseInt(b.descuento_pct);
+    if (b.primera_consulta_only !== undefined) campos.primera_consulta_only = b.primera_consulta_only;
+    const c = await db.updateCobertura(req.params.id, campos);
+    if (!c) return res.status(404).json({ error: "Cobertura no encontrada" });
+    res.json(c);
+  } catch(err) { console.error(err); res.status(500).json({ error: "Error interno" }); }
+});
+app.delete("/coberturas/:id", authMiddleware, async (req, res) => {
+  try { await db.deleteCobertura(req.params.id); res.json({ ok: true }); }
   catch(err) { console.error(err); res.status(500).json({ error: "Error interno" }); }
 });
 
