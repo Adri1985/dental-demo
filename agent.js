@@ -1,9 +1,6 @@
 const path = require("path");
 const config = require(path.join(__dirname, "config/consultorio.json"));
 
-// ─────────────────────────────────────────────
-//  Helpers
-// ─────────────────────────────────────────────
 function buildProfesionalesEnum() {
   return config.profesionales.map(p => p.id);
 }
@@ -18,7 +15,6 @@ function buildHorariosText(cfg = {}) {
   return `- ${p.nombre}: ${h.dias} de ${mananaDesde} a ${mananaHasta} y ${tardeDesde} a ${tardeHasta} (último turno a las ${tardeHasta})`;
 }
 
-// Construye el texto de prácticas desde DB (para_agente=true) o fallback a consultorio.json
 function buildPracticasText(practicas) {
   const lista = practicas && practicas.length > 0 ? practicas : config.practicas;
   return lista.map(p => {
@@ -31,11 +27,32 @@ function buildPracticasText(practicas) {
 function buildKnowledgeBase(cfg = {}, practicas = []) {
   const precio = config.precio_consulta.toLocaleString("es-AR");
   const pol = config.politica;
+
+  // Flujos desde DB o fallback hardcoded
+  const flujoNuevo = cfg.flujo_paciente_nuevo ||
+    `1. Saludar de forma breve\n2. Pedir: nombre completo, DNI y obra social (de a uno, nunca todos juntos)\n3. Informar el valor de la consulta ($${precio})\n4. Si acepta, buscar disponibilidad y asignar turno\n5. Confirmar el turno con todos los datos`;
+
+  const flujoExistente = cfg.flujo_paciente_existente ||
+    `1. Saludar por su nombre (ya lo tenés guardado)\n2. Preguntar qué necesita\n3. Buscar disponibilidad y asignar turno\n4. Confirmar`;
+
+  // Política desde DB o fallback
+  const cancelacionHs   = cfg.cancelacion_anticipacion_hs || pol.cancelacion_anticipacion_hs;
+  const toleranciaMin   = cfg.tolerancia_llegada_min      || pol.tolerancia_llegada_tarde_min;
+  const anticipacionMin = cfg.anticipacion_nuevo_min      || pol.anticipacion_llegada_nuevo_min;
+
+  // Palabras de alarma desde DB o fallback
+  const palabrasAlarma = cfg.palabras_alarma || config.palabras_alarma.join(", ");
+
+  // Mensaje de bienvenida opcional
+  const bienvenida = cfg.mensaje_bienvenida
+    ? `\nCONTEXTO DE BIENVENIDA PARA PACIENTES NUEVOS:\n${cfg.mensaje_bienvenida}\n`
+    : "";
+
   return `
 CONSULTORIO:
 - Nombre: ${config.consultorio.nombre}
 ${config.consultorio.direccion ? `- Dirección: ${config.consultorio.direccion}` : ""}
-
+${bienvenida}
 PROFESIONALES Y HORARIOS:
 ${buildHorariosText(cfg)}
 
@@ -47,28 +64,24 @@ VALOR DE CONSULTA:
 PRÁCTICAS DISPONIBLES Y SUS DURACIONES:
 ${buildPracticasText(practicas)}
 
-Si el paciente menciona algo que no coincide con ninguna práctica de la lista, usá "Consulta" con 30 minutos de duración como fallback.
+IMPORTANTE — PRÁCTICAS ESTRICTAS:
+- Solo podés ofrecer o mencionar las prácticas de la lista de arriba. NUNCA inventes ni sugieras prácticas que no estén en esa lista.
+- Si el paciente menciona algo que no coincide con ninguna práctica, respondé: "Para eso tendrías que consultar directamente con el doctor. Lo que puedo agendarte es una consulta general de 30 minutos, te sirve?"
+- Si la lista está vacía, ofrecé solo "Consulta" de 30 minutos.
 
 FLUJO PARA PACIENTE NUEVO:
-1. Saludar de forma breve
-2. Pedir: nombre completo, DNI y obra social (de a uno, nunca todos juntos)
-3. Informar el valor de la consulta ($${precio})
-4. Si acepta, buscar disponibilidad y asignar turno
-5. Confirmar el turno con todos los datos
+${flujoNuevo}
 
 FLUJO PARA PACIENTE EXISTENTE:
-1. Saludar por su nombre (ya lo tenés guardado)
-2. Preguntar qué necesita
-3. Buscar disponibilidad y asignar turno
-4. Confirmar
+${flujoExistente}
 
 POLÍTICA DE TURNOS:
-- Cancelaciones: avisar con al menos ${pol.cancelacion_anticipacion_hs} horas de anticipación
-- Llegada tarde: se respeta el turno hasta ${pol.tolerancia_llegada_tarde_min} minutos de demora
-- Pacientes nuevos: llegar ${pol.anticipacion_llegada_nuevo_min} minutos antes para completar la ficha
+- Cancelaciones: avisar con al menos ${cancelacionHs} horas de anticipación
+- Llegada tarde: se respeta el turno hasta ${toleranciaMin} minutos de demora
+- Pacientes nuevos: llegar ${anticipacionMin} minutos antes para completar la ficha
 
 PALABRAS DE ALARMA — escalar SIEMPRE de forma inmediata:
-${config.palabras_alarma.join(", ")}
+${palabrasAlarma}
 `;
 }
 
@@ -76,17 +89,15 @@ ${config.palabras_alarma.join(", ")}
 //  ESTILOS DE CONVERSACIÓN
 // ─────────────────────────────────────────────
 const ESTILOS = {
-  cercano: `Hablás de manera muy informal y cercana, como un amigo de confianza. Usás el voseo rioplatense con muletillas frecuentes: "dale", "re bien", "genial", "buenísimo". Frases cortas, tono de chat entre amigos.`,
-  amigable: `Hablás de manera informal pero prolija, como una secretaria simpática. Usás el voseo rioplatense. Sos cálida pero sin excesos. Alguna muletilla ocasional ("perfecto", "anotado") pero sin abusar.`,
-  profesional_amigable: `Hablás de manera profesional pero cálida. Usás el voseo pero con moderación. No usás "che" ni muletillas informales. Sos cordial, clara y directa. Transmitís confianza sin ser fría.`,
-  formal: `Hablás de manera formal, usando "usted" para dirigirte al paciente. Oraciones completas, tono de atención médica profesional. Cordial pero estructurado.`,
-  muy_formal: `Hablás con lenguaje clínico y muy formal, usando "usted" siempre. Respuestas estructuradas y precisas. Sin nada informal. Máxima claridad y profesionalismo.`,
+  cercano: `Hablás de manera muy informal y cercana, como un amigo de confianza. Usás el voseo rioplatense con muletillas frecuentes: "dale", "re bien", "genial". Frases cortas, tono de chat entre amigos.`,
+  amigable: `Hablás de manera informal pero prolija, como una secretaria simpática. Usás el voseo rioplatense. Sos cálida pero sin excesos.`,
+  profesional_amigable: `Hablás de manera profesional pero cálida. Usás el voseo pero con moderación. No usás "che" ni muletillas informales. Sos cordial, clara y directa.`,
+  formal: `Hablás de manera formal, usando "usted" para dirigirte al paciente. Oraciones completas, tono de atención médica profesional.`,
+  muy_formal: `Hablás con lenguaje clínico y muy formal, usando "usted" siempre. Respuestas estructuradas y precisas. Sin nada informal.`,
 };
 
 // ─────────────────────────────────────────────
 //  SYSTEM PROMPT
-//  cfg: config de DB (horarios, estilo)
-//  practicas: lista filtrada con para_agente=true
 // ─────────────────────────────────────────────
 const getSystemPrompt = (cfg = {}, practicas = []) => {
   const ahora = new Date().toLocaleString("es-AR", {
@@ -152,15 +163,15 @@ ${buildKnowledgeBase(cfg, practicas)}
 const TOOLS = [
   {
     name: "check_availability",
-    description: "Verifica slots disponibles en el calendario. Llamar siempre antes de ofrecer un horario. En reagendamiento, pasar excluir_event_id para no bloquear el turno actual.",
+    description: "Verifica slots disponibles en el calendario. Llamar siempre antes de ofrecer un horario.",
     input_schema: {
       type: "object",
       properties: {
-        profesional_id:   { type: "string", enum: buildProfesionalesEnum(), description: "ID del profesional cuya agenda consultar" },
-        fecha_desde:      { type: "string", description: "ISO 8601 con timezone, ej: 2026-07-07T09:30:00-03:00" },
-        fecha_hasta:      { type: "string", description: "ISO 8601 con timezone, ej: 2026-07-11T17:00:00-03:00" },
+        profesional_id:   { type: "string", enum: buildProfesionalesEnum() },
+        fecha_desde:      { type: "string", description: "ISO 8601 con timezone" },
+        fecha_hasta:      { type: "string", description: "ISO 8601 con timezone" },
         duracion_minutos: { type: "number" },
-        excluir_event_id: { type: "string", description: "ID del evento a excluir en reagendamiento" },
+        excluir_event_id: { type: "string" },
       },
       required: ["fecha_desde", "fecha_hasta", "duracion_minutos"],
     },
@@ -190,12 +201,12 @@ const TOOLS = [
   },
   {
     name: "get_patient_appointments",
-    description: "Consulta los turnos futuros del paciente. Usar cuando pregunta por sus turnos o quiere cancelar/reagendar.",
+    description: "Consulta los turnos futuros del paciente.",
     input_schema: { type: "object", properties: {} },
   },
   {
     name: "save_patient_data",
-    description: "Guarda o actualiza datos del paciente. Llamar cuando el paciente proporciona nombre, DNI u obra social.",
+    description: "Guarda o actualiza datos del paciente.",
     input_schema: {
       type: "object",
       properties: {
@@ -207,7 +218,7 @@ const TOOLS = [
   },
   {
     name: "flag_critical_issue",
-    description: "Alerta urgente al profesional. Usar INMEDIATAMENTE ante dolor agudo, hinchazón, sangrado, fiebre, trauma o emergencia dental.",
+    description: "Alerta urgente al profesional. Usar INMEDIATAMENTE ante palabras de alarma.",
     input_schema: {
       type: "object",
       properties: {
