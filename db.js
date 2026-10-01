@@ -101,12 +101,19 @@ async function initDB() {
     );
 
     INSERT INTO consultorio_config (clave, valor) VALUES
-      ('horario_manana_desde', '09:30'),
-      ('horario_manana_hasta', '13:00'),
-      ('horario_tarde_desde',  '14:00'),
-      ('horario_tarde_hasta',  '17:00'),
-      ('estilo_conversacion',  'profesional_amigable'),
-      ('bot_whatsapp_number',  '15551445115')
+      ('horario_manana_desde',        '09:30'),
+      ('horario_manana_hasta',        '13:00'),
+      ('horario_tarde_desde',         '14:00'),
+      ('horario_tarde_hasta',         '17:00'),
+      ('estilo_conversacion',         'profesional_amigable'),
+      ('bot_whatsapp_number',         '15551445115'),
+      ('cancelacion_anticipacion_hs', '24'),
+      ('tolerancia_llegada_min',      '15'),
+      ('anticipacion_nuevo_min',      '10'),
+      ('palabras_alarma',             'dolor fuerte, hinchazón, sangrado, fiebre, accidente, golpe, urgencia, emergencia'),
+      ('flujo_paciente_nuevo',        '1. Saludar de forma breve\n2. Pedir nombre completo, DNI y obra social (de a uno, nunca todos juntos)\n3. Informar el valor de la consulta\n4. Si acepta, buscar disponibilidad y asignar turno\n5. Confirmar el turno con todos los datos'),
+      ('flujo_paciente_existente',    '1. Saludar por su nombre\n2. Preguntar qué necesita\n3. Buscar disponibilidad y asignar turno\n4. Confirmar'),
+      ('mensaje_bienvenida',          '')
     ON CONFLICT (clave) DO NOTHING;
   `);
   // Migraciones — agregar columnas nuevas si no existen
