@@ -369,7 +369,7 @@ app.post("/admin/resume/:telefono",     authMiddleware, async (req, res) => { aw
 // Config
 app.get("/config",  authMiddleware, async (req, res) => { res.json(await db.getConfig()); });
 app.patch("/config", authMiddleware, async (req, res) => {
-  const permitidos = ["horario_manana_desde","horario_manana_hasta","horario_tarde_desde","horario_tarde_hasta","estilo_conversacion","bot_whatsapp_number"];
+  const permitidos = ["horario_manana_desde","horario_manana_hasta","horario_tarde_desde","horario_tarde_hasta","estilo_conversacion","bot_whatsapp_number","cancelacion_anticipacion_hs","tolerancia_llegada_min","anticipacion_nuevo_min","palabras_alarma","flujo_paciente_nuevo","flujo_paciente_existente","mensaje_bienvenida"];
   for (const [k, v] of Object.entries(req.body)) { if (permitidos.includes(k)) await db.setConfig(k, v); }
   res.json({ ok: true, config: await db.getConfig() });
 });
