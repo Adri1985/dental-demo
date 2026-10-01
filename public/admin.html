@@ -192,6 +192,7 @@
       <button class="cfg-tab active" onclick="switchTab('horarios')">Horarios</button>
       <button class="cfg-tab" onclick="switchTab('estilo')">Estilo</button>
       <button class="cfg-tab" onclick="switchTab('practicas')">Prácticas</button>
+      <button class="cfg-tab" onclick="switchTab('flujos')">Flujos</button>
       <button class="cfg-tab" onclick="switchTab('equipo')">Equipo</button>
     </div>
 
@@ -255,6 +256,50 @@
           <button class="btn btn-cancel" id="pCancelarEdit" style="display:none" onclick="cancelarEditPractica()">Cancelar edición</button>
           <button class="btn btn-primary" onclick="guardarPractica()">Agregar práctica</button>
         </div>
+      </div>
+    </div>
+
+    <!-- Tab: Flujos -->
+    <div class="cfg-panel" id="tab-flujos" style="display:none;overflow-y:auto;flex:1">
+      <div class="modal-field">
+        <label class="modal-label">Flujo para paciente nuevo</label>
+        <textarea class="modal-input" id="cfgFlujoNuevo" rows="5" style="resize:vertical;font-family:inherit;line-height:1.5"></textarea>
+        <div style="font-size:11px;color:#8696a0;margin-top:4px">Pasos que sigue Mía con un paciente que nunca atendieron</div>
+      </div>
+      <div class="modal-field">
+        <label class="modal-label">Flujo para paciente existente</label>
+        <textarea class="modal-input" id="cfgFlujoExistente" rows="4" style="resize:vertical;font-family:inherit;line-height:1.5"></textarea>
+      </div>
+      <div class="modal-field">
+        <label class="modal-label">Mensaje de bienvenida (opcional)</label>
+        <textarea class="modal-input" id="cfgBienvenida" rows="3" style="resize:vertical;font-family:inherit;line-height:1.5" placeholder="Ej: Preguntarle quién lo recomendó. Somos un consultorio especializado en implantes y estética dental."></textarea>
+        <div style="font-size:11px;color:#8696a0;margin-top:4px">Mía lo incorpora naturalmente en la primera conversación con pacientes nuevos</div>
+      </div>
+      <div style="border-top:1px solid #2a3942;padding-top:14px;margin-top:4px">
+        <div style="font-size:13px;font-weight:600;margin-bottom:10px">Política de turnos</div>
+        <div class="modal-row">
+          <div class="modal-field">
+            <label class="modal-label">Cancelación con anticipación (hs)</label>
+            <input class="modal-input" id="cfgCancelacionHs" type="number" min="1" max="72" />
+          </div>
+          <div class="modal-field">
+            <label class="modal-label">Tolerancia llegada tarde (min)</label>
+            <input class="modal-input" id="cfgToleranciaMin" type="number" min="0" max="60" />
+          </div>
+          <div class="modal-field">
+            <label class="modal-label">Anticipación paciente nuevo (min)</label>
+            <input class="modal-input" id="cfgAnticipaciónMin" type="number" min="0" max="60" />
+          </div>
+        </div>
+        <div class="modal-field">
+          <label class="modal-label">Palabras de alarma (separadas por coma)</label>
+          <input class="modal-input" id="cfgPalabrasAlarma" type="text" placeholder="dolor fuerte, sangrado, hinchazón, fiebre..." />
+          <div style="font-size:11px;color:#8696a0;margin-top:4px">Cuando el paciente dice alguna de estas palabras, Mía escala inmediatamente al doctor</div>
+        </div>
+      </div>
+      <div class="modal-actions" style="margin-top:8px">
+        <button class="btn btn-cancel" onclick="cerrarConfig()">Cancelar</button>
+        <button class="btn btn-primary" onclick="guardarFlujos()">Guardar</button>
       </div>
     </div>
 
@@ -526,6 +571,36 @@
       cerrarConfig();
       showToast("Configuración guardada. Efectiva en el próximo mensaje.");
     } catch(e) { showToast("Error guardando configuración"); }
+  }
+
+  // Cargar flujos (llamado desde switchTab)
+  async function cargarFlujos() {
+    try {
+      const cfg = await fetch(`${API}/config`, { headers: authH() }).then(r => r.json());
+      document.getElementById("cfgFlujoNuevo").value       = cfg.flujo_paciente_nuevo    || "";
+      document.getElementById("cfgFlujoExistente").value   = cfg.flujo_paciente_existente || "";
+      document.getElementById("cfgBienvenida").value       = cfg.mensaje_bienvenida      || "";
+      document.getElementById("cfgCancelacionHs").value    = cfg.cancelacion_anticipacion_hs || "24";
+      document.getElementById("cfgToleranciaMin").value    = cfg.tolerancia_llegada_min   || "15";
+      document.getElementById("cfgAnticipaciónMin").value  = cfg.anticipacion_nuevo_min   || "10";
+      document.getElementById("cfgPalabrasAlarma").value   = cfg.palabras_alarma          || "";
+    } catch(e) { console.error("Error cargando flujos:", e); }
+  }
+
+  async function guardarFlujos() {
+    try {
+      await fetch(`${API}/config`, { method: "PATCH", headers: authH(), body: JSON.stringify({
+        flujo_paciente_nuevo:        document.getElementById("cfgFlujoNuevo").value.trim(),
+        flujo_paciente_existente:    document.getElementById("cfgFlujoExistente").value.trim(),
+        mensaje_bienvenida:          document.getElementById("cfgBienvenida").value.trim(),
+        cancelacion_anticipacion_hs: document.getElementById("cfgCancelacionHs").value,
+        tolerancia_llegada_min:      document.getElementById("cfgToleranciaMin").value,
+        anticipacion_nuevo_min:      document.getElementById("cfgAnticipaciónMin").value,
+        palabras_alarma:             document.getElementById("cfgPalabrasAlarma").value.trim(),
+      })});
+      cerrarConfig();
+      showToast("Flujos guardados. Efectivos en el próximo mensaje.");
+    } catch(e) { showToast("Error guardando flujos"); }
   }
 
   // Cargar equipo (llamado desde switchTab)
