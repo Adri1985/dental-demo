@@ -88,6 +88,24 @@ async function initDB() {
       updated_at TIMESTAMPTZ DEFAULT NOW()
     );
 
+    CREATE TABLE IF NOT EXISTS coberturas (
+      id                   SERIAL PRIMARY KEY,
+      obra_social          TEXT NOT NULL,
+      descuento_pct        INTEGER NOT NULL DEFAULT 0,
+      primera_consulta_only BOOLEAN DEFAULT false,
+      activa               BOOLEAN DEFAULT true,
+      created_at           TIMESTAMPTZ DEFAULT NOW()
+    );
+
+    CREATE TABLE IF NOT EXISTS coberturas (
+      id                   SERIAL PRIMARY KEY,
+      obra_social          TEXT NOT NULL,
+      descuento_pct        INTEGER NOT NULL DEFAULT 0,
+      primera_consulta_only BOOLEAN DEFAULT false,
+      activa               BOOLEAN DEFAULT true,
+      created_at           TIMESTAMPTZ DEFAULT NOW()
+    );
+
     CREATE TABLE IF NOT EXISTS practicas (
       id                  SERIAL PRIMARY KEY,
       nombre              TEXT NOT NULL,
@@ -107,6 +125,8 @@ async function initDB() {
       ('horario_tarde_hasta',         '17:00'),
       ('estilo_conversacion',         'profesional_amigable'),
       ('bot_whatsapp_number',         '15551445115'),
+      ('precio_consulta',            '0'),
+      ('precio_consulta',             '50000'),
       ('cancelacion_anticipacion_hs', '24'),
       ('tolerancia_llegada_min',      '15'),
       ('anticipacion_nuevo_min',      '10'),
@@ -116,6 +136,18 @@ async function initDB() {
       ('mensaje_bienvenida',          '')
     ON CONFLICT (clave) DO NOTHING;
   `);
+  // Migraciones — agregar columnas nuevas si no existen
+  await pool.query(`
+    CREATE TABLE IF NOT EXISTS coberturas (
+      id                    SERIAL PRIMARY KEY,
+      obra_social           TEXT NOT NULL,
+      descuento_pct         INTEGER NOT NULL DEFAULT 0,
+      primera_consulta_only BOOLEAN DEFAULT false,
+      activa                BOOLEAN DEFAULT true,
+      created_at            TIMESTAMPTZ DEFAULT NOW()
+    );
+  `).catch(e => console.log("[db] migracion coberturas:", e.message));
+
   // Migraciones — agregar columnas nuevas si no existen
   // Esto permite evolucionar el schema sin perder datos
   await pool.query(`
@@ -358,6 +390,90 @@ async function clearClaudeHistory(telefono) {
 }
 
 // ─────────────────────────────────────────────
+//  COBERTURAS
+// ─────────────────────────────────────────────
+
+async function getCoberturas() {
+  if (!USE_DB) return [];
+  const { rows } = await pool.query(
+    "SELECT * FROM coberturas WHERE activa = true ORDER BY obra_social ASC"
+  );
+  return rows;
+}
+
+async function createCobertura({ obra_social, descuento_pct, primera_consulta_only }) {
+  if (!USE_DB) return null;
+  const { rows } = await pool.query(
+    `INSERT INTO coberturas (obra_social, descuento_pct, primera_consulta_only)
+     VALUES ($1, $2, $3) RETURNING *`,
+    [obra_social, descuento_pct || 0, primera_consulta_only || false]
+  );
+  return rows[0];
+}
+
+async function updateCobertura(id, campos) {
+  if (!USE_DB) return null;
+  const sets = [], vals = [];
+  let i = 1;
+  if (campos.obra_social            !== undefined) { sets.push(`obra_social = $${i++}`);             vals.push(campos.obra_social); }
+  if (campos.descuento_pct          !== undefined) { sets.push(`descuento_pct = $${i++}`);           vals.push(campos.descuento_pct); }
+  if (campos.primera_consulta_only  !== undefined) { sets.push(`primera_consulta_only = $${i++}`);   vals.push(campos.primera_consulta_only); }
+  if (!sets.length) return null;
+  vals.push(id);
+  const { rows } = await pool.query(
+    `UPDATE coberturas SET ${sets.join(", ")} WHERE id = $${i} RETURNING *`, vals
+  );
+  return rows[0];
+}
+
+async function deleteCobertura(id) {
+  if (!USE_DB) return;
+  await pool.query("UPDATE coberturas SET activa = false WHERE id = $1", [id]);
+}
+
+// ─────────────────────────────────────────────
+//  COBERTURAS
+// ─────────────────────────────────────────────
+
+async function getCoberturas() {
+  if (!USE_DB) return [];
+  const { rows } = await pool.query(
+    "SELECT * FROM coberturas WHERE activa = true ORDER BY obra_social ASC"
+  );
+  return rows;
+}
+
+async function createCobertura({ obra_social, descuento_pct, primera_consulta_only }) {
+  if (!USE_DB) return null;
+  const { rows } = await pool.query(
+    `INSERT INTO coberturas (obra_social, descuento_pct, primera_consulta_only)
+     VALUES ($1, $2, $3) RETURNING *`,
+    [obra_social, descuento_pct || 0, primera_consulta_only || false]
+  );
+  return rows[0];
+}
+
+async function updateCobertura(id, campos) {
+  if (!USE_DB) return null;
+  const sets = [], vals = [];
+  let i = 1;
+  if (campos.obra_social            !== undefined) { sets.push(`obra_social = $${i++}`);            vals.push(campos.obra_social); }
+  if (campos.descuento_pct          !== undefined) { sets.push(`descuento_pct = $${i++}`);          vals.push(campos.descuento_pct); }
+  if (campos.primera_consulta_only  !== undefined) { sets.push(`primera_consulta_only = $${i++}`);  vals.push(campos.primera_consulta_only); }
+  if (!sets.length) return null;
+  vals.push(id);
+  const { rows } = await pool.query(
+    `UPDATE coberturas SET ${sets.join(", ")} WHERE id = $${i} RETURNING *`, vals
+  );
+  return rows[0];
+}
+
+async function deleteCobertura(id) {
+  if (!USE_DB) return;
+  await pool.query("UPDATE coberturas SET activa = false WHERE id = $1", [id]);
+}
+
+// ─────────────────────────────────────────────
 //  PRÁCTICAS
 // ─────────────────────────────────────────────
 
@@ -416,6 +532,10 @@ module.exports = {
   createConsultorio, getConsultorio,
   createUser, getUserByEmail, updateUserConsultorio, getUsersByConsultorio,
   createInvitacion, getInvitacion, usarInvitacion,
+  // coberturas
+  getCoberturas, createCobertura, updateCobertura, deleteCobertura,
+  // coberturas
+  getCoberturas, createCobertura, updateCobertura, deleteCobertura,
   // practicas
   getPracticas, createPractica, updatePractica, deletePractica,
   // config
