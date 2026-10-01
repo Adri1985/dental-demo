@@ -388,6 +388,12 @@ app.post("/practicas", authMiddleware, async (req, res) => {
   } catch(err) { console.error(err); res.status(500).json({ error: "Error interno" }); }
 });
 
+// GET /practicas/turno-directo — ANTES de /:id para que Express no confunda la ruta
+app.get("/practicas/turno-directo", authMiddleware, async (req, res) => {
+  try { res.json(await db.getPracticas("turno_directo")); }
+  catch(err) { console.error(err); res.status(500).json({ error: "Error interno" }); }
+});
+
 app.patch("/practicas/:id", authMiddleware, async (req, res) => {
   try {
     const { nombre, duracion_min, requiere, para_agente, para_turno_directo } = req.body;
@@ -398,12 +404,6 @@ app.patch("/practicas/:id", authMiddleware, async (req, res) => {
     if (!p) return res.status(404).json({ error: "Práctica no encontrada" });
     res.json(p);
   } catch(err) { console.error(err); res.status(500).json({ error: "Error interno" }); }
-});
-
-// GET /practicas/turno-directo — solo las marcadas para turno directo (para el dropdown del panel)
-app.get("/practicas/turno-directo", authMiddleware, async (req, res) => {
-  try { res.json(await db.getPracticas("turno_directo")); }
-  catch(err) { console.error(err); res.status(500).json({ error: "Error interno" }); }
 });
 
 app.delete("/practicas/:id", authMiddleware, async (req, res) => {
