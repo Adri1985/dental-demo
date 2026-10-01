@@ -84,7 +84,7 @@ async function executeTool(name, input, telefono) {
       if (slots.length === 0) return { disponible: false, mensaje: "No encontré turnos libres en ese período." };
       return { disponible: true, slots };
     }
-    case "create_appointment": {
+    case "create_appointment":
       return await createAppointment({
         ...input,
         paciente_dni:         input.paciente_dni        || patient?.dni,
@@ -92,8 +92,8 @@ async function executeTool(name, input, telefono) {
         paciente_nombre:      input.paciente_nombre      || patient?.nombre,
         paciente_telefono:    input.paciente_telefono    || telefono,
       });
-    }
-    case "cancel_appointment":    return await cancelAppointment(input);
+    case "cancel_appointment":
+      return await cancelAppointment(input);
     case "get_patient_appointments": {
       const turnos = await getPatientAppointments(telefono, patient?.dni);
       return { turnos };
@@ -125,6 +125,7 @@ function humanDelay(text) {
 
 // ─────────────────────────────────────────────
 //  LOOP PRINCIPAL DEL AGENTE
+//  Lee cfg y prácticas de DB en cada llamada
 // ─────────────────────────────────────────────
 async function runAgent(userMessage, telefono) {
   const patient = await db.getPatient(telefono);
@@ -135,12 +136,17 @@ async function runAgent(userMessage, telefono) {
   }
   claudeHistory.push({ role: "user", content: userMessage });
 
-  // Leer config y prácticas de DB para personalizar el system prompt
-  const [cfg, practicas] = await Promise.all([db.getConfig(), db.getPracticas("agente")]);
+  // Leer config y prácticas (solo las marcadas para_agente=true) de DB
+  const [cfg, practicas] = await Promise.all([
+    db.getConfig(),
+    db.getPracticas("agente"),
+  ]);
+  console.log(`[agent] usando ${practicas.length} prácticas del catálogo`);
 
   let response = await anthropic.messages.create({
     model: "claude-sonnet-4-5", max_tokens: 1024,
-    system: getSystemPrompt(cfg, practicas), tools: TOOLS, messages: claudeHistory,
+    system: getSystemPrompt(cfg, practicas),
+    tools: TOOLS, messages: claudeHistory,
   });
 
   while (response.stop_reason === "tool_use") {
@@ -154,7 +160,8 @@ async function runAgent(userMessage, telefono) {
     claudeHistory.push({ role: "user", content: toolResults });
     response = await anthropic.messages.create({
       model: "claude-sonnet-4-5", max_tokens: 1024,
-      system: getSystemPrompt(cfg, practicas), tools: TOOLS, messages: claudeHistory,
+      system: getSystemPrompt(cfg, practicas),
+      tools: TOOLS, messages: claudeHistory,
     });
   }
 
@@ -167,7 +174,6 @@ async function runAgent(userMessage, telefono) {
 // ─────────────────────────────────────────────
 //  AUTH ENDPOINTS
 // ─────────────────────────────────────────────
-
 app.post("/auth/register", async (req, res) => {
   try {
     const { email, password, nombre } = req.body;
@@ -283,7 +289,6 @@ app.post("/webhook", async (req, res) => {
     if (!message || message.type !== "text") return;
     const telefono = message.from, texto = message.text.body;
     console.log(`[whatsapp] mensaje de ${telefono}: ${texto}`);
-
     let patient = await db.getPatient(telefono);
     if (!patient) {
       let datosPrevios = null;
@@ -293,12 +298,8 @@ app.post("/webhook", async (req, res) => {
           new Promise((_, reject) => setTimeout(() => reject(new Error("timeout Google Calendar (8s)")), 8000)),
         ]);
       } catch(e) { console.error("[wh] error/timeout Calendar:", e.message); }
-      patient = await db.upsertPatient({
-        telefono, nombre: datosPrevios?.nombre || "Paciente",
-        dni: datosPrevios?.dni || null, obra_social: datosPrevios?.obra_social || null,
-      });
+      patient = await db.upsertPatient({ telefono, nombre: datosPrevios?.nombre || "Paciente", dni: datosPrevios?.dni || null, obra_social: datosPrevios?.obra_social || null });
     }
-
     await db.addMessage(telefono, "user", texto, new Date().toISOString());
     if (patient.modo === "humano") { console.log(`[whatsapp] conversación pausada para ${telefono}`); return; }
     const reply = await runAgent(texto, telefono);
@@ -315,8 +316,7 @@ app.get("/session/:telefono", async (req, res) => {
   const { telefono } = req.params;
   const patient = await db.getPatient(telefono);
   if (patient) {
-    const displayHistory = await db.getMessages(telefono);
-    return res.json({ existe: true, nombre: patient.nombre, dni: patient.dni, obra_social: patient.obra_social, displayHistory, fuente: "db" });
+    return res.json({ existe: true, nombre: patient.nombre, dni: patient.dni, obra_social: patient.obra_social, displayHistory: await db.getMessages(telefono), fuente: "db" });
   }
   try {
     const encontrado = await findPatientByIdentifier(telefono, null);
@@ -361,43 +361,32 @@ app.delete("/session/:telefono", async (req, res) => {
   res.json({ ok: true });
 });
 
-app.get("/patients",                      authMiddleware, async (req, res) => { res.json(await db.getAllPatients()); });
-app.get("/patients/:telefono/messages",   authMiddleware, async (req, res) => { res.json(await db.getMessages(req.params.telefono)); });
-app.post("/admin/pause/:telefono",        authMiddleware, async (req, res) => { await db.setPatientMode(req.params.telefono, "humano"); res.json({ ok: true }); });
-app.post("/admin/resume/:telefono",       authMiddleware, async (req, res) => { await db.setPatientMode(req.params.telefono, "bot"); await db.clearClaudeHistory(req.params.telefono); res.json({ ok: true }); });
-app.get("/config",                        authMiddleware, async (req, res) => { res.json(await db.getConfig()); });
-app.patch("/config",                      authMiddleware, async (req, res) => {
+app.get("/patients",                    authMiddleware, async (req, res) => { res.json(await db.getAllPatients()); });
+app.get("/patients/:telefono/messages", authMiddleware, async (req, res) => { res.json(await db.getMessages(req.params.telefono)); });
+app.post("/admin/pause/:telefono",      authMiddleware, async (req, res) => { await db.setPatientMode(req.params.telefono, "humano"); res.json({ ok: true }); });
+app.post("/admin/resume/:telefono",     authMiddleware, async (req, res) => { await db.setPatientMode(req.params.telefono, "bot"); await db.clearClaudeHistory(req.params.telefono); res.json({ ok: true }); });
+
+// Config
+app.get("/config",  authMiddleware, async (req, res) => { res.json(await db.getConfig()); });
+app.patch("/config", authMiddleware, async (req, res) => {
   const permitidos = ["horario_manana_desde","horario_manana_hasta","horario_tarde_desde","horario_tarde_hasta","estilo_conversacion","bot_whatsapp_number"];
   for (const [k, v] of Object.entries(req.body)) { if (permitidos.includes(k)) await db.setConfig(k, v); }
   res.json({ ok: true, config: await db.getConfig() });
 });
-// ─────────────────────────────────────────────
-//  PRÁCTICAS ENDPOINTS
-// ─────────────────────────────────────────────
-app.get("/practicas", authMiddleware, async (req, res) => {
-  try { res.json(await db.getPracticas()); }
-  catch(err) { console.error(err); res.status(500).json({ error: "Error interno" }); }
-});
 
-app.post("/practicas", authMiddleware, async (req, res) => {
+// Prácticas — turno-directo ANTES de :id para que Express no confunda la ruta
+app.get("/practicas",               authMiddleware, async (req, res) => { res.json(await db.getPracticas()); });
+app.get("/practicas/turno-directo", authMiddleware, async (req, res) => { res.json(await db.getPracticas("turno_directo")); });
+app.post("/practicas",              authMiddleware, async (req, res) => {
   try {
     const { nombre, duracion_min, requiere, para_agente, para_turno_directo } = req.body;
     if (!nombre || !duracion_min) return res.status(400).json({ error: "nombre y duracion_min requeridos" });
-    const p = await db.createPractica({ nombre, duracion_min: parseInt(duracion_min), requiere, para_agente, para_turno_directo });
-    res.json(p);
+    res.json(await db.createPractica({ nombre, duracion_min: parseInt(duracion_min), requiere, para_agente, para_turno_directo }));
   } catch(err) { console.error(err); res.status(500).json({ error: "Error interno" }); }
 });
-
-// GET /practicas/turno-directo — ANTES de /:id para que Express no confunda la ruta
-app.get("/practicas/turno-directo", authMiddleware, async (req, res) => {
-  try { res.json(await db.getPracticas("turno_directo")); }
-  catch(err) { console.error(err); res.status(500).json({ error: "Error interno" }); }
-});
-
 app.patch("/practicas/:id", authMiddleware, async (req, res) => {
   try {
-    // Solo pasar los campos que realmente vienen en el body
-    // para no sobreescribir campos que no se quieren cambiar
+    console.log("[PATCH /practicas] id:", req.params.id, "body:", JSON.stringify(req.body));
     const campos = {};
     const b = req.body;
     if (b.nombre             !== undefined) campos.nombre             = b.nombre;
@@ -405,12 +394,12 @@ app.patch("/practicas/:id", authMiddleware, async (req, res) => {
     if (b.requiere           !== undefined) campos.requiere           = b.requiere;
     if (b.para_agente        !== undefined) campos.para_agente        = b.para_agente;
     if (b.para_turno_directo !== undefined) campos.para_turno_directo = b.para_turno_directo;
+    console.log("[PATCH /practicas] campos:", JSON.stringify(campos));
     const p = await db.updatePractica(req.params.id, campos);
     if (!p) return res.status(404).json({ error: "Práctica no encontrada" });
     res.json(p);
-  } catch(err) { console.error(err); res.status(500).json({ error: "Error interno" }); }
+  } catch(err) { console.error("[PATCH /practicas] ERROR:", err.message); res.status(500).json({ error: "Error interno", detalle: err.message }); }
 });
-
 app.delete("/practicas/:id", authMiddleware, async (req, res) => {
   try { await db.deletePractica(req.params.id); res.json({ ok: true }); }
   catch(err) { console.error(err); res.status(500).json({ error: "Error interno" }); }
