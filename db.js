@@ -109,6 +109,13 @@ async function initDB() {
       ('bot_whatsapp_number',  '15551445115')
     ON CONFLICT (clave) DO NOTHING;
   `);
+  // Migraciones — agregar columnas nuevas si no existen
+  // Esto permite evolucionar el schema sin perder datos
+  await pool.query(`
+    ALTER TABLE practicas ADD COLUMN IF NOT EXISTS para_agente        BOOLEAN DEFAULT true;
+    ALTER TABLE practicas ADD COLUMN IF NOT EXISTS para_turno_directo BOOLEAN DEFAULT true;
+  `).catch(e => console.log("[db] migracion practicas:", e.message));
+
   console.log("[db] tablas listas (PostgreSQL)");
 }
 
@@ -371,22 +378,22 @@ async function createPractica({ nombre, duracion_min, requiere, para_agente, par
 }
 
 async function updatePractica(id, campos) {
-  if (!USE_DB) return null;
-  // Construir query dinámicamente con solo los campos que vienen
+  if (!USE_DB) { console.log("[updatePractica] sin DB, modo memoria"); return null; }
   const sets = [];
   const vals = [];
   let i = 1;
-  if (campos.nombre      !== undefined) { sets.push(`nombre = $${i++}`);             vals.push(campos.nombre); }
-  if (campos.duracion_min!== undefined) { sets.push(`duracion_min = $${i++}`);       vals.push(campos.duracion_min); }
-  if (campos.requiere    !== undefined) { sets.push(`requiere = $${i++}`);            vals.push(campos.requiere || null); }
-  if (campos.para_agente !== undefined) { sets.push(`para_agente = $${i++}`);        vals.push(campos.para_agente); }
+  if (campos.nombre             !== undefined) { sets.push(`nombre = $${i++}`);            vals.push(campos.nombre); }
+  if (campos.duracion_min       !== undefined) { sets.push(`duracion_min = $${i++}`);      vals.push(campos.duracion_min); }
+  if (campos.requiere           !== undefined) { sets.push(`requiere = $${i++}`);           vals.push(campos.requiere || null); }
+  if (campos.para_agente        !== undefined) { sets.push(`para_agente = $${i++}`);       vals.push(campos.para_agente); }
   if (campos.para_turno_directo !== undefined) { sets.push(`para_turno_directo = $${i++}`); vals.push(campos.para_turno_directo); }
-  if (!sets.length) return null;
+  console.log("[updatePractica] sets:", sets, "vals:", vals, "id:", id);
+  if (!sets.length) { console.log("[updatePractica] nada que actualizar"); return null; }
   vals.push(id);
-  const { rows } = await pool.query(
-    `UPDATE practicas SET ${sets.join(", ")} WHERE id = $${i} RETURNING *`,
-    vals
-  );
+  const query = `UPDATE practicas SET ${sets.join(", ")} WHERE id = $${i} RETURNING *`;
+  console.log("[updatePractica] query:", query);
+  const { rows } = await pool.query(query, vals);
+  console.log("[updatePractica] rows:", rows);
   return rows[0];
 }
 
