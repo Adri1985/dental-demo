@@ -569,20 +569,23 @@
         return;
       }
       el.innerHTML = lista.map(p => `
-        <div style="display:flex;align-items:center;gap:8px;padding:8px 0;border-bottom:1px solid #2a3942">
-          <div style="flex:1">
-            <div style="font-size:14px;font-weight:500">${escHtml(p.nombre)}</div>
-            <div style="font-size:11px;color:#8696a0;margin-top:2px">
-              ${p.duracion_min} min
-              ${p.requiere ? ` · Requiere: ${escHtml(p.requiere)}` : ""}
-            </div>
-            <div style="font-size:11px;margin-top:3px;display:flex;gap:8px">
-              <span style="color:${p.para_agente ? "#00a884" : "#8696a0"}">
-                ${p.para_agente ? "✓" : "✗"} Agente
-              </span>
-              <span style="color:${p.para_turno_directo ? "#00a884" : "#8696a0"}">
-                ${p.para_turno_directo ? "✓" : "✗"} Turno directo
-              </span>
+        <div style="display:flex;align-items:center;gap:8px;padding:10px 0;border-bottom:1px solid #2a3942">
+          <div style="flex:1;min-width:0">
+            <div style="font-size:14px;font-weight:500;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${escHtml(p.nombre)}</div>
+            <div style="font-size:11px;color:#8696a0;margin-top:2px">${p.duracion_min} min${p.requiere ? ` · ${escHtml(p.requiere)}` : ""}</div>
+            <div style="display:flex;gap:14px;margin-top:6px">
+              <label style="display:flex;align-items:center;gap:5px;font-size:12px;color:#8696a0;cursor:pointer">
+                <input type="checkbox" ${p.para_agente ? "checked" : ""}
+                  onchange="togglePractica(${p.id},'para_agente',this.checked)"
+                  style="accent-color:#00a884;width:14px;height:14px" />
+                Agente
+              </label>
+              <label style="display:flex;align-items:center;gap:5px;font-size:12px;color:#8696a0;cursor:pointer">
+                <input type="checkbox" ${p.para_turno_directo ? "checked" : ""}
+                  onchange="togglePractica(${p.id},'para_turno_directo',this.checked)"
+                  style="accent-color:#00a884;width:14px;height:14px" />
+                Turno directo
+              </label>
             </div>
           </div>
           <button class="btn btn-sm" onclick="editarPractica(${p.id},'${escHtml(p.nombre)}',${p.duracion_min},'${escHtml(p.requiere||"")}',${!!p.para_agente},${!!p.para_turno_directo})">Editar</button>
@@ -612,6 +615,17 @@
     document.getElementById("pParaTurno").checked = true;
     document.getElementById("practicasFormTitle").textContent = "Nueva práctica";
     document.getElementById("pCancelarEdit").style.display = "none";
+  }
+
+  async function togglePractica(id, campo, valor) {
+    try {
+      await fetch(`${API}/practicas/${id}`, {
+        method: "PATCH",
+        headers: authH(),
+        body: JSON.stringify({ [campo]: valor }),
+      });
+      showToast("Guardado");
+    } catch(e) { showToast("Error al guardar"); }
   }
 
   async function guardarPractica() {
