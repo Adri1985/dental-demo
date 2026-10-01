@@ -24,8 +24,9 @@ function buildPracticasText(practicas) {
   }).join("\n");
 }
 
-function buildKnowledgeBase(cfg = {}, practicas = []) {
-  const precio = config.precio_consulta.toLocaleString("es-AR");
+function buildKnowledgeBase(cfg = {}, practicas = [], coberturas = []) {
+  const precio_num = parseInt(cfg.precio_consulta) || config.precio_consulta || 0;
+  const precio = precio_num.toLocaleString("es-AR");
   const pol = config.politica;
 
   // Flujos desde DB o fallback hardcoded
@@ -99,7 +100,7 @@ const ESTILOS = {
 // ─────────────────────────────────────────────
 //  SYSTEM PROMPT
 // ─────────────────────────────────────────────
-const getSystemPrompt = (cfg = {}, practicas = []) => {
+const getSystemPrompt = (cfg = {}, practicas = [], coberturas = []) => {
   const ahora = new Date().toLocaleString("es-AR", {
     timeZone: "America/Argentina/Buenos_Aires",
     weekday: "long", year: "numeric", month: "long",
@@ -153,7 +154,7 @@ REGLAS DE REAGENDAMIENTO — MUY IMPORTANTE:
   6. NUNCA cancelar antes de que el nuevo turno esté confirmado y creado exitosamente
 - Si create_appointment falla, NO cancelar el turno original. Avisar al paciente y ofrecer otro horario.
 
-${buildKnowledgeBase(cfg, practicas)}
+${buildKnowledgeBase(cfg, practicas, coberturas)}
 `;
 };
 
