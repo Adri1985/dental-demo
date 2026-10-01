@@ -370,20 +370,22 @@ async function createPractica({ nombre, duracion_min, requiere, para_agente, par
   return rows[0];
 }
 
-async function updatePractica(id, { nombre, duracion_min, requiere, para_agente, para_turno_directo }) {
+async function updatePractica(id, campos) {
   if (!USE_DB) return null;
+  // Construir query dinámicamente con solo los campos que vienen
+  const sets = [];
+  const vals = [];
+  let i = 1;
+  if (campos.nombre      !== undefined) { sets.push(`nombre = $${i++}`);             vals.push(campos.nombre); }
+  if (campos.duracion_min!== undefined) { sets.push(`duracion_min = $${i++}`);       vals.push(campos.duracion_min); }
+  if (campos.requiere    !== undefined) { sets.push(`requiere = $${i++}`);            vals.push(campos.requiere || null); }
+  if (campos.para_agente !== undefined) { sets.push(`para_agente = $${i++}`);        vals.push(campos.para_agente); }
+  if (campos.para_turno_directo !== undefined) { sets.push(`para_turno_directo = $${i++}`); vals.push(campos.para_turno_directo); }
+  if (!sets.length) return null;
+  vals.push(id);
   const { rows } = await pool.query(
-    `UPDATE practicas SET
-      nombre              = COALESCE($1, nombre),
-      duracion_min        = COALESCE($2, duracion_min),
-      requiere            = $3,
-      para_agente         = $4,
-      para_turno_directo  = $5
-     WHERE id = $6 RETURNING *`,
-    [nombre || null, duracion_min || null, requiere || null,
-     para_agente !== undefined ? para_agente : true,
-     para_turno_directo !== undefined ? para_turno_directo : true,
-     id]
+    `UPDATE practicas SET ${sets.join(", ")} WHERE id = $${i} RETURNING *`,
+    vals
   );
   return rows[0];
 }
