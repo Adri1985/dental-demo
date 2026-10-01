@@ -122,7 +122,10 @@
     <button class="back-btn" id="backBtn" onclick="goBack()">←</button>
     <div>
       <div class="header-title" id="headerTitle">Panel Admin — Mía</div>
-      <div class="header-sub" id="lastUpdate">Actualizando...</div>
+      <div class="header-sub">
+        <span id="consultorioNombre" style="color:#e9edef;font-weight:500"></span>
+        <span id="lastUpdate" style="margin-left:6px"></span>
+      </div>
     </div>
   </div>
   <div class="header-right">
@@ -390,7 +393,7 @@
       patients = await res.json();
       renderSidebar();
       if (selectedTel && !userScrolling) await updateMessages(selectedTel);
-      document.getElementById("lastUpdate").textContent = `Actualizado ${fmtTime(new Date().toISOString())}`;
+      document.getElementById("lastUpdate").textContent = `· ${fmtTime(new Date().toISOString())}`;
     } catch(e) { console.error(e); }
   }
 
@@ -748,6 +751,15 @@
   });
 
   // Arranque
+  // Cargar nombre del consultorio
+  fetch(`${API}/auth/me`, { headers: authH() })
+    .then(r => r.json())
+    .then(data => {
+      if (data.consultorio?.nombre) {
+        document.getElementById("consultorioNombre").textContent = data.consultorio.nombre;
+      }
+    }).catch(() => {});
+
   loadPatients();
   setInterval(loadPatients, 3000);
   fetch(`${API}/config`, { headers: authH() }).then(r => r.json()).then(cfg => { if (cfg.bot_whatsapp_number) BOT_NUMBER = cfg.bot_whatsapp_number; }).catch(() => {});
