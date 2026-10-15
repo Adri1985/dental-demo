@@ -592,13 +592,15 @@
 
   function switchTab(nombre) {
     document.querySelectorAll(".cfg-tab").forEach((t, i) => {
-      const tabs = ["horarios","estilo","practicas","equipo"];
+      const tabs = ["horarios","estilo","practicas","coberturas","flujos","equipo"];
       t.classList.toggle("active", tabs[i] === nombre);
     });
     document.querySelectorAll(".cfg-panel").forEach(p => p.style.display = "none");
     document.getElementById(`tab-${nombre}`).style.display = "block";
-    if (nombre === "practicas") cargarPracticas();
-    if (nombre === "equipo") cargarEquipo();
+    if (nombre === "practicas")  cargarPracticas();
+    if (nombre === "coberturas") cargarCoberturas();
+    if (nombre === "flujos")     cargarFlujos();
+    if (nombre === "equipo")     cargarEquipo();
   }
   async function guardarConfig() {
     const num = document.getElementById("cfgBotNumber").value.trim().replace(/\D/g, "");

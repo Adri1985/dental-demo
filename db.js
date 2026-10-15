@@ -432,48 +432,6 @@ async function deleteCobertura(id) {
 }
 
 // ─────────────────────────────────────────────
-//  COBERTURAS
-// ─────────────────────────────────────────────
-
-async function getCoberturas() {
-  if (!USE_DB) return [];
-  const { rows } = await pool.query(
-    "SELECT * FROM coberturas WHERE activa = true ORDER BY obra_social ASC"
-  );
-  return rows;
-}
-
-async function createCobertura({ obra_social, descuento_pct, primera_consulta_only }) {
-  if (!USE_DB) return null;
-  const { rows } = await pool.query(
-    `INSERT INTO coberturas (obra_social, descuento_pct, primera_consulta_only)
-     VALUES ($1, $2, $3) RETURNING *`,
-    [obra_social, descuento_pct || 0, primera_consulta_only || false]
-  );
-  return rows[0];
-}
-
-async function updateCobertura(id, campos) {
-  if (!USE_DB) return null;
-  const sets = [], vals = [];
-  let i = 1;
-  if (campos.obra_social            !== undefined) { sets.push(`obra_social = $${i++}`);            vals.push(campos.obra_social); }
-  if (campos.descuento_pct          !== undefined) { sets.push(`descuento_pct = $${i++}`);          vals.push(campos.descuento_pct); }
-  if (campos.primera_consulta_only  !== undefined) { sets.push(`primera_consulta_only = $${i++}`);  vals.push(campos.primera_consulta_only); }
-  if (!sets.length) return null;
-  vals.push(id);
-  const { rows } = await pool.query(
-    `UPDATE coberturas SET ${sets.join(", ")} WHERE id = $${i} RETURNING *`, vals
-  );
-  return rows[0];
-}
-
-async function deleteCobertura(id) {
-  if (!USE_DB) return;
-  await pool.query("UPDATE coberturas SET activa = false WHERE id = $1", [id]);
-}
-
-// ─────────────────────────────────────────────
 //  PRÁCTICAS
 // ─────────────────────────────────────────────
 
@@ -532,8 +490,6 @@ module.exports = {
   createConsultorio, getConsultorio,
   createUser, getUserByEmail, updateUserConsultorio, getUsersByConsultorio,
   createInvitacion, getInvitacion, usarInvitacion,
-  // coberturas
-  getCoberturas, createCobertura, updateCobertura, deleteCobertura,
   // coberturas
   getCoberturas, createCobertura, updateCobertura, deleteCobertura,
   // practicas

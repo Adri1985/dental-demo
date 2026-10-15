@@ -102,11 +102,20 @@ async function getPatientAppointments(telefono, dni) {
   }));
 }
 
+// "09:30" → { h: 9, m: 30 }. Devuelve el fallback si el formato no sirve.
+function parseHora(txt, fallback) {
+  const m = /^(\d{1,2}):(\d{2})$/.exec(String(txt || "").trim());
+  if (!m) return fallback;
+  const h = parseInt(m[1]), min = parseInt(m[2]);
+  if (h < 0 || h > 23 || min < 0 || min > 59) return fallback;
+  return { h, m: min };
+}
+
 /**
  * Busca slots libres en el calendario del Dr. Diego.
  * Usa Date en timezone Argentina via Intl para evitar bugs de offset.
  */
-async function checkAvailability({ fecha_desde, fecha_hasta, duracion_minutos, excluir_event_id }) {
+async function checkAvailability({ fecha_desde, fecha_hasta, duracion_minutos, excluir_event_id, horarios }) {
   const auth = getAuthClient();
   const calendar = google.calendar({ version: "v3", auth });
 
@@ -170,11 +179,16 @@ async function checkAvailability({ fecha_desde, fecha_hasta, duracion_minutos, e
     
     // Solo lunes (1) a viernes (5)
     if (p.dow >= 1 && p.dow <= 5) {
-      // Franjas: 9:30-13:00 y 14:00-17:00 en hora AR
+      // Franjas en hora AR, según la config del panel (fallback a 9:30-13:00 y 14:00-17:00)
+      const mIni = parseHora(horarios?.manana_desde, { h: 9,  m: 30 });
+      const mFin = parseHora(horarios?.manana_hasta, { h: 13, m: 0  });
+      const tIni = parseHora(horarios?.tarde_desde,  { h: 14, m: 0  });
+      const tFin = parseHora(horarios?.tarde_hasta,  { h: 17, m: 0  });
+
       const franjas = [
-        { hIni: 9, mIni: 30, hFin: 13, mFin: 0 },
-        { hIni: 14, mIni: 0, hFin: 17, mFin: 0 },
-      ];
+        { hIni: mIni.h, mIni: mIni.m, hFin: mFin.h, mFin: mFin.m },
+        { hIni: tIni.h, mIni: tIni.m, hFin: tFin.h, mFin: tFin.m },
+      ].filter(f => (f.hIni * 60 + f.mIni) < (f.hFin * 60 + f.mFin));
 
       for (const franja of franjas) {
         let slotStart = arToUTC(p.year, p.month, p.day, franja.hIni, franja.mIni);

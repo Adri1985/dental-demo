@@ -24,6 +24,21 @@ function buildPracticasText(practicas) {
   }).join("\n");
 }
 
+function buildCoberturasText(coberturas, precio_num) {
+  if (!coberturas || coberturas.length === 0) {
+    return "- No hay convenios cargados. Todos los pacientes abonan el valor estándar.";
+  }
+  return coberturas.map(c => {
+    const pct = parseInt(c.descuento_pct) || 0;
+    if (pct <= 0) return `- ${c.obra_social}: sin descuento, abona $${precio_num.toLocaleString("es-AR")}`;
+    const final = Math.round(precio_num * (1 - pct / 100));
+    const alcance = c.primera_consulta_only
+      ? " (solo en la primera consulta, después abona el valor estándar)"
+      : "";
+    return `- ${c.obra_social}: ${pct}% de descuento, abona $${final.toLocaleString("es-AR")}${alcance}`;
+  }).join("\n");
+}
+
 function buildKnowledgeBase(cfg = {}, practicas = [], coberturas = []) {
   const precio_num = parseInt(cfg.precio_consulta) || config.precio_consulta || 0;
   const precio = precio_num.toLocaleString("es-AR");
@@ -58,9 +73,18 @@ PROFESIONALES Y HORARIOS:
 ${buildHorariosText(cfg)}
 
 VALOR DE CONSULTA:
-- Consulta estándar: $${precio} pesos
-- Si el paciente pregunta el precio, informá este valor
+- Consulta estándar (particular, sin convenio): $${precio} pesos
 - Tras informar el valor, preguntar si está de acuerdo para continuar con el turno
+
+DESCUENTOS POR OBRA SOCIAL:
+${buildCoberturasText(coberturas, precio_num)}
+
+CÓMO APLICAR LOS DESCUENTOS — MUY IMPORTANTE:
+- Si ya sabés la obra social del paciente, informale directamente el monto final con el descuento ya aplicado. No le muestres la cuenta ni el porcentaje, decile el número que tiene que pagar.
+- Si el paciente pregunta el precio y todavía no sabés su obra social, preguntale cuál tiene antes de darle un valor.
+- Si su obra social NO figura en la lista de arriba, abona el valor estándar de $${precio}. Nunca inventes descuentos ni prometas convenios que no estén en la lista.
+- Los descuentos marcados como "solo en la primera consulta" valen únicamente si el paciente es nuevo. Si ya es paciente del consultorio, abona el valor estándar.
+- Nunca negocies el precio ni ofrezcas descuentos adicionales por tu cuenta.
 
 PRÁCTICAS DISPONIBLES Y SUS DURACIONES:
 ${buildPracticasText(practicas)}

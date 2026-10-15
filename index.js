@@ -75,12 +75,21 @@ function buildPatientContext(patient) {
 // ─────────────────────────────────────────────
 //  EJECUTOR DE TOOLS
 // ─────────────────────────────────────────────
-async function executeTool(name, input, telefono) {
+async function executeTool(name, input, telefono, cfg = {}) {
   console.log(`[tool] ${name}`, JSON.stringify(input, null, 2));
   const patient = await db.getPatient(telefono);
   switch (name) {
     case "check_availability": {
-      const slots = await checkAvailability(input);
+      // Los horarios del panel mandan sobre las franjas por defecto del calendario
+      const slots = await checkAvailability({
+        ...input,
+        horarios: {
+          manana_desde: cfg.horario_manana_desde,
+          manana_hasta: cfg.horario_manana_hasta,
+          tarde_desde:  cfg.horario_tarde_desde,
+          tarde_hasta:  cfg.horario_tarde_hasta,
+        },
+      });
       if (slots.length === 0) return { disponible: false, mensaje: "No encontré turnos libres en ese período." };
       return { disponible: true, slots };
     }
@@ -154,14 +163,14 @@ async function runAgent(userMessage, telefono) {
     const toolResults = await Promise.all(
       response.content.filter(b => b.type === "tool_use").map(async block => ({
         type: "tool_result", tool_use_id: block.id,
-        content: JSON.stringify(await executeTool(block.name, block.input, telefono)),
+        content: JSON.stringify(await executeTool(block.name, block.input, telefono, cfg)),
       }))
     );
     claudeHistory.push({ role: "assistant", content: response.content });
     claudeHistory.push({ role: "user", content: toolResults });
     response = await anthropic.messages.create({
       model: "claude-sonnet-4-5", max_tokens: 1024,
-      system: getSystemPrompt(cfg, practicas),
+      system: getSystemPrompt(cfg, practicas, coberturas),
       tools: TOOLS, messages: claudeHistory,
     });
   }
