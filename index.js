@@ -232,10 +232,16 @@ function humanDelay(text) {
 async function runAgent(userMessage, telefono, consultorio_id = DEFAULT_CONSULTORIO_ID) {
   const patient = await db.getPatient(telefono);
   let claudeHistory = await db.getClaudeHistory(telefono);
-  if (claudeHistory.length === 0) {
-    claudeHistory.push({ role: "user", content: buildPatientContext(patient) });
-    claudeHistory.push({ role: "assistant", content: "Entendido, tengo los datos del paciente." });
+
+  // El perfil del paciente viaja en el system prompt, que se arma en cada
+  // mensaje. Las conversaciones viejas lo tienen clavado como primer mensaje
+  // del historial, con el estado que el paciente tenía al arrancar: lo sacamos
+  // para que no contradiga al perfil actualizado.
+  if (typeof claudeHistory[0]?.content === "string" &&
+      claudeHistory[0].content.startsWith("[DATOS DEL PACIENTE]")) {
+    claudeHistory = claudeHistory.slice(2);
   }
+
   claudeHistory.push({ role: "user", content: userMessage });
 
   // Leer config y prácticas (solo las marcadas para_agente=true) de DB
@@ -249,7 +255,7 @@ async function runAgent(userMessage, telefono, consultorio_id = DEFAULT_CONSULTO
 
   let response = await anthropic.messages.create({
     model: "claude-sonnet-4-5", max_tokens: 1024,
-    system: getSystemPrompt(cfg, practicas, coberturas),
+    system: getSystemPrompt(cfg, practicas, coberturas, buildPatientContext(patient)),
     tools: TOOLS, messages: claudeHistory,
   });
 
@@ -264,7 +270,9 @@ async function runAgent(userMessage, telefono, consultorio_id = DEFAULT_CONSULTO
     claudeHistory.push({ role: "user", content: toolResults });
     response = await anthropic.messages.create({
       model: "claude-sonnet-4-5", max_tokens: 1024,
-      system: getSystemPrompt(cfg, practicas, coberturas),
+      // Se relee el paciente: si el agente acaba de guardar datos con
+      // save_patient_data, el perfil ya refleja el estado nuevo.
+      system: getSystemPrompt(cfg, practicas, coberturas, buildPatientContext(await db.getPatient(telefono) || patient)),
       tools: TOOLS, messages: claudeHistory,
     });
   }

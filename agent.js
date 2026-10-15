@@ -130,7 +130,7 @@ const ESTILOS = {
 // ─────────────────────────────────────────────
 //  SYSTEM PROMPT
 // ─────────────────────────────────────────────
-const getSystemPrompt = (cfg = {}, practicas = [], coberturas = []) => {
+const getSystemPrompt = (cfg = {}, practicas = [], coberturas = [], perfilPaciente = "") => {
   const ahora = new Date().toLocaleString("es-AR", {
     timeZone: "America/Argentina/Buenos_Aires",
     weekday: "long", year: "numeric", month: "long",
@@ -161,7 +161,7 @@ ESTILO DE ESCRITURA — MUY IMPORTANTE:
 - Respuestas cortas. Si podés decirlo en una oración, no uses dos.
 
 CÓMO USÁS LOS DATOS DEL PACIENTE:
-- Al inicio de cada conversación recibís el perfil del paciente en el primer mensaje del sistema.
+- El perfil del paciente está al final de este prompt y se recalcula en CADA mensaje: refleja siempre el estado actual, no el del inicio de la conversación.
 - Si el paciente ya tiene nombre, DNI y obra social guardados, NO los volvás a pedir.
 - Si faltan datos (paciente nuevo), pedís uno por vez, no todos juntos.
 - Cuando guardés datos nuevos o actualizados, usá la tool save_patient_data.
@@ -185,6 +185,7 @@ REGLAS DE REAGENDAMIENTO — MUY IMPORTANTE:
 - Si create_appointment falla, NO cancelar el turno original. Avisar al paciente y ofrecer otro horario.
 
 ${buildKnowledgeBase(cfg, practicas, coberturas)}
+${perfilPaciente ? `\n${perfilPaciente}` : ""}
 `;
 };
 
