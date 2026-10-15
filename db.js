@@ -1,10 +1,54 @@
+const crypto = require("crypto");
+
 const USE_DB = !!process.env.DATABASE_URL;
 console.log(`[db] modo: ${USE_DB ? "PostgreSQL" : "memoria"}`);
 
 const store = {
   patients: {}, messages: {}, claudeHistory: {}, config: {},
-  users: {}, consultorios: {}, invitaciones: [],
+  users: {}, consultorios: {}, invitaciones: [], profiles: [],
 };
+
+// ─────────────────────────────────────────────
+//  CIFRADO DE CREDENCIALES (AES-256-CBC)
+// ─────────────────────────────────────────────
+// Las credenciales de los perfiles nunca se guardan en texto plano.
+// El formato almacenado es "<iv en hex>:<ciphertext en hex>".
+
+function getEncryptionKey() {
+  const k = process.env.ENCRYPTION_KEY || "";
+  if (k.length === 32) return Buffer.from(k, "utf8");
+  if (!k) {
+    console.warn("[crypto] ENCRYPTION_KEY no está seteada — las credenciales se cifran con una clave derivada por defecto. NO usar así en producción.");
+  } else {
+    console.warn(`[crypto] ENCRYPTION_KEY tiene ${k.length} chars en vez de 32 — se deriva una clave de 32 bytes con sha256.`);
+  }
+  return crypto.createHash("sha256").update(k).digest();
+}
+
+function encrypt(text) {
+  if (text === null || text === undefined || text === "") return null;
+  const iv = crypto.randomBytes(16);
+  const cipher = crypto.createCipheriv("aes-256-cbc", getEncryptionKey(), iv);
+  const enc = Buffer.concat([cipher.update(String(text), "utf8"), cipher.final()]);
+  return `${iv.toString("hex")}:${enc.toString("hex")}`;
+}
+
+function decrypt(text) {
+  if (text === null || text === undefined || text === "") return null;
+  const str = String(text);
+  const sep = str.indexOf(":");
+  // Si no tiene el formato iv:payload asumimos que quedó en texto plano de antes
+  if (sep !== 32) return str;
+  try {
+    const iv  = Buffer.from(str.slice(0, sep), "hex");
+    const enc = Buffer.from(str.slice(sep + 1), "hex");
+    const decipher = crypto.createDecipheriv("aes-256-cbc", getEncryptionKey(), iv);
+    return Buffer.concat([decipher.update(enc), decipher.final()]).toString("utf8");
+  } catch (e) {
+    console.error("[crypto] no se pudo descifrar una credencial:", e.message);
+    return null;
+  }
+}
 
 let pool = null;
 if (USE_DB) {
@@ -106,6 +150,20 @@ async function initDB() {
       created_at           TIMESTAMPTZ DEFAULT NOW()
     );
 
+    CREATE TABLE IF NOT EXISTS integration_profiles (
+      id                          SERIAL PRIMARY KEY,
+      consultorio_id              INTEGER REFERENCES consultorios(id) ON DELETE CASCADE,
+      nombre                      TEXT NOT NULL,
+      activo                      BOOLEAN DEFAULT false,
+      whatsapp_phone_number_id    TEXT,
+      whatsapp_token              TEXT,
+      whatsapp_verify_token       TEXT,
+      google_service_account_json TEXT,
+      calendar_id                 TEXT,
+      created_at                  TIMESTAMPTZ DEFAULT NOW(),
+      updated_at                  TIMESTAMPTZ DEFAULT NOW()
+    );
+
     CREATE TABLE IF NOT EXISTS practicas (
       id                  SERIAL PRIMARY KEY,
       nombre              TEXT NOT NULL,
@@ -155,7 +213,33 @@ async function initDB() {
     ALTER TABLE practicas ADD COLUMN IF NOT EXISTS para_turno_directo BOOLEAN DEFAULT true;
   `).catch(e => console.log("[db] migracion practicas:", e.message));
 
+  await migrarEnvAPerfil().catch(e => console.log("[migration] error:", e.message));
+
   console.log("[db] tablas listas (PostgreSQL)");
+}
+
+// Corre una sola vez: si el consultorio 1 todavía no tiene perfiles, crea uno
+// con las credenciales que hoy viven en las variables de entorno.
+async function migrarEnvAPerfil() {
+  const { rows: cons } = await pool.query("SELECT id FROM consultorios WHERE id = 1");
+  if (!cons.length) return;
+
+  const { rows: existentes } = await pool.query(
+    "SELECT id FROM integration_profiles WHERE consultorio_id = 1 LIMIT 1"
+  );
+  if (existentes.length) return;
+
+  await createProfile({
+    consultorio_id:              1,
+    nombre:                      "Test mode",
+    activo:                      true,
+    whatsapp_phone_number_id:    process.env.WHATSAPP_PHONE_NUMBER_ID,
+    whatsapp_token:              process.env.WHATSAPP_TOKEN,
+    whatsapp_verify_token:       process.env.WHATSAPP_VERIFY_TOKEN,
+    google_service_account_json: process.env.GOOGLE_SERVICE_ACCOUNT_JSON,
+    calendar_id:                 process.env.CALENDAR_ID_DR_DIEGO,
+  });
+  console.log("[migration] perfil 'Test mode' creado desde env vars");
 }
 
 // ─────────────────────────────────────────────
@@ -484,6 +568,169 @@ async function deletePractica(id) {
   await pool.query("UPDATE practicas SET activa = false WHERE id = $1", [id]);
 }
 
+// ─────────────────────────────────────────────
+//  PERFILES DE INTEGRACIÓN
+// ─────────────────────────────────────────────
+// Campos que se guardan cifrados y se devuelven en claro solo en getActiveProfile.
+const CAMPOS_CREDENCIAL = [
+  "whatsapp_phone_number_id", "whatsapp_token", "whatsapp_verify_token",
+  "google_service_account_json", "calendar_id",
+];
+
+function cifrarCredenciales(data) {
+  const out = {};
+  for (const c of CAMPOS_CREDENCIAL) out[c] = encrypt(data[c]);
+  return out;
+}
+
+function descifrarPerfil(row) {
+  if (!row) return null;
+  const out = { ...row };
+  for (const c of CAMPOS_CREDENCIAL) out[c] = decrypt(row[c]);
+  return out;
+}
+
+// Devuelve el perfil sin credenciales en claro: solo si cada campo está seteado.
+function resumirPerfil(row) {
+  if (!row) return null;
+  const configurado = {};
+  for (const c of CAMPOS_CREDENCIAL) configurado[c] = !!row[c];
+  return {
+    id: row.id, consultorio_id: row.consultorio_id, nombre: row.nombre,
+    activo: !!row.activo, created_at: row.created_at, updated_at: row.updated_at,
+    configurado,
+  };
+}
+
+async function getProfiles(consultorio_id) {
+  if (!USE_DB) {
+    return store.profiles
+      .filter(p => String(p.consultorio_id) === String(consultorio_id))
+      .map(resumirPerfil);
+  }
+  const { rows } = await pool.query(
+    "SELECT * FROM integration_profiles WHERE consultorio_id = $1 ORDER BY created_at ASC",
+    [consultorio_id]
+  );
+  return rows.map(resumirPerfil);
+}
+
+async function getActiveProfile(consultorio_id) {
+  if (!USE_DB) {
+    const p = store.profiles.find(
+      p => String(p.consultorio_id) === String(consultorio_id) && p.activo
+    );
+    return descifrarPerfil(p);
+  }
+  const { rows } = await pool.query(
+    "SELECT * FROM integration_profiles WHERE consultorio_id = $1 AND activo = true LIMIT 1",
+    [consultorio_id]
+  );
+  return descifrarPerfil(rows[0]);
+}
+
+// Devuelve el perfil con credenciales en claro. Uso interno (editar/validar).
+async function getProfileById(id) {
+  if (!USE_DB) return descifrarPerfil(store.profiles.find(p => String(p.id) === String(id)));
+  const { rows } = await pool.query("SELECT * FROM integration_profiles WHERE id = $1", [id]);
+  return descifrarPerfil(rows[0]);
+}
+
+async function createProfile(data) {
+  const cif = cifrarCredenciales(data);
+  if (!USE_DB) {
+    const row = {
+      id: store.profiles.length + 1,
+      consultorio_id: data.consultorio_id,
+      nombre: data.nombre,
+      activo: !!data.activo,
+      ...cif,
+      created_at: new Date().toISOString(), updated_at: new Date().toISOString(),
+    };
+    if (row.activo) {
+      store.profiles.forEach(p => {
+        if (String(p.consultorio_id) === String(row.consultorio_id)) p.activo = false;
+      });
+    }
+    store.profiles.push(row);
+    return resumirPerfil(row);
+  }
+  // Un solo perfil activo por consultorio
+  if (data.activo) {
+    await pool.query(
+      "UPDATE integration_profiles SET activo = false WHERE consultorio_id = $1",
+      [data.consultorio_id]
+    );
+  }
+  const { rows } = await pool.query(
+    `INSERT INTO integration_profiles
+       (consultorio_id, nombre, activo, whatsapp_phone_number_id, whatsapp_token,
+        whatsapp_verify_token, google_service_account_json, calendar_id)
+     VALUES ($1,$2,$3,$4,$5,$6,$7,$8) RETURNING *`,
+    [data.consultorio_id, data.nombre, !!data.activo,
+     cif.whatsapp_phone_number_id, cif.whatsapp_token, cif.whatsapp_verify_token,
+     cif.google_service_account_json, cif.calendar_id]
+  );
+  return resumirPerfil(rows[0]);
+}
+
+async function updateProfile(id, data) {
+  const sets = [], vals = [];
+  let i = 1;
+  if (data.nombre !== undefined) { sets.push(`nombre = $${i++}`); vals.push(data.nombre); }
+  for (const c of CAMPOS_CREDENCIAL) {
+    // undefined = no se tocó. "" = se quiere borrar el valor.
+    if (data[c] !== undefined) { sets.push(`${c} = $${i++}`); vals.push(encrypt(data[c])); }
+  }
+  if (!sets.length) return null;
+
+  if (!USE_DB) {
+    const row = store.profiles.find(p => String(p.id) === String(id));
+    if (!row) return null;
+    if (data.nombre !== undefined) row.nombre = data.nombre;
+    for (const c of CAMPOS_CREDENCIAL) if (data[c] !== undefined) row[c] = encrypt(data[c]);
+    row.updated_at = new Date().toISOString();
+    return resumirPerfil(row);
+  }
+  sets.push("updated_at = NOW()");
+  vals.push(id);
+  const { rows } = await pool.query(
+    `UPDATE integration_profiles SET ${sets.join(", ")} WHERE id = $${i} RETURNING *`, vals
+  );
+  return resumirPerfil(rows[0]);
+}
+
+async function activateProfile(id, consultorio_id) {
+  if (!USE_DB) {
+    const row = store.profiles.find(p => String(p.id) === String(id));
+    if (!row) return null;
+    store.profiles.forEach(p => {
+      if (String(p.consultorio_id) === String(consultorio_id)) p.activo = false;
+    });
+    row.activo = true;
+    return resumirPerfil(row);
+  }
+  await pool.query(
+    "UPDATE integration_profiles SET activo = false WHERE consultorio_id = $1",
+    [consultorio_id]
+  );
+  const { rows } = await pool.query(
+    `UPDATE integration_profiles SET activo = true, updated_at = NOW()
+     WHERE id = $1 AND consultorio_id = $2 RETURNING *`,
+    [id, consultorio_id]
+  );
+  return resumirPerfil(rows[0]);
+}
+
+async function deleteProfile(id) {
+  if (!USE_DB) {
+    const idx = store.profiles.findIndex(p => String(p.id) === String(id));
+    if (idx >= 0) store.profiles.splice(idx, 1);
+    return;
+  }
+  await pool.query("DELETE FROM integration_profiles WHERE id = $1", [id]);
+}
+
 module.exports = {
   initDB,
   // auth
@@ -502,4 +749,9 @@ module.exports = {
   addMessage, getMessages, clearMessages,
   // claude history
   getClaudeHistory, saveClaudeHistory, clearClaudeHistory,
+  // perfiles de integración
+  getProfiles, getActiveProfile, getProfileById,
+  createProfile, updateProfile, activateProfile, deleteProfile,
+  // cifrado
+  encrypt, decrypt,
 };

@@ -2,16 +2,18 @@ const { google } = require("googleapis");
 const path = require("path");
 const config = require(path.join(__dirname, "config/consultorio.json"));
 
-// Mapa de profesional_id -> variable de entorno del Calendar ID
-const CALENDAR_IDS = {
-  dr_diego: process.env.CALENDAR_ID_DR_DIEGO,
-};
+// Las credenciales llegan desde el perfil de integración activo. Las env vars
+// quedan solo como fallback para cuando todavía no hay ningún perfil cargado.
+function resolverCreds(creds = {}) {
+  const sa = creds.google_service_account_json || process.env.GOOGLE_SERVICE_ACCOUNT_JSON;
+  const calendarId = creds.calendar_id || process.env.CALENDAR_ID_DR_DIEGO;
+  if (!sa) throw new Error("No hay Service Account de Google configurada (ni en el perfil activo ni en env)");
+  if (!calendarId) throw new Error("No hay Calendar ID configurado (ni en el perfil activo ni en env)");
+  return { sa, calendarId };
+}
 
-// Por ahora usamos el primero por defecto (para cuando hay un solo profesional)
-const CALENDAR_ID = CALENDAR_IDS[config.profesionales[0].id] || process.env.CALENDAR_ID_DR_DIEGO;
-
-function getAuthClient() {
-  const credentials = JSON.parse(process.env.GOOGLE_SERVICE_ACCOUNT_JSON);
+function getAuthClient(sa) {
+  const credentials = typeof sa === "string" ? JSON.parse(sa) : sa;
   return new google.auth.GoogleAuth({
     credentials,
     scopes: ["https://www.googleapis.com/auth/calendar"],
@@ -22,8 +24,9 @@ function getAuthClient() {
  * Busca eventos futuros que contengan un teléfono o DNI en la descripción.
  * Usado para reconstruir el perfil del paciente al reiniciar el backend.
  */
-async function findPatientByIdentifier(telefono, dni) {
-  const auth = getAuthClient();
+async function findPatientByIdentifier(telefono, dni, creds) {
+  const { sa, calendarId: CALENDAR_ID } = resolverCreds(creds);
+  const auth = getAuthClient(sa);
   const calendar = google.calendar({ version: "v3", auth });
 
   const ahora = new Date();
@@ -68,8 +71,9 @@ async function findPatientByIdentifier(telefono, dni) {
 /**
  * Busca turnos futuros de un paciente por teléfono o DNI.
  */
-async function getPatientAppointments(telefono, dni) {
-  const auth = getAuthClient();
+async function getPatientAppointments(telefono, dni, creds) {
+  const { sa, calendarId: CALENDAR_ID } = resolverCreds(creds);
+  const auth = getAuthClient(sa);
   const calendar = google.calendar({ version: "v3", auth });
 
   const { data } = await calendar.events.list({
@@ -115,8 +119,9 @@ function parseHora(txt, fallback) {
  * Busca slots libres en el calendario del Dr. Diego.
  * Usa Date en timezone Argentina via Intl para evitar bugs de offset.
  */
-async function checkAvailability({ fecha_desde, fecha_hasta, duracion_minutos, excluir_event_id, horarios }) {
-  const auth = getAuthClient();
+async function checkAvailability({ fecha_desde, fecha_hasta, duracion_minutos, excluir_event_id, horarios, creds }) {
+  const { sa, calendarId: CALENDAR_ID } = resolverCreds(creds);
+  const auth = getAuthClient(sa);
   const calendar = google.calendar({ version: "v3", auth });
 
   // Ampliar rango al mes completo para no perder eventos
@@ -239,8 +244,9 @@ async function checkAvailability({ fecha_desde, fecha_hasta, duracion_minutos, e
  * Crea un evento con todos los datos del paciente en la descripción.
  * Esto permite reconstruir el perfil después de un reinicio.
  */
-async function createAppointment({ paciente_nombre, paciente_telefono, paciente_dni, paciente_obra_social, fecha_hora, tipo_practica, duracion_minutos }) {
-  const auth = getAuthClient();
+async function createAppointment({ paciente_nombre, paciente_telefono, paciente_dni, paciente_obra_social, fecha_hora, tipo_practica, duracion_minutos, creds }) {
+  const { sa, calendarId: CALENDAR_ID } = resolverCreds(creds);
+  const auth = getAuthClient(sa);
   const calendar = google.calendar({ version: "v3", auth });
 
   const start = new Date(fecha_hora);
@@ -304,8 +310,9 @@ async function createAppointment({ paciente_nombre, paciente_telefono, paciente_
 /**
  * Cancela un evento por ID.
  */
-async function cancelAppointment({ event_id }) {
-  const auth = getAuthClient();
+async function cancelAppointment({ event_id, creds }) {
+  const { sa, calendarId: CALENDAR_ID } = resolverCreds(creds);
+  const auth = getAuthClient(sa);
   const calendar = google.calendar({ version: "v3", auth });
   await calendar.events.delete({ calendarId: CALENDAR_ID, eventId: event_id });
   return { ok: true };

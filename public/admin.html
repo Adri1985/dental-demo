@@ -90,6 +90,45 @@
     .modal-actions { display: flex; gap: 8px; justify-content: flex-end; margin-top: 4px; }
     .btn-cancel { background: #2a3942; color: #8696a0; }
     .btn-primary { background: #00a884; color: white; }
+
+    /* Hints de los campos de integración */
+    .hint-wrap { position: relative; display: inline-block; margin-left: 5px; }
+    .hint-ico {
+      display: inline-flex; align-items: center; justify-content: center;
+      width: 15px; height: 15px; border-radius: 50%;
+      background: #2a3942; color: #8696a0;
+      font-size: 10px; font-weight: 700; font-style: normal;
+      cursor: pointer; user-select: none; vertical-align: middle;
+    }
+    .hint-ico:hover { background: #00a884; color: #fff; }
+    .hint-pop {
+      display: none; position: absolute; left: 0; z-index: 50;
+      width: max-content; max-width: 280px;
+      background: rgba(17, 27, 33, 0.97);
+      border: 1px solid #2a3942; border-radius: 8px;
+      padding: 9px 11px; font-size: 11.5px; line-height: 1.5;
+      color: #e9edef; font-weight: 400; white-space: normal;
+      box-shadow: 0 6px 20px rgba(0,0,0,0.5);
+    }
+    .hint-pop.show { display: block; }
+    .hint-pop.below { top: 22px; }
+    .hint-pop.above { bottom: 22px; }
+    @media (max-width: 500px) {
+      .hint-pop { max-width: 210px; }
+    }
+
+    /* Perfiles de integración */
+    .perfil-row {
+      display: flex; align-items: center; gap: 8px;
+      padding: 9px 0; border-bottom: 1px solid #2a3942;
+    }
+    .badge-activo {
+      background: #00a884; color: #fff; font-size: 10px; font-weight: 700;
+      padding: 2px 7px; border-radius: 10px; letter-spacing: 0.3px;
+    }
+    .valida-linea { font-size: 12px; margin-top: 5px; line-height: 1.5; }
+    .valida-ok  { color: #00a884; }
+    .valida-mal { color: #ff6b6b; }
     .select { background: #2a3942; border: 1px solid #3a4952; border-radius: 8px; padding: 10px 12px; color: #e9edef; font-size: 14px; outline: none; width: 100%; }
     .link-box { background: #182229; border: 1px solid #2a3942; border-radius: 8px; padding: 12px; font-size: 12px; word-break: break-all; color: #8696a0; display: none; }
     .link-box strong { color: #00a884; display: block; margin-bottom: 6px; font-size: 11px; }
@@ -198,6 +237,7 @@
       <button class="cfg-tab" onclick="switchTab('coberturas')">Cobertura/Valores</button>
       <button class="cfg-tab" onclick="switchTab('flujos')">Flujos</button>
       <button class="cfg-tab" onclick="switchTab('equipo')">Equipo</button>
+      <button class="cfg-tab" onclick="switchTab('integraciones')">Integraciones</button>
     </div>
 
     <!-- Tab: Horarios -->
@@ -362,6 +402,60 @@
         <div class="modal-actions" style="margin-top:8px">
           <button class="btn btn-cancel" onclick="cerrarConfig()">Cerrar</button>
           <button class="btn btn-primary" onclick="invitar()">Generar invitación</button>
+        </div>
+      </div>
+    </div>
+
+    <div class="cfg-panel" id="tab-integraciones" style="display:none;overflow-y:auto;flex:1">
+      <div style="font-size:12px;color:#8696a0;margin-bottom:12px;line-height:1.5">
+        Un perfil agrupa las credenciales de WhatsApp y Google Calendar. Podés tener varios, pero solo uno activo a la vez.
+      </div>
+
+      <div id="perfilesList" style="font-size:13px;color:#8696a0;margin-bottom:14px">Cargando...</div>
+
+      <div style="border-top:1px solid #2a3942;padding-top:14px">
+        <button class="btn btn-primary" id="btnNuevoPerfil" onclick="nuevoPerfil()">Nuevo perfil</button>
+      </div>
+
+      <div id="perfilForm" style="display:none;border-top:1px solid #2a3942;margin-top:14px;padding-top:14px">
+        <div style="font-size:13px;font-weight:600;margin-bottom:10px" id="perfilFormTitulo">Nuevo perfil</div>
+        <input type="hidden" id="perfilEditId" />
+
+        <div class="modal-field">
+          <label class="modal-label">Nombre del perfil</label>
+          <input class="modal-input" id="pfNombre" type="text" placeholder="Ej: Producción" />
+        </div>
+
+        <div class="modal-field">
+          <label class="modal-label">WhatsApp Phone Number ID<span class="hint-wrap"><i class="hint-ico" onclick="toggleHint(event, this)">i</i><span class="hint-pop">Entrá a Meta for Developers → Tu app → WhatsApp → API Setup. El Phone Number ID aparece debajo del número registrado.</span></span></label>
+          <input class="modal-input" id="pfPhoneId" type="text" />
+        </div>
+
+        <div class="modal-field">
+          <label class="modal-label">WhatsApp Token<span class="hint-wrap"><i class="hint-ico" onclick="toggleHint(event, this)">i</i><span class="hint-pop">En la misma pantalla de API Setup, copiá el "Temporary access token". Para producción, generá un token permanente desde Sistema → Usuarios del sistema en Meta Business Manager.</span></span></label>
+          <input class="modal-input" id="pfToken" type="text" />
+        </div>
+
+        <div class="modal-field">
+          <label class="modal-label">WhatsApp Verify Token<span class="hint-wrap"><i class="hint-ico" onclick="toggleHint(event, this)">i</i><span class="hint-pop">Es una palabra clave que vos elegís (ej: "mia_webhook_2024"). Tenés que usarla también al configurar el webhook en Meta → Configuración → Webhooks.</span></span></label>
+          <input class="modal-input" id="pfVerify" type="text" />
+        </div>
+
+        <div class="modal-field">
+          <label class="modal-label">Google Service Account JSON<span class="hint-wrap"><i class="hint-ico" onclick="toggleHint(event, this)">i</i><span class="hint-pop">En Google Cloud Console → IAM → Cuentas de servicio, creá una cuenta, generá una clave JSON y pegá el contenido completo acá. Luego compartí tu Google Calendar con el email de la cuenta de servicio dándole permisos de edición.</span></span></label>
+          <textarea class="modal-input" id="pfServiceAccount" rows="4" style="resize:vertical;font-family:monospace;font-size:11px;line-height:1.4"></textarea>
+        </div>
+
+        <div class="modal-field">
+          <label class="modal-label">Calendar ID<span class="hint-wrap"><i class="hint-ico" onclick="toggleHint(event, this)">i</i><span class="hint-pop">Abrí Google Calendar → Configuración del calendario → Integrar calendario. El ID tiene formato algo@group.calendar.google.com o es tu email de Google.</span></span></label>
+          <input class="modal-input" id="pfCalendarId" type="text" />
+        </div>
+
+        <div id="perfilValidacion" style="display:none;margin-top:10px;padding:9px 11px;background:#111b21;border:1px solid #2a3942;border-radius:8px"></div>
+
+        <div class="modal-actions" style="margin-top:10px">
+          <button class="btn btn-cancel" onclick="cerrarPerfilForm()">Cancelar</button>
+          <button class="btn btn-primary" id="btnGuardarPerfil" onclick="guardarPerfil()">Guardar y validar</button>
         </div>
       </div>
     </div>
@@ -592,7 +686,7 @@
 
   function switchTab(nombre) {
     document.querySelectorAll(".cfg-tab").forEach((t, i) => {
-      const tabs = ["horarios","estilo","practicas","coberturas","flujos","equipo"];
+      const tabs = ["horarios","estilo","practicas","coberturas","flujos","equipo","integraciones"];
       t.classList.toggle("active", tabs[i] === nombre);
     });
     document.querySelectorAll(".cfg-panel").forEach(p => p.style.display = "none");
@@ -601,6 +695,7 @@
     if (nombre === "coberturas") cargarCoberturas();
     if (nombre === "flujos")     cargarFlujos();
     if (nombre === "equipo")     cargarEquipo();
+    if (nombre === "integraciones") cargarPerfiles();
   }
   async function guardarConfig() {
     const num = document.getElementById("cfgBotNumber").value.trim().replace(/\D/g, "");
@@ -731,6 +826,199 @@
       cerrarConfig();
       showToast("Flujos guardados. Efectivos en el próximo mensaje.");
     } catch(e) { showToast("Error guardando flujos"); }
+  }
+
+
+  // ── Integraciones / perfiles ─────────────
+  const PLACEHOLDER_SECRETO = "••••••••";
+
+  // Popover de ayuda: se abre uno por vez y se cierra al clickear afuera
+  function toggleHint(ev, ico) {
+    ev.stopPropagation();
+    const pop = ico.nextElementSibling;
+    const abierto = pop.classList.contains("show");
+    cerrarHints();
+    if (abierto) return;
+    // Arriba o abajo según el espacio que quede hasta el borde inferior
+    const espacioAbajo = window.innerHeight - ico.getBoundingClientRect().bottom;
+    pop.classList.add(espacioAbajo < 130 ? "above" : "below", "show");
+  }
+  function cerrarHints() {
+    document.querySelectorAll(".hint-pop").forEach(p => p.classList.remove("show", "above", "below"));
+  }
+  document.addEventListener("click", cerrarHints);
+
+  async function cargarPerfiles() {
+    const el = document.getElementById("perfilesList");
+    try {
+      const lista = await fetch(`${API}/profiles`, { headers: authH() }).then(r => r.json());
+      if (!Array.isArray(lista) || !lista.length) {
+        el.innerHTML = '<div style="color:#8696a0">No hay perfiles todavía. Creá uno para conectar WhatsApp y Google Calendar.</div>';
+        return;
+      }
+      el.innerHTML = lista.map(p => {
+        const faltantes = Object.entries(p.configurado || {}).filter(([, v]) => !v).length;
+        return `
+        <div class="perfil-row">
+          <div style="flex:1;min-width:0">
+            <div style="font-size:14px;font-weight:500;color:#e9edef">
+              ${escHtml(p.nombre)} ${p.activo ? '<span class="badge-activo">Activo</span>' : ""}
+            </div>
+            <div style="font-size:11px;color:#8696a0;margin-top:2px">
+              ${faltantes ? faltantes + " credencial(es) sin configurar" : "Todas las credenciales configuradas"}
+            </div>
+          </div>
+          <button class="btn btn-sm" onclick="editarPerfil(${p.id})">Editar</button>
+          ${p.activo ? "" : `<button class="btn btn-sm" style="color:#00a884" onclick="activarPerfil(${p.id})">Activar</button>`}
+          ${p.activo ? "" : `<button class="btn btn-sm" style="color:#ff6b6b" onclick="eliminarPerfil(${p.id})">Eliminar</button>`}
+        </div>`;
+      }).join("");
+    } catch (e) {
+      el.innerHTML = '<div style="color:#ff6b6b">Error cargando perfiles</div>';
+    }
+  }
+
+  function nuevoPerfil() {
+    document.getElementById("perfilEditId").value = "";
+    document.getElementById("perfilFormTitulo").textContent = "Nuevo perfil";
+    ["pfNombre","pfPhoneId","pfToken","pfVerify","pfServiceAccount","pfCalendarId"].forEach(id => {
+      const el = document.getElementById(id);
+      el.value = "";
+      el.placeholder = "";
+    });
+    document.getElementById("perfilValidacion").style.display = "none";
+    document.getElementById("perfilForm").style.display = "block";
+  }
+
+  async function editarPerfil(id) {
+    try {
+      const lista = await fetch(`${API}/profiles`, { headers: authH() }).then(r => r.json());
+      const p = lista.find(x => x.id === id);
+      if (!p) return showToast("Perfil no encontrado");
+
+      document.getElementById("perfilEditId").value = id;
+      document.getElementById("perfilFormTitulo").textContent = `Editar "${p.nombre}"`;
+      document.getElementById("pfNombre").value = p.nombre;
+      document.getElementById("pfNombre").placeholder = "";
+
+      // Los valores reales nunca viajan al navegador: si el campo ya está
+      // configurado se muestra el placeholder y solo se manda si lo reescriben.
+      const mapa = {
+        pfPhoneId:        "whatsapp_phone_number_id",
+        pfToken:          "whatsapp_token",
+        pfVerify:         "whatsapp_verify_token",
+        pfServiceAccount: "google_service_account_json",
+        pfCalendarId:     "calendar_id",
+      };
+      for (const [elId, campo] of Object.entries(mapa)) {
+        const el = document.getElementById(elId);
+        el.value = "";
+        el.placeholder = p.configurado?.[campo] ? PLACEHOLDER_SECRETO : "";
+      }
+      document.getElementById("perfilValidacion").style.display = "none";
+      document.getElementById("perfilForm").style.display = "block";
+    } catch (e) { showToast("Error cargando el perfil"); }
+  }
+
+  function cerrarPerfilForm() {
+    document.getElementById("perfilForm").style.display = "none";
+  }
+
+  function pintarValidacion(r) {
+    const box = document.getElementById("perfilValidacion");
+    const linea = (nombre, res) => {
+      if (res?.sinCambios) return `<div class="valida-linea" style="color:#8696a0">— ${nombre}: sin cambios, no se revalidó</div>`;
+      return res?.ok
+        ? `<div class="valida-linea valida-ok">✓ ${nombre}: conexión correcta</div>`
+        : `<div class="valida-linea valida-mal">✗ ${nombre}: ${escHtml(res?.error || "no se pudo validar")}</div>`;
+    };
+    box.innerHTML = linea("WhatsApp", r.whatsapp) + linea("Google Calendar", r.calendar);
+    box.style.display = "block";
+  }
+
+  async function guardarPerfil() {
+    const id     = document.getElementById("perfilEditId").value;
+    const nombre = document.getElementById("pfNombre").value.trim();
+    if (!nombre) return showToast("Poné un nombre para el perfil");
+
+    // En edición, un campo vacío significa "no lo toqué": no se manda.
+    const campos = {
+      whatsapp_phone_number_id:    document.getElementById("pfPhoneId").value.trim(),
+      whatsapp_token:              document.getElementById("pfToken").value.trim(),
+      whatsapp_verify_token:       document.getElementById("pfVerify").value.trim(),
+      google_service_account_json: document.getElementById("pfServiceAccount").value.trim(),
+      calendar_id:                 document.getElementById("pfCalendarId").value.trim(),
+    };
+    const payload = { nombre };
+    for (const [k, v] of Object.entries(campos)) {
+      if (!id || v) payload[k] = v;
+    }
+
+    const btn = document.getElementById("btnGuardarPerfil");
+    btn.disabled = true;
+    btn.textContent = "Validando...";
+    try {
+      if (id) {
+        // El backend revalida solo lo que cambió y guarda en el mismo paso
+        const resp = await fetch(`${API}/profiles/${id}`, {
+          method: "PATCH", headers: authH(), body: JSON.stringify(payload),
+        });
+        const data = await resp.json();
+        if (!resp.ok) {
+          if (data.whatsapp || data.calendar) pintarValidacion(data);
+          else showToast(data.error || "No se pudo guardar");
+          return;
+        }
+        pintarValidacion(data);
+        showToast("Perfil actualizado");
+      } else {
+        // Alta: primero validamos para poder mostrar el detalle por credencial
+        const val = await fetch(`${API}/profiles/validate`, {
+          method: "POST", headers: authH(), body: JSON.stringify(payload),
+        }).then(r => r.json());
+        pintarValidacion(val);
+        if (!val.whatsapp?.ok || !val.calendar?.ok) {
+          showToast("Revisá las credenciales marcadas en rojo");
+          return;
+        }
+        const resp = await fetch(`${API}/profiles`, {
+          method: "POST", headers: authH(), body: JSON.stringify(payload),
+        });
+        const data = await resp.json();
+        if (!resp.ok) {
+          if (data.whatsapp || data.calendar) pintarValidacion(data);
+          else showToast(data.error || "No se pudo crear el perfil");
+          return;
+        }
+        showToast("Perfil creado");
+      }
+      cerrarPerfilForm();
+      await cargarPerfiles();
+    } catch (e) {
+      showToast("Error de conexión");
+    } finally {
+      btn.disabled = false;
+      btn.textContent = "Guardar y validar";
+    }
+  }
+
+  async function activarPerfil(id) {
+    try {
+      const resp = await fetch(`${API}/profiles/${id}/activate`, { method: "POST", headers: authH() });
+      if (!resp.ok) return showToast((await resp.json()).error || "No se pudo activar");
+      showToast("Perfil activado");
+      await cargarPerfiles();
+    } catch (e) { showToast("Error activando el perfil"); }
+  }
+
+  async function eliminarPerfil(id) {
+    if (!confirm("Eliminar este perfil de integración?")) return;
+    try {
+      const resp = await fetch(`${API}/profiles/${id}`, { method: "DELETE", headers: authH() });
+      if (!resp.ok) return showToast((await resp.json()).error || "No se pudo eliminar");
+      showToast("Perfil eliminado");
+      await cargarPerfiles();
+    } catch (e) { showToast("Error eliminando el perfil"); }
   }
 
   // Cargar equipo (llamado desde switchTab)

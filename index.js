@@ -10,6 +10,7 @@ const {
   checkAvailability, createAppointment, cancelAppointment,
   findPatientByIdentifier, getPatientAppointments,
 } = require("./calendar");
+const { google } = require("googleapis");
 const { getSystemPrompt, TOOLS, config } = require("./agent");
 const db = require("./db");
 
@@ -17,6 +18,91 @@ const app       = express();
 const anthropic = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY });
 const JWT_SECRET  = process.env.JWT_SECRET || "dental_demo_secret_cambiar_en_produccion";
 const SALT_ROUNDS = 10;
+// Mientras no haya multitenancy completa, el webhook (que llega sin JWT) asume este consultorio.
+const DEFAULT_CONSULTORIO_ID = process.env.DEFAULT_CONSULTORIO_ID || 1;
+
+// ─────────────────────────────────────────────
+//  PERFIL DE INTEGRACIÓN ACTIVO
+// ─────────────────────────────────────────────
+// Devuelve el perfil con las credenciales descifradas, o null si no hay.
+// Nunca tira: si falla, se loggea y el caller decide con qué seguir.
+async function getPerfilActivo(consultorio_id = DEFAULT_CONSULTORIO_ID) {
+  try {
+    const perfil = await db.getActiveProfile(consultorio_id);
+    if (!perfil) console.error(`[perfil] no hay perfil de integración activo para el consultorio ${consultorio_id}`);
+    return perfil;
+  } catch (err) {
+    console.error("[perfil] error leyendo el perfil activo:", err.message);
+    return null;
+  }
+}
+
+// Credenciales de Google que espera calendar.js
+function credsCalendar(perfil) {
+  return {
+    google_service_account_json: perfil?.google_service_account_json,
+    calendar_id:                 perfil?.calendar_id,
+  };
+}
+
+// ─────────────────────────────────────────────
+//  VALIDACIÓN DE CREDENCIALES
+// ─────────────────────────────────────────────
+async function validarWhatsApp({ whatsapp_phone_number_id, whatsapp_token }) {
+  if (!whatsapp_phone_number_id || !whatsapp_token) {
+    return { ok: false, error: "Faltan el Phone Number ID o el token" };
+  }
+  try {
+    const resp = await fetch(
+      `https://graph.facebook.com/v19.0/${encodeURIComponent(whatsapp_phone_number_id)}`,
+      { headers: { Authorization: `Bearer ${whatsapp_token}` } }
+    );
+    if (resp.ok) return { ok: true, error: null };
+
+    const texto = await resp.text().catch(() => "");
+    let codigo = null;
+    try { codigo = JSON.parse(texto)?.error?.code; } catch {}
+
+    // Meta devuelve 401, pero también 400 con code 190, para un token vencido o inválido
+    if (resp.status === 401 || codigo === 190) return { ok: false, error: "Token inválido" };
+    if (resp.status === 404 || codigo === 803)  return { ok: false, error: "Phone Number ID no encontrado" };
+    return { ok: false, error: `Meta respondió ${resp.status}${texto ? ": " + texto.slice(0, 160) : ""}` };
+  } catch (err) {
+    return { ok: false, error: `No se pudo conectar con Meta: ${err.message}` };
+  }
+}
+
+async function validarCalendar({ google_service_account_json, calendar_id }) {
+  if (!google_service_account_json || !calendar_id) {
+    return { ok: false, error: "Faltan la Service Account o el Calendar ID" };
+  }
+  let credentials;
+  try {
+    credentials = JSON.parse(google_service_account_json);
+  } catch {
+    return { ok: false, error: "El JSON de la Service Account no es válido" };
+  }
+  if (!credentials.client_email || !credentials.private_key) {
+    return { ok: false, error: "Al JSON le faltan client_email o private_key" };
+  }
+  try {
+    const auth = new google.auth.GoogleAuth({
+      credentials, scopes: ["https://www.googleapis.com/auth/calendar"],
+    });
+    const calendar = google.calendar({ version: "v3", auth });
+    await calendar.events.list({ calendarId: calendar_id, maxResults: 1 });
+    return { ok: true, error: null };
+  } catch (err) {
+    const msg    = err.message || "";
+    const status = err.code || err.response?.status;
+    if (msg.includes("invalid_grant")) return { ok: false, error: "Service account inválida" };
+    if (status === 404) return { ok: false, error: "Calendar ID no encontrado o sin permisos" };
+    if (status === 403) {
+      return { ok: false, error: `Sin permisos sobre el calendario. ¿Lo compartiste con ${credentials.client_email}?` };
+    }
+    return { ok: false, error: msg.slice(0, 200) || "Error desconocido al validar el calendario" };
+  }
+}
 
 app.use(cors());
 app.use(express.json());
@@ -44,10 +130,14 @@ function normalizarParaEnvioAR(numero) {
   return numero;
 }
 
-async function sendWhatsAppMessage(to, text) {
-  const token   = process.env.WHATSAPP_TOKEN;
-  const phoneId = process.env.WHATSAPP_PHONE_NUMBER_ID;
-  if (!token || !phoneId) { console.error("[wa-send] falta WHATSAPP_TOKEN o WHATSAPP_PHONE_NUMBER_ID"); return; }
+async function sendWhatsAppMessage(to, text, perfil = null) {
+  const p       = perfil || await getPerfilActivo();
+  const token   = p?.whatsapp_token           || process.env.WHATSAPP_TOKEN;
+  const phoneId = p?.whatsapp_phone_number_id || process.env.WHATSAPP_PHONE_NUMBER_ID;
+  if (!token || !phoneId) {
+    console.error("[wa-send] no hay credenciales de WhatsApp: ni perfil activo ni env vars. Mensaje no enviado.");
+    return;
+  }
   const destinatario = normalizarParaEnvioAR(to);
   if (destinatario !== to) console.log(`[wa-send] normalizado AR: ${to} -> ${destinatario}`);
   const resp = await fetch(`https://graph.facebook.com/v19.0/${phoneId}/messages`, {
@@ -75,7 +165,8 @@ function buildPatientContext(patient) {
 // ─────────────────────────────────────────────
 //  EJECUTOR DE TOOLS
 // ─────────────────────────────────────────────
-async function executeTool(name, input, telefono, cfg = {}) {
+async function executeTool(name, input, telefono, cfg = {}, perfil = null) {
+  const creds = credsCalendar(perfil);
   console.log(`[tool] ${name}`, JSON.stringify(input, null, 2));
   const patient = await db.getPatient(telefono);
   switch (name) {
@@ -83,6 +174,7 @@ async function executeTool(name, input, telefono, cfg = {}) {
       // Los horarios del panel mandan sobre las franjas por defecto del calendario
       const slots = await checkAvailability({
         ...input,
+        creds,
         horarios: {
           manana_desde: cfg.horario_manana_desde,
           manana_hasta: cfg.horario_manana_hasta,
@@ -96,15 +188,16 @@ async function executeTool(name, input, telefono, cfg = {}) {
     case "create_appointment":
       return await createAppointment({
         ...input,
+        creds,
         paciente_dni:         input.paciente_dni        || patient?.dni,
         paciente_obra_social: input.paciente_obra_social || patient?.obra_social,
         paciente_nombre:      input.paciente_nombre      || patient?.nombre,
         paciente_telefono:    input.paciente_telefono    || telefono,
       });
     case "cancel_appointment":
-      return await cancelAppointment(input);
+      return await cancelAppointment({ ...input, creds });
     case "get_patient_appointments": {
-      const turnos = await getPatientAppointments(telefono, patient?.dni);
+      const turnos = await getPatientAppointments(telefono, patient?.dni, creds);
       return { turnos };
     }
     case "save_patient_data": {
@@ -117,7 +210,7 @@ async function executeTool(name, input, telefono, cfg = {}) {
     case "flag_critical_issue": {
       console.error("🚨 URGENCIA DENTAL 🚨", input.paciente_nombre || patient?.nombre, telefono, input.descripcion);
       const doctorTel = process.env.WHATSAPP_DOCTOR_TELEFONO;
-      if (doctorTel) await sendWhatsAppMessage(doctorTel, `URGENCIA — ${input.paciente_nombre || patient?.nombre || "Paciente"} (${telefono})\n${input.descripcion}`);
+      if (doctorTel) await sendWhatsAppMessage(doctorTel, `URGENCIA — ${input.paciente_nombre || patient?.nombre || "Paciente"} (${telefono})\n${input.descripcion}`, perfil);
       return { ok: true, accion: `Alerta enviada al ${config.profesionales[0].nombre}. El paciente será contactado a la brevedad.` };
     }
     default: return { error: `Tool desconocida: ${name}` };
@@ -136,7 +229,7 @@ function humanDelay(text) {
 //  LOOP PRINCIPAL DEL AGENTE
 //  Lee cfg y prácticas de DB en cada llamada
 // ─────────────────────────────────────────────
-async function runAgent(userMessage, telefono) {
+async function runAgent(userMessage, telefono, consultorio_id = DEFAULT_CONSULTORIO_ID) {
   const patient = await db.getPatient(telefono);
   let claudeHistory = await db.getClaudeHistory(telefono);
   if (claudeHistory.length === 0) {
@@ -146,10 +239,11 @@ async function runAgent(userMessage, telefono) {
   claudeHistory.push({ role: "user", content: userMessage });
 
   // Leer config y prácticas (solo las marcadas para_agente=true) de DB
-  const [cfg, practicas, coberturas] = await Promise.all([
+  const [cfg, practicas, coberturas, perfil] = await Promise.all([
     db.getConfig(),
     db.getPracticas("agente"),
     db.getCoberturas(),
+    getPerfilActivo(consultorio_id),
   ]);
   console.log(`[agent] usando ${practicas.length} prácticas del catálogo`);
 
@@ -163,7 +257,7 @@ async function runAgent(userMessage, telefono) {
     const toolResults = await Promise.all(
       response.content.filter(b => b.type === "tool_use").map(async block => ({
         type: "tool_result", tool_use_id: block.id,
-        content: JSON.stringify(await executeTool(block.name, block.input, telefono, cfg)),
+        content: JSON.stringify(await executeTool(block.name, block.input, telefono, cfg, perfil)),
       }))
     );
     claudeHistory.push({ role: "assistant", content: response.content });
@@ -283,9 +377,11 @@ app.get("/admin/team", authMiddleware, async (req, res) => {
 // ─────────────────────────────────────────────
 //  WEBHOOK WHATSAPP
 // ─────────────────────────────────────────────
-app.get("/webhook", (req, res) => {
+app.get("/webhook", async (req, res) => {
   const { "hub.mode": mode, "hub.verify_token": token, "hub.challenge": challenge } = req.query;
-  if (mode === "subscribe" && token === process.env.WHATSAPP_VERIFY_TOKEN) {
+  const perfil = await getPerfilActivo();
+  const verifyToken = perfil?.whatsapp_verify_token || process.env.WHATSAPP_VERIFY_TOKEN;
+  if (mode === "subscribe" && verifyToken && token === verifyToken) {
     console.log("[webhook] verificado por Meta");
     return res.status(200).send(challenge);
   }
@@ -299,12 +395,13 @@ app.post("/webhook", async (req, res) => {
     if (!message || message.type !== "text") return;
     const telefono = message.from, texto = message.text.body;
     console.log(`[whatsapp] mensaje de ${telefono}: ${texto}`);
+    const perfil = await getPerfilActivo();
     let patient = await db.getPatient(telefono);
     if (!patient) {
       let datosPrevios = null;
       try {
         datosPrevios = await Promise.race([
-          findPatientByIdentifier(telefono, null),
+          findPatientByIdentifier(telefono, null, credsCalendar(perfil)),
           new Promise((_, reject) => setTimeout(() => reject(new Error("timeout Google Calendar (8s)")), 8000)),
         ]);
       } catch(e) { console.error("[wh] error/timeout Calendar:", e.message); }
@@ -315,7 +412,7 @@ app.post("/webhook", async (req, res) => {
     const reply = await runAgent(texto, telefono);
     await humanDelay(reply);
     await db.addMessage(telefono, "assistant", reply, new Date().toISOString());
-    await sendWhatsAppMessage(telefono, reply);
+    await sendWhatsAppMessage(telefono, reply, perfil);
   } catch(err) { console.error("[webhook error]", err.message, err.stack); }
 });
 
@@ -329,7 +426,7 @@ app.get("/session/:telefono", async (req, res) => {
     return res.json({ existe: true, nombre: patient.nombre, dni: patient.dni, obra_social: patient.obra_social, displayHistory: await db.getMessages(telefono), fuente: "db" });
   }
   try {
-    const encontrado = await findPatientByIdentifier(telefono, null);
+    const encontrado = await findPatientByIdentifier(telefono, null, credsCalendar(await getPerfilActivo()));
     if (encontrado) return res.json({ existe: true, nombre: encontrado.nombre, dni: encontrado.dni, obra_social: encontrado.obra_social, displayHistory: [], fuente: "calendar" });
   } catch(err) { console.error("[calendar lookup error]", err.message); }
   res.json({ existe: false });
@@ -344,7 +441,7 @@ app.post("/session", async (req, res) => {
     return res.json({ nueva: false, nombre: patient.nombre, dni: patient.dni, obra_social: patient.obra_social, displayHistory: await db.getMessages(telefono) });
   }
   let datosPrevios = null;
-  try { datosPrevios = await findPatientByIdentifier(telefono, null); } catch(err) {}
+  try { datosPrevios = await findPatientByIdentifier(telefono, null, credsCalendar(await getPerfilActivo())); } catch(err) {}
   patient = await db.upsertPatient({ telefono, nombre: datosPrevios?.nombre || nombre || "Paciente", dni: datosPrevios?.dni || null, obra_social: datosPrevios?.obra_social || null });
   res.json({ nueva: !datosPrevios, recuperado: !!datosPrevios, nombre: patient.nombre, dni: patient.dni, obra_social: patient.obra_social, displayHistory: [] });
 });
@@ -442,6 +539,122 @@ app.patch("/coberturas/:id", authMiddleware, async (req, res) => {
 app.delete("/coberturas/:id", authMiddleware, async (req, res) => {
   try { await db.deleteCobertura(req.params.id); res.json({ ok: true }); }
   catch(err) { console.error(err); res.status(500).json({ error: "Error interno" }); }
+});
+
+// ─────────────────────────────────────────────
+//  PERFILES DE INTEGRACIÓN
+// ─────────────────────────────────────────────
+function consultorioDe(req) {
+  return req.user?.consultorio_id || DEFAULT_CONSULTORIO_ID;
+}
+
+// Valida credenciales sin guardar nada
+app.post("/profiles/validate", authMiddleware, async (req, res) => {
+  try {
+    const [whatsapp, calendar] = await Promise.all([
+      validarWhatsApp(req.body),
+      validarCalendar(req.body),
+    ]);
+    res.json({ whatsapp, calendar });
+  } catch (err) {
+    console.error("[POST /profiles/validate]", err.message);
+    res.status(500).json({ error: "Error interno" });
+  }
+});
+
+app.get("/profiles", authMiddleware, async (req, res) => {
+  try { res.json(await db.getProfiles(consultorioDe(req))); }
+  catch (err) { console.error("[GET /profiles]", err.message); res.status(500).json({ error: "Error interno" }); }
+});
+
+app.post("/profiles", authMiddleware, async (req, res) => {
+  try {
+    const { nombre } = req.body;
+    if (!nombre || !nombre.trim()) return res.status(400).json({ error: "El nombre del perfil es obligatorio" });
+
+    const [whatsapp, calendar] = await Promise.all([
+      validarWhatsApp(req.body),
+      validarCalendar(req.body),
+    ]);
+    if (!whatsapp.ok || !calendar.ok) {
+      return res.status(400).json({ error: "Las credenciales no son válidas", whatsapp, calendar });
+    }
+
+    const perfil = await db.createProfile({
+      consultorio_id:              consultorioDe(req),
+      nombre:                      nombre.trim(),
+      activo:                      !!req.body.activo,
+      whatsapp_phone_number_id:    req.body.whatsapp_phone_number_id,
+      whatsapp_token:              req.body.whatsapp_token,
+      whatsapp_verify_token:       req.body.whatsapp_verify_token,
+      google_service_account_json: req.body.google_service_account_json,
+      calendar_id:                 req.body.calendar_id,
+    });
+    res.json({ ok: true, perfil, whatsapp, calendar });
+  } catch (err) {
+    console.error("[POST /profiles]", err.message);
+    res.status(500).json({ error: "Error interno", detalle: err.message });
+  }
+});
+
+app.patch("/profiles/:id", authMiddleware, async (req, res) => {
+  try {
+    const actual = await db.getProfileById(req.params.id);
+    if (!actual) return res.status(404).json({ error: "Perfil no encontrado" });
+
+    const b = req.body;
+    const campos = {};
+    for (const c of ["nombre", "whatsapp_phone_number_id", "whatsapp_token",
+                     "whatsapp_verify_token", "google_service_account_json", "calendar_id"]) {
+      if (b[c] !== undefined) campos[c] = b[c];
+    }
+    if (!Object.keys(campos).length) return res.status(400).json({ error: "No hay nada para actualizar" });
+
+    // Revalidar solo el bloque que cambió, usando los valores que ya están guardados
+    // para los campos que el usuario no tocó.
+    const merged = { ...actual, ...campos };
+    const tocoWhatsapp = b.whatsapp_phone_number_id !== undefined || b.whatsapp_token !== undefined;
+    const tocoCalendar = b.google_service_account_json !== undefined || b.calendar_id !== undefined;
+
+    const whatsapp = tocoWhatsapp ? await validarWhatsApp(merged) : { ok: true, error: null, sinCambios: true };
+    const calendar = tocoCalendar ? await validarCalendar(merged) : { ok: true, error: null, sinCambios: true };
+    if (!whatsapp.ok || !calendar.ok) {
+      return res.status(400).json({ error: "Las credenciales no son válidas", whatsapp, calendar });
+    }
+
+    const perfil = await db.updateProfile(req.params.id, campos);
+    res.json({ ok: true, perfil, whatsapp, calendar });
+  } catch (err) {
+    console.error("[PATCH /profiles]", err.message);
+    res.status(500).json({ error: "Error interno", detalle: err.message });
+  }
+});
+
+app.post("/profiles/:id/activate", authMiddleware, async (req, res) => {
+  try {
+    const perfil = await db.activateProfile(req.params.id, consultorioDe(req));
+    if (!perfil) return res.status(404).json({ error: "Perfil no encontrado" });
+    console.log(`[perfil] activado "${perfil.nombre}" (id ${perfil.id})`);
+    res.json({ ok: true, perfil });
+  } catch (err) {
+    console.error("[POST /profiles/activate]", err.message);
+    res.status(500).json({ error: "Error interno" });
+  }
+});
+
+app.delete("/profiles/:id", authMiddleware, async (req, res) => {
+  try {
+    const perfil = await db.getProfileById(req.params.id);
+    if (!perfil) return res.status(404).json({ error: "Perfil no encontrado" });
+    if (perfil.activo) {
+      return res.status(400).json({ error: "No se puede eliminar el perfil activo. Activá otro primero." });
+    }
+    await db.deleteProfile(req.params.id);
+    res.json({ ok: true });
+  } catch (err) {
+    console.error("[DELETE /profiles]", err.message);
+    res.status(500).json({ error: "Error interno" });
+  }
 });
 
 app.get("/health", (_, res) => res.json({ status: "ok" }));
