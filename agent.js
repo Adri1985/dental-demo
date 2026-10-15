@@ -24,6 +24,11 @@ function buildPracticasText(practicas) {
   }).join("\n");
 }
 
+// El panel manda un booleano real, pero toleramos string/number por las dudas
+function esVerdadero(v) {
+  return v === true || v === 1 || v === "true" || v === "t" || v === "1";
+}
+
 function buildCoberturasText(coberturas, precio_num) {
   if (!coberturas || coberturas.length === 0) {
     return "- No hay convenios cargados. Todos los pacientes abonan el valor estándar.";
@@ -32,10 +37,10 @@ function buildCoberturasText(coberturas, precio_num) {
     const pct = parseInt(c.descuento_pct) || 0;
     if (pct <= 0) return `- ${c.obra_social}: sin descuento, abona $${precio_num.toLocaleString("es-AR")}`;
     const final = Math.round(precio_num * (1 - pct / 100));
-    const alcance = c.primera_consulta_only
-      ? " (solo en la primera consulta, después abona el valor estándar)"
-      : "";
-    return `- ${c.obra_social}: ${pct}% de descuento, abona $${final.toLocaleString("es-AR")}${alcance}`;
+    const alcance = esVerdadero(c.primera_consulta_only)
+      ? "SOLO en la primera consulta (si ya es paciente del consultorio, abona el valor estándar)"
+      : "SIEMPRE, en todas sus consultas (da igual si es paciente nuevo o ya viene hace años)";
+    return `- ${c.obra_social}: ${pct}% de descuento, abona $${final.toLocaleString("es-AR")} — aplica ${alcance}`;
   }).join("\n");
 }
 
@@ -83,7 +88,8 @@ CÓMO APLICAR LOS DESCUENTOS — MUY IMPORTANTE:
 - Si ya sabés la obra social del paciente, informale directamente el monto final con el descuento ya aplicado. No le muestres la cuenta ni el porcentaje, decile el número que tiene que pagar.
 - Si el paciente pregunta el precio y todavía no sabés su obra social, preguntale cuál tiene antes de darle un valor.
 - Si su obra social NO figura en la lista de arriba, abona el valor estándar de $${precio}. Nunca inventes descuentos ni prometas convenios que no estén en la lista.
-- Los descuentos marcados como "solo en la primera consulta" valen únicamente si el paciente es nuevo. Si ya es paciente del consultorio, abona el valor estándar.
+- Cada convenio aclara su alcance y tenés que respetarlo tal cual: los que dicen "aplica SIEMPRE" valen en todas las consultas del paciente, sea nuevo o ya existente, y NUNCA los presentes como limitados a la primera consulta. Los que dicen "aplica SOLO en la primera consulta" valen únicamente si el paciente es nuevo.
+- No agregues condiciones, plazos ni límites que el convenio no diga.
 - Nunca negocies el precio ni ofrezcas descuentos adicionales por tu cuenta.
 
 PRÁCTICAS DISPONIBLES Y SUS DURACIONES:
