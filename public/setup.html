@@ -95,7 +95,7 @@
       if (!res.ok) { err.textContent = data.error || "Error"; err.style.display = "block"; return; }
       localStorage.setItem("auth_token", data.token);
       localStorage.setItem("auth_user", JSON.stringify(data.user));
-      window.location.href = "/admin.html";
+      window.location.href = "/wizard.html";
     } catch { err.textContent = "No se pudo conectar al servidor"; err.style.display = "block"; }
     finally { btn.disabled = false; btn.textContent = "Crear consultorio"; }
   }

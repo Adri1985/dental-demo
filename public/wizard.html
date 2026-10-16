@@ -1,0 +1,654 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Configuración inicial — Mía</title>
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; background: #0b141a; color: #e9edef; min-height: 100vh; display: flex; flex-direction: column; }
+
+    /* ── Header ─────────────────────────────── */
+    .wiz-top { background: #202c33; border-bottom: 1px solid #2a3942; padding: 14px 24px; display: flex; align-items: center; justify-content: space-between; flex-shrink: 0; }
+    .wiz-brand { display: flex; align-items: center; gap: 10px; font-size: 16px; font-weight: 700; }
+    .wiz-step-label { font-size: 13px; color: #8696a0; }
+
+    /* ── Progress bar ────────────────────────── */
+    .progress-bar { height: 3px; background: #2a3942; flex-shrink: 0; }
+    .progress-fill { height: 100%; background: #00a884; transition: width 0.4s ease; }
+
+    /* ── Step strip ─────────────────────────── */
+    .steps-strip { background: #202c33; border-bottom: 1px solid #2a3942; padding: 14px 16px; overflow-x: auto; flex-shrink: 0; }
+    .steps-strip::-webkit-scrollbar { display: none; }
+    .steps-row { display: flex; align-items: center; gap: 0; min-width: max-content; margin: 0 auto; max-width: 640px; }
+    .step-dot { display: flex; flex-direction: column; align-items: center; gap: 4px; cursor: default; }
+    .step-circle { width: 30px; height: 30px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 12px; font-weight: 700; border: 2px solid #3a4952; color: #8696a0; background: transparent; transition: all 0.2s; flex-shrink: 0; }
+    .step-circle.done { border-color: #00a884; background: #00a884; color: white; }
+    .step-circle.active { border-color: #00a884; color: #00a884; }
+    .step-lbl { font-size: 10px; color: #8696a0; white-space: nowrap; }
+    .step-lbl.active { color: #e9edef; font-weight: 600; }
+    .step-lbl.done { color: #00a884; }
+    .step-line { width: 32px; height: 2px; background: #2a3942; margin: 0 2px 16px; flex-shrink: 0; transition: background 0.2s; }
+    .step-line.done { background: #00a884; }
+
+    /* ── Body ───────────────────────────────── */
+    .wiz-body { flex: 1; display: flex; align-items: flex-start; justify-content: center; padding: 28px 16px 40px; }
+    .wiz-card { background: #202c33; border-radius: 16px; padding: 28px 28px 24px; width: 100%; max-width: 580px; }
+    .wiz-title { font-size: 20px; font-weight: 700; margin-bottom: 6px; }
+    .wiz-desc { font-size: 13px; color: #8696a0; margin-bottom: 22px; line-height: 1.5; }
+
+    /* ── Form elements ──────────────────────── */
+    .field { margin-bottom: 14px; }
+    .lbl { font-size: 12px; color: #8696a0; margin-bottom: 5px; display: block; }
+    .inp { width: 100%; background: #2a3942; border: 1px solid #3a4952; border-radius: 8px; padding: 10px 12px; color: #e9edef; font-size: 14px; outline: none; }
+    .inp:focus { border-color: #00a884; }
+    textarea.inp { resize: vertical; min-height: 72px; font-family: inherit; }
+    .row2 { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+    .row3 { display: grid; grid-template-columns: 2fr 1fr 1fr; gap: 10px; }
+
+    /* ── Estilo cards ───────────────────────── */
+    .estilo-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+    @media(max-width:480px){ .estilo-grid { grid-template-columns: 1fr; } }
+    .estilo-card { background: #2a3942; border: 2px solid #3a4952; border-radius: 10px; padding: 14px; cursor: pointer; transition: border-color 0.15s; }
+    .estilo-card:hover { border-color: #00a884; }
+    .estilo-card.sel { border-color: #00a884; background: #1c3530; }
+    .estilo-name { font-size: 13px; font-weight: 600; margin-bottom: 4px; }
+    .estilo-desc { font-size: 11px; color: #8696a0; line-height: 1.4; }
+
+    /* ── List items ─────────────────────────── */
+    .item-list { display: flex; flex-direction: column; gap: 7px; margin-bottom: 12px; min-height: 10px; }
+    .item-row { background: #2a3942; border-radius: 8px; padding: 10px 12px; display: flex; align-items: center; gap: 8px; }
+    .item-info { flex: 1; min-width: 0; }
+    .item-name { font-size: 14px; font-weight: 500; }
+    .item-meta { font-size: 11px; color: #8696a0; margin-top: 2px; }
+    .btn-del { background: none; border: none; color: #ff6b6b; font-size: 20px; cursor: pointer; padding: 0 4px; line-height: 1; flex-shrink: 0; }
+    .empty-list { text-align: center; padding: 16px; color: #8696a0; font-size: 13px; background: #182229; border-radius: 8px; margin-bottom: 12px; }
+    .add-box { background: #182229; border: 1px solid #2a3942; border-radius: 10px; padding: 14px; }
+    .add-box-title { font-size: 11px; color: #8696a0; font-weight: 600; text-transform: uppercase; letter-spacing: .5px; margin-bottom: 10px; }
+    .btn-add { background: #2a3942; border: 1px solid #3a4952; border-radius: 8px; padding: 7px 14px; color: #00a884; font-size: 13px; font-weight: 600; cursor: pointer; margin-top: 8px; }
+    .btn-add:hover { background: #354952; }
+
+    /* ── Validation result ──────────────────── */
+    .val-box { border-radius: 8px; padding: 10px 12px; background: #111b21; border: 1px solid #2a3942; margin-top: 10px; display: none; }
+    .val-line { font-size: 13px; padding: 3px 0; display: flex; align-items: center; gap: 8px; }
+    .val-ok { color: #00a884; }
+    .val-mal { color: #ff6b6b; }
+
+    /* ── Navigation ─────────────────────────── */
+    .wiz-nav { display: flex; align-items: center; justify-content: space-between; margin-top: 24px; padding-top: 18px; border-top: 1px solid #2a3942; gap: 8px; flex-wrap: wrap; }
+    .btn-back { background: #2a3942; border: none; border-radius: 24px; padding: 10px 22px; color: #8696a0; font-size: 14px; font-weight: 600; cursor: pointer; }
+    .btn-back:hover { background: #354952; }
+    .btn-next { background: #00a884; border: none; border-radius: 24px; padding: 10px 26px; color: white; font-size: 14px; font-weight: 600; cursor: pointer; }
+    .btn-next:hover:not(:disabled) { background: #00c99d; }
+    .btn-next:disabled { background: #2a3942; color: #8696a0; cursor: default; }
+    .btn-skip { background: none; border: none; color: #8696a0; font-size: 13px; cursor: pointer; text-decoration: underline; padding: 10px 0; }
+    .nav-right { display: flex; align-items: center; gap: 12px; }
+
+    /* ── Final screen ───────────────────────── */
+    .listo-icon { font-size: 60px; text-align: center; margin-bottom: 14px; }
+    .listo-checks { display: flex; flex-direction: column; gap: 8px; margin: 18px 0 24px; }
+    .listo-row { display: flex; align-items: center; gap: 12px; background: #182229; border-radius: 8px; padding: 12px; }
+    .listo-ic { font-size: 18px; width: 28px; text-align: center; flex-shrink: 0; }
+    .listo-info { flex: 1; }
+    .listo-name { font-size: 14px; font-weight: 500; }
+    .listo-sub { font-size: 12px; color: #8696a0; margin-top: 2px; }
+    .btn-admin { display: block; width: 100%; background: #00a884; border: none; border-radius: 24px; padding: 14px; color: white; font-size: 16px; font-weight: 600; cursor: pointer; text-align: center; }
+    .btn-admin:hover { background: #00c99d; }
+
+    /* ── Error box ──────────────────────────── */
+    .err-box { background: #3d1a1a; border: 1px solid #cc0000; border-radius: 8px; padding: 10px 14px; color: #ff6b6b; font-size: 13px; margin-bottom: 14px; display: none; }
+
+    /* ── Toast ──────────────────────────────── */
+    .toast { position: fixed; bottom: 24px; left: 50%; transform: translateX(-50%); background: #2a3942; color: #e9edef; padding: 9px 20px; border-radius: 24px; font-size: 13px; opacity: 0; pointer-events: none; transition: opacity 0.2s; z-index: 999; white-space: nowrap; }
+    .toast.show { opacity: 1; }
+  </style>
+</head>
+<body>
+
+<!-- Header -->
+<div class="wiz-top">
+  <div class="wiz-brand">🦷 Mía</div>
+  <div class="wiz-step-label" id="stepLabel"></div>
+</div>
+
+<!-- Progress bar -->
+<div class="progress-bar"><div class="progress-fill" id="progressFill"></div></div>
+
+<!-- Steps strip -->
+<div class="steps-strip">
+  <div class="steps-row" id="stepsRow"></div>
+</div>
+
+<!-- Main content -->
+<div class="wiz-body">
+  <div class="wiz-card" id="wizCard"></div>
+</div>
+
+<div class="toast" id="toast"></div>
+
+<script>
+  // ── Auth guard ────────────────────────────────────────────────────
+  const authToken = localStorage.getItem("auth_token");
+  const authUser  = JSON.parse(localStorage.getItem("auth_user") || "{}");
+  if (!authToken) { window.location.href = "/login.html"; }
+  if (!authUser.consultorio_id) { window.location.href = "/setup.html"; }
+
+  function authH() { return { "Authorization": `Bearer ${authToken}`, "Content-Type": "application/json" }; }
+  function escHtml(t) { return (t||"").replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;"); }
+  function showToast(msg) {
+    const t = document.getElementById("toast");
+    t.textContent = msg; t.classList.add("show");
+    setTimeout(() => t.classList.remove("show"), 2500);
+  }
+
+  // ── Step definitions ──────────────────────────────────────────────
+  const STEPS = [
+    { id: "horarios",     label: "Horarios",    title: "Horarios de atención",        desc: "Configurá los días y horarios en que atiende el consultorio. Mía va a ofrecer turnos dentro de estas franjas." },
+    { id: "estilo",       label: "Estilo",      title: "Estilo de conversación",      desc: "¿Cómo querés que Mía le hable a los pacientes? Podés cambiarlo después desde el panel." },
+    { id: "practicas",    label: "Prácticas",   title: "Prácticas y precios",         desc: "Agregá los servicios que ofrece el consultorio con su duración y precio. El agente solo va a ofrecer lo que esté en esta lista." },
+    { id: "coberturas",   label: "Coberturas",  title: "Obras sociales y descuentos", desc: "Si tenés convenios con obras sociales, agregalos acá. Mía va a informar el precio con descuento según la obra social del paciente.", optional: true },
+    { id: "flujos",       label: "Flujos",      title: "Flujos de atención",          desc: "Definí cómo debe comportarse Mía con pacientes nuevos y con pacientes que ya vienen al consultorio. Podés usar el texto por defecto y ajustarlo después.", optional: true },
+    { id: "integracion",  label: "Integración", title: "Conectar WhatsApp y Calendar", desc: "El último paso: conectá tu número de WhatsApp Business y Google Calendar para que Mía pueda recibir mensajes y crear turnos." },
+    { id: "listo",        label: "¡Listo!",     title: "Tu consultorio está configurado", desc: "" },
+  ];
+
+  const ESTILOS_WIZ = [
+    { key: "cercano",             name: "Muy cercano",          desc: "Informal y amigable, como un amigo de confianza. Muletillas, voseo, tono de chat." },
+    { key: "amigable",            name: "Amigable",             desc: "Informal pero prolijo. Voseo, cálido, sin excesos." },
+    { key: "profesional_amigable",name: "Profesional amigable", desc: "Profesional y cálido. Voseo moderado, cordial y directo." },
+    { key: "formal",              name: "Formal",               desc: "Trato de usted. Oraciones completas, tono médico profesional." },
+    { key: "muy_formal",          name: "Muy formal",           desc: "Lenguaje clínico, trato de usted siempre. Sin informalidad." },
+  ];
+
+  // ── State ─────────────────────────────────────────────────────────
+  let paso = 0;
+  let practicasWiz = [];   // synced on step entry
+  let coberturasWiz = [];  // synced on step entry
+  let perfilGuardado = null; // integration profile result
+
+  // ── Rendering ─────────────────────────────────────────────────────
+  function renderStrip() {
+    const row = document.getElementById("stepsRow");
+    const visibles = STEPS.slice(0, STEPS.length - 1); // exclude "listo"
+    row.innerHTML = visibles.map((s, i) => {
+      const isDone   = i < paso;
+      const isActive = i === paso;
+      const cirClass = isDone ? "done" : isActive ? "active" : "";
+      const lblClass = isDone ? "done"  : isActive ? "active"  : "";
+      const lineClass = i < paso ? "done" : "";
+      const circle = isDone ? "✓" : i + 1;
+      const sep = i < visibles.length - 1 ? `<div class="step-line ${lineClass}"></div>` : "";
+      return `
+        <div class="step-dot">
+          <div class="step-circle ${cirClass}">${circle}</div>
+          <div class="step-lbl ${lblClass}">${escHtml(s.label)}</div>
+        </div>${sep}`;
+    }).join("");
+
+    // progress fill
+    const totalVisual = STEPS.length - 1;
+    const pct = paso >= totalVisual ? 100 : Math.round((paso / (totalVisual - 1)) * 100);
+    document.getElementById("progressFill").style.width = `${pct}%`;
+
+    const paso1 = Math.min(paso + 1, STEPS.length - 1);
+    document.getElementById("stepLabel").textContent = paso < STEPS.length - 1 ? `Paso ${paso + 1} de ${STEPS.length - 1}` : "";
+  }
+
+  async function renderStep() {
+    renderStrip();
+    const s = STEPS[paso];
+    const card = document.getElementById("wizCard");
+    card.innerHTML = "";
+
+    if (s.id === "listo") { renderListo(card); return; }
+
+    card.innerHTML = `
+      <div class="wiz-title">${escHtml(s.title)}</div>
+      <div class="wiz-desc">${escHtml(s.desc)}</div>
+      <div class="err-box" id="wErr"></div>
+      <div id="stepContent"></div>
+      <div class="wiz-nav">
+        ${paso > 0 ? `<button class="btn-back" onclick="goBack()">← Anterior</button>` : `<div></div>`}
+        <div class="nav-right">
+          ${s.optional ? `<button class="btn-skip" onclick="goNext(true)">Omitir</button>` : ""}
+          <button class="btn-next" id="btnNext" onclick="goNext(false)">${paso === STEPS.length - 2 ? "Finalizar" : "Siguiente →"}</button>
+        </div>
+      </div>`;
+
+    const sc = document.getElementById("stepContent");
+    if (s.id === "horarios")    await renderHorarios(sc);
+    if (s.id === "estilo")      await renderEstilo(sc);
+    if (s.id === "practicas")   await renderPracticas(sc);
+    if (s.id === "coberturas")  await renderCoberturas(sc);
+    if (s.id === "flujos")      await renderFlujos(sc);
+    if (s.id === "integracion") await renderIntegracion(sc);
+  }
+
+  function showErr(msg) {
+    const e = document.getElementById("wErr");
+    if (!e) return;
+    e.textContent = msg; e.style.display = msg ? "block" : "none";
+  }
+
+  // ── Navigation ────────────────────────────────────────────────────
+  async function goNext(skip) {
+    if (!skip) {
+      const ok = await saveCurrentStep();
+      if (!ok) return;
+    }
+    paso++;
+    await renderStep();
+    document.getElementById("wizCard").scrollIntoView({ behavior: "smooth", block: "start" });
+  }
+
+  async function goBack() {
+    paso--;
+    await renderStep();
+  }
+
+  // ── Save logic per step ───────────────────────────────────────────
+  async function saveCurrentStep() {
+    const id = STEPS[paso].id;
+    if (id === "horarios")    return saveHorarios();
+    if (id === "estilo")      return saveEstilo();
+    if (id === "practicas")   return true;  // saved inline
+    if (id === "coberturas")  return true;  // saved inline
+    if (id === "flujos")      return saveFlujos();
+    if (id === "integracion") return saveIntegracion();
+    return true;
+  }
+
+  // ── Step: Horarios ────────────────────────────────────────────────
+  async function renderHorarios(sc) {
+    let cfg = {};
+    try { cfg = await fetch("/config", { headers: authH() }).then(r => r.json()); } catch {}
+    sc.innerHTML = `
+      <div style="margin-bottom:16px;font-size:13px;color:#8696a0">Lunes a viernes por defecto. Podés ajustar los días desde el panel después.</div>
+      <div style="font-size:12px;font-weight:600;color:#8696a0;margin-bottom:8px">MAÑANA</div>
+      <div class="row2" style="margin-bottom:14px">
+        <div class="field"><label class="lbl">Desde</label><input class="inp" id="mDe" type="time" value="${cfg.horario_manana_desde||'09:30'}" /></div>
+        <div class="field"><label class="lbl">Hasta</label><input class="inp" id="mHa" type="time" value="${cfg.horario_manana_hasta||'13:00'}" /></div>
+      </div>
+      <div style="font-size:12px;font-weight:600;color:#8696a0;margin-bottom:8px">TARDE</div>
+      <div class="row2">
+        <div class="field"><label class="lbl">Desde</label><input class="inp" id="tDe" type="time" value="${cfg.horario_tarde_desde||'14:00'}" /></div>
+        <div class="field"><label class="lbl">Hasta</label><input class="inp" id="tHa" type="time" value="${cfg.horario_tarde_hasta||'17:00'}" /></div>
+      </div>`;
+  }
+
+  async function saveHorarios() {
+    const mDe = document.getElementById("mDe").value;
+    const mHa = document.getElementById("mHa").value;
+    const tDe = document.getElementById("tDe").value;
+    const tHa = document.getElementById("tHa").value;
+    if (!mDe || !mHa || !tDe || !tHa) { showErr("Completá todos los horarios"); return false; }
+    try {
+      const r = await fetch("/config", { method: "PATCH", headers: authH(), body: JSON.stringify({
+        horario_manana_desde: mDe, horario_manana_hasta: mHa,
+        horario_tarde_desde:  tDe, horario_tarde_hasta:  tHa,
+      })});
+      if (!r.ok) throw new Error();
+      return true;
+    } catch { showErr("No se pudieron guardar los horarios"); return false; }
+  }
+
+  // ── Step: Estilo ──────────────────────────────────────────────────
+  async function renderEstilo(sc) {
+    let cfg = {};
+    try { cfg = await fetch("/config", { headers: authH() }).then(r => r.json()); } catch {}
+    const sel = cfg.estilo_conversacion || "profesional_amigable";
+    sc.innerHTML = `<div class="estilo-grid" id="estiloGrid">` +
+      ESTILOS_WIZ.map(e => `
+        <div class="estilo-card${e.key === sel ? " sel" : ""}" onclick="selEstilo('${e.key}')">
+          <div class="estilo-name">${escHtml(e.name)}</div>
+          <div class="estilo-desc">${escHtml(e.desc)}</div>
+        </div>`).join("") +
+      `</div>`;
+  }
+
+  function selEstilo(key) {
+    document.querySelectorAll(".estilo-card").forEach(c => {
+      c.classList.toggle("sel", c.getAttribute("onclick") === `selEstilo('${key}')`);
+    });
+  }
+
+  async function saveEstilo() {
+    const sel = document.querySelector(".estilo-card.sel");
+    if (!sel) { showErr("Seleccioná un estilo"); return false; }
+    const key = sel.getAttribute("onclick").match(/'(\w+)'/)?.[1];
+    try {
+      await fetch("/config", { method: "PATCH", headers: authH(), body: JSON.stringify({ estilo_conversacion: key }) });
+      return true;
+    } catch { showErr("Error guardando estilo"); return false; }
+  }
+
+  // ── Step: Prácticas ───────────────────────────────────────────────
+  async function renderPracticas(sc) {
+    try { practicasWiz = await fetch("/practicas", { headers: authH() }).then(r => r.json()); } catch { practicasWiz = []; }
+    sc.innerHTML = `<div id="pList"></div>
+      <div class="add-box">
+        <div class="add-box-title">Agregar práctica</div>
+        <div class="row3">
+          <div class="field"><label class="lbl">Nombre</label><input class="inp" id="pNom" type="text" placeholder="Ej: Limpieza" /></div>
+          <div class="field"><label class="lbl">Duración (min)</label><input class="inp" id="pDur" type="number" min="10" step="5" placeholder="30" /></div>
+          <div class="field"><label class="lbl">Precio ($)</label><input class="inp" id="pPre" type="number" min="0" step="1" placeholder="50" /></div>
+        </div>
+        <input class="inp" id="pReq" type="text" placeholder="Requiere (opcional, ej: Radiografía previa)" style="margin-bottom:8px" />
+        <button class="btn-add" onclick="agregarPractica()">+ Agregar</button>
+      </div>`;
+    renderPracticasList();
+  }
+
+  function renderPracticasList() {
+    const el = document.getElementById("pList");
+    if (!el) return;
+    if (!practicasWiz.length) {
+      el.innerHTML = '<div class="empty-list">Sin prácticas todavía. Agregá al menos una para que Mía pueda ofrecer turnos.</div>';
+      return;
+    }
+    el.innerHTML = `<div class="item-list">` +
+      practicasWiz.map(p => `
+        <div class="item-row">
+          <div class="item-info">
+            <div class="item-name">${escHtml(p.nombre)}</div>
+            <div class="item-meta">${p.duracion_min} min · $${(p.precio||50).toLocaleString("es-AR")}${p.requiere ? ` · ${escHtml(p.requiere)}` : ""}</div>
+          </div>
+          <button class="btn-del" onclick="eliminarPractica(${p.id})" title="Eliminar">×</button>
+        </div>`).join("") +
+      `</div>`;
+  }
+
+  async function agregarPractica() {
+    const nombre = document.getElementById("pNom").value.trim();
+    const duracion_min = parseInt(document.getElementById("pDur").value) || 30;
+    const precio = parseInt(document.getElementById("pPre").value) || 50;
+    const requiere = document.getElementById("pReq").value.trim() || null;
+    if (!nombre) { showToast("Escribí el nombre de la práctica"); return; }
+    try {
+      const p = await fetch("/practicas", { method: "POST", headers: authH(), body: JSON.stringify({ nombre, duracion_min, precio, requiere }) }).then(r => r.json());
+      practicasWiz.push(p);
+      document.getElementById("pNom").value = "";
+      document.getElementById("pDur").value = "";
+      document.getElementById("pPre").value = "";
+      document.getElementById("pReq").value = "";
+      renderPracticasList();
+      showToast("Práctica agregada");
+    } catch { showToast("Error agregando práctica"); }
+  }
+
+  async function eliminarPractica(id) {
+    try {
+      await fetch(`/practicas/${id}`, { method: "DELETE", headers: authH() });
+      practicasWiz = practicasWiz.filter(p => p.id !== id);
+      renderPracticasList();
+    } catch { showToast("Error eliminando práctica"); }
+  }
+
+  // ── Step: Coberturas ──────────────────────────────────────────────
+  async function renderCoberturas(sc) {
+    try { coberturasWiz = await fetch("/coberturas", { headers: authH() }).then(r => r.json()); } catch { coberturasWiz = []; }
+    sc.innerHTML = `<div id="cList"></div>
+      <div class="add-box">
+        <div class="add-box-title">Agregar cobertura</div>
+        <div class="row2" style="margin-bottom:8px">
+          <div class="field"><label class="lbl">Obra social</label><input class="inp" id="cOS" type="text" placeholder="Ej: OSDE" /></div>
+          <div class="field"><label class="lbl">Descuento (%)</label><input class="inp" id="cPct" type="number" min="0" max="100" placeholder="30" /></div>
+        </div>
+        <label style="display:flex;align-items:center;gap:8px;font-size:13px;cursor:pointer;margin-bottom:8px">
+          <input type="checkbox" id="cPrim" style="width:15px;height:15px;accent-color:#00a884" />
+          Solo primera consulta
+        </label>
+        <button class="btn-add" onclick="agregarCobertura()">+ Agregar</button>
+      </div>`;
+    renderCoberturasList();
+  }
+
+  function renderCoberturasList() {
+    const el = document.getElementById("cList");
+    if (!el) return;
+    if (!coberturasWiz.length) {
+      el.innerHTML = '<div class="empty-list" style="margin-bottom:12px">Sin coberturas configuradas. Podés omitir este paso y agregarlas después.</div>';
+      return;
+    }
+    el.innerHTML = `<div class="item-list">` +
+      coberturasWiz.map(c => `
+        <div class="item-row">
+          <div class="item-info">
+            <div class="item-name">${escHtml(c.obra_social)}</div>
+            <div class="item-meta">${c.descuento_pct}% descuento${c.primera_consulta_only ? " · solo 1ª consulta" : " · siempre"}</div>
+          </div>
+          <button class="btn-del" onclick="eliminarCobertura(${c.id})" title="Eliminar">×</button>
+        </div>`).join("") +
+      `</div>`;
+  }
+
+  async function agregarCobertura() {
+    const obra_social = document.getElementById("cOS").value.trim();
+    const descuento_pct = parseInt(document.getElementById("cPct").value) || 0;
+    const primera_consulta_only = document.getElementById("cPrim").checked;
+    if (!obra_social) { showToast("Escribí el nombre de la obra social"); return; }
+    try {
+      const c = await fetch("/coberturas", { method: "POST", headers: authH(), body: JSON.stringify({ obra_social, descuento_pct, primera_consulta_only }) }).then(r => r.json());
+      coberturasWiz.push(c);
+      document.getElementById("cOS").value = "";
+      document.getElementById("cPct").value = "";
+      document.getElementById("cPrim").checked = false;
+      renderCoberturasList();
+      showToast("Cobertura agregada");
+    } catch { showToast("Error agregando cobertura"); }
+  }
+
+  async function eliminarCobertura(id) {
+    try {
+      await fetch(`/coberturas/${id}`, { method: "DELETE", headers: authH() });
+      coberturasWiz = coberturasWiz.filter(c => c.id !== id);
+      renderCoberturasList();
+    } catch { showToast("Error eliminando cobertura"); }
+  }
+
+  // ── Step: Flujos ──────────────────────────────────────────────────
+  const FLUJO_NUEVO_DEFAULT = `1. Saludar de forma breve
+2. Pedir nombre completo, DNI y obra social (de a uno, nunca todos juntos)
+3. Informar el valor de la práctica que necesita
+4. Si acepta, buscar disponibilidad y asignar turno
+5. Confirmar el turno con todos los datos`;
+
+  const FLUJO_EXIST_DEFAULT = `1. Saludar por su nombre (ya lo tenés guardado)
+2. Preguntar qué necesita
+3. Buscar disponibilidad y asignar turno
+4. Confirmar`;
+
+  async function renderFlujos(sc) {
+    let cfg = {};
+    try { cfg = await fetch("/config", { headers: authH() }).then(r => r.json()); } catch {}
+    sc.innerHTML = `
+      <div class="field">
+        <label class="lbl">Flujo — paciente nuevo</label>
+        <textarea class="inp" id="fNuevo" rows="5" placeholder="${escHtml(FLUJO_NUEVO_DEFAULT)}">${escHtml(cfg.flujo_paciente_nuevo||"")}</textarea>
+        <div style="font-size:11px;color:#8696a0;margin-top:4px">Si lo dejás vacío se usa el flujo por defecto.</div>
+      </div>
+      <div class="field">
+        <label class="lbl">Flujo — paciente existente</label>
+        <textarea class="inp" id="fExiste" rows="4" placeholder="${escHtml(FLUJO_EXIST_DEFAULT)}">${escHtml(cfg.flujo_paciente_existente||"")}</textarea>
+      </div>
+      <div class="field">
+        <label class="lbl">Mensaje de bienvenida (opcional)</label>
+        <textarea class="inp" id="fBienvenida" rows="2" placeholder="Ej: Somos un consultorio familiar en Palermo, atendemos desde 2005...">${escHtml(cfg.mensaje_bienvenida||"")}</textarea>
+        <div style="font-size:11px;color:#8696a0;margin-top:4px">Contexto extra que Mía puede mencionar a pacientes nuevos.</div>
+      </div>`;
+  }
+
+  async function saveFlujos() {
+    const flujo_paciente_nuevo    = document.getElementById("fNuevo").value.trim();
+    const flujo_paciente_existente = document.getElementById("fExiste").value.trim();
+    const mensaje_bienvenida       = document.getElementById("fBienvenida").value.trim();
+    try {
+      await fetch("/config", { method: "PATCH", headers: authH(), body: JSON.stringify({
+        flujo_paciente_nuevo, flujo_paciente_existente, mensaje_bienvenida
+      })});
+      return true;
+    } catch { showErr("Error guardando flujos"); return false; }
+  }
+
+  // ── Step: Integración ─────────────────────────────────────────────
+  let valIntegracion = null;
+
+  async function renderIntegracion(sc) {
+    sc.innerHTML = `
+      <div class="field"><label class="lbl">Nombre del perfil</label><input class="inp" id="iNombre" type="text" placeholder="Ej: Producción" value="Principal" /></div>
+      <div class="field">
+        <label class="lbl">WhatsApp Phone Number ID <small style="color:#8696a0">(Meta for Developers → Tu app → WhatsApp → API Setup)</small></label>
+        <input class="inp" id="iPhoneId" type="text" placeholder="Ej: 123456789012345" />
+      </div>
+      <div class="field">
+        <label class="lbl">WhatsApp Token <small style="color:#8696a0">(Temporary access token o token permanente de sistema)</small></label>
+        <input class="inp" id="iToken" type="text" />
+      </div>
+      <div class="field">
+        <label class="lbl">WhatsApp Verify Token <small style="color:#8696a0">(Una palabra clave que vos elegís, ej: mia_webhook_2025)</small></label>
+        <input class="inp" id="iVerify" type="text" placeholder="mia_webhook_2025" />
+      </div>
+      <div class="field">
+        <label class="lbl">Google Service Account JSON <small style="color:#8696a0">(Google Cloud → IAM → Cuentas de servicio → Clave JSON)</small></label>
+        <textarea class="inp" id="iSA" rows="4" style="font-family:monospace;font-size:11px;line-height:1.4" placeholder='{"type":"service_account","project_id":"..."}'></textarea>
+      </div>
+      <div class="field">
+        <label class="lbl">Google Calendar ID <small style="color:#8696a0">(Configuración del calendario → Integrar calendario)</small></label>
+        <input class="inp" id="iCalId" type="text" placeholder="algo@group.calendar.google.com" />
+      </div>
+      <button class="btn-add" onclick="validarIntegracion()" id="btnValidar" style="margin-bottom:0">Probar conexión</button>
+      <div class="val-box" id="valBox"></div>
+      <div style="font-size:12px;color:#8696a0;margin-top:12px;line-height:1.5">Si todavía no tenés las credenciales, podés omitir este paso y configurarlo después desde el panel en la sección Integraciones.</div>`;
+  }
+
+  async function validarIntegracion() {
+    const body = leerCamposIntegracion();
+    const btn = document.getElementById("btnValidar");
+    btn.textContent = "Validando..."; btn.disabled = true;
+    valIntegracion = null;
+    try {
+      const r = await fetch("/profiles/validate", { method: "POST", headers: authH(), body: JSON.stringify(body) }).then(x => x.json());
+      valIntegracion = r;
+      pintarValIntegracion(r);
+    } catch { showToast("Error de conexión"); }
+    finally { btn.textContent = "Probar conexión"; btn.disabled = false; }
+  }
+
+  function leerCamposIntegracion() {
+    return {
+      nombre:                      document.getElementById("iNombre")?.value.trim(),
+      whatsapp_phone_number_id:    document.getElementById("iPhoneId")?.value.trim(),
+      whatsapp_token:              document.getElementById("iToken")?.value.trim(),
+      whatsapp_verify_token:       document.getElementById("iVerify")?.value.trim(),
+      google_service_account_json: document.getElementById("iSA")?.value.trim(),
+      calendar_id:                 document.getElementById("iCalId")?.value.trim(),
+    };
+  }
+
+  function pintarValIntegracion(r) {
+    const box = document.getElementById("valBox");
+    if (!box) return;
+    const linea = (nombre, res) => {
+      if (!res) return "";
+      return res.ok
+        ? `<div class="val-line val-ok">✓ ${nombre}: conexión correcta</div>`
+        : `<div class="val-line val-mal">✗ ${nombre}: ${escHtml(res.error || "no se pudo validar")}</div>`;
+    };
+    box.innerHTML = linea("WhatsApp", r.whatsapp) + linea("Google Calendar", r.calendar);
+    box.style.display = "block";
+  }
+
+  async function saveIntegracion() {
+    const campos = leerCamposIntegracion();
+    const tieneAlgo = campos.whatsapp_phone_number_id || campos.whatsapp_token || campos.google_service_account_json;
+    if (!tieneAlgo) return true; // skipped
+
+    // Si ya validamos y pasó, guardar directo
+    if (valIntegracion?.whatsapp?.ok && valIntegracion?.calendar?.ok) {
+      try {
+        const r = await fetch("/profiles", { method: "POST", headers: authH(), body: JSON.stringify({ ...campos, activo: true }) }).then(x => x.json());
+        if (r.perfil?.id) {
+          localStorage.setItem(`perfil_val_${r.perfil.id}`, JSON.stringify({ wok: true, cok: true, ts: Date.now() }));
+        }
+        perfilGuardado = { ok: true };
+        return true;
+      } catch { showErr("Error guardando el perfil de integración"); return false; }
+    }
+
+    // Validar ahora
+    const btn = document.getElementById("btnNext");
+    if (btn) { btn.disabled = true; btn.textContent = "Validando..."; }
+    try {
+      const val = await fetch("/profiles/validate", { method: "POST", headers: authH(), body: JSON.stringify(campos) }).then(x => x.json());
+      valIntegracion = val;
+      pintarValIntegracion(val);
+      if (!val.whatsapp?.ok || !val.calendar?.ok) {
+        showErr("Revisá las credenciales marcadas en rojo o usá 'Omitir' si no las tenés todavía.");
+        if (btn) { btn.disabled = false; btn.textContent = "Finalizar"; }
+        return false;
+      }
+      const r = await fetch("/profiles", { method: "POST", headers: authH(), body: JSON.stringify({ ...campos, activo: true }) }).then(x => x.json());
+      if (r.perfil?.id) {
+        localStorage.setItem(`perfil_val_${r.perfil.id}`, JSON.stringify({ wok: true, cok: true, ts: Date.now() }));
+      }
+      perfilGuardado = { ok: true };
+      return true;
+    } catch {
+      showErr("Error de conexión");
+      if (btn) { btn.disabled = false; btn.textContent = "Finalizar"; }
+      return false;
+    }
+  }
+
+  // ── Step: Listo ───────────────────────────────────────────────────
+  function renderListo(card) {
+    const integOk = !!perfilGuardado?.ok;
+    card.innerHTML = `
+      <div class="listo-icon">🎉</div>
+      <div class="wiz-title" style="text-align:center">¡Tu consultorio está listo!</div>
+      <div class="wiz-desc" style="text-align:center">Configuración completada. Podés ajustar cualquier parámetro en cualquier momento desde el panel de administración.</div>
+      <div class="listo-checks">
+        <div class="listo-row">
+          <div class="listo-ic">🕐</div>
+          <div class="listo-info"><div class="listo-name">Horarios configurados</div><div class="listo-sub">Mía va a ofrecer turnos dentro de tus franjas horarias</div></div>
+          <div style="color:#00a884;font-size:18px">✓</div>
+        </div>
+        <div class="listo-row">
+          <div class="listo-ic">💬</div>
+          <div class="listo-info"><div class="listo-name">Estilo de conversación</div><div class="listo-sub">Mía va a hablarle a los pacientes con el tono que elegiste</div></div>
+          <div style="color:#00a884;font-size:18px">✓</div>
+        </div>
+        <div class="listo-row">
+          <div class="listo-ic">🦷</div>
+          <div class="listo-info">
+            <div class="listo-name">Prácticas${practicasWiz.length ? ` (${practicasWiz.length})` : ""}</div>
+            <div class="listo-sub">${practicasWiz.length ? "El agente solo ofrece las prácticas que cargaste" : "Sin prácticas — podés agregarlas desde el panel"}</div>
+          </div>
+          <div style="font-size:18px;color:${practicasWiz.length ? "#00a884" : "#8696a0"}">${practicasWiz.length ? "✓" : "—"}</div>
+        </div>
+        <div class="listo-row">
+          <div class="listo-ic">📲</div>
+          <div class="listo-info">
+            <div class="listo-name">Integración WhatsApp + Calendar</div>
+            <div class="listo-sub">${integOk ? "Credenciales validadas y perfil activo" : "No configurada — hacelo desde el panel → Integraciones"}</div>
+          </div>
+          <div style="font-size:18px;color:${integOk ? "#00a884" : "#f59e0b"}">${integOk ? "✓" : "⚠"}</div>
+        </div>
+      </div>
+      <button class="btn-admin" onclick="irAlPanel()">Ir al panel →</button>`;
+
+    document.getElementById("stepsRow").closest(".steps-strip").style.display = "none";
+    document.getElementById("progressFill").style.width = "100%";
+    document.getElementById("stepLabel").textContent = "";
+  }
+
+  function irAlPanel() {
+    localStorage.setItem("wizard_done", "1");
+    window.location.href = "/admin.html";
+  }
+
+  // ── Kickoff ───────────────────────────────────────────────────────
+  renderStep();
+</script>
+</body>
+</html>
