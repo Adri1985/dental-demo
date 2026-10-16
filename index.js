@@ -572,6 +572,23 @@ function consultorioDe(req) {
   return req.user?.consultorio_id || DEFAULT_CONSULTORIO_ID;
 }
 
+// Valida un servicio individual sin guardar nada (para indicadores inline en el panel)
+app.post("/profiles/validate-field", authMiddleware, async (req, res) => {
+  try {
+    const { service, ...creds } = req.body;
+    if (service === "whatsapp") {
+      res.json(await validarWhatsApp(creds));
+    } else if (service === "calendar") {
+      res.json(await validarCalendar(creds));
+    } else {
+      res.status(400).json({ ok: false, error: "Servicio no reconocido" });
+    }
+  } catch (err) {
+    console.error("[POST /profiles/validate-field]", err.message);
+    res.status(500).json({ ok: false, error: "Error interno" });
+  }
+});
+
 // Valida credenciales sin guardar nada
 app.post("/profiles/validate", authMiddleware, async (req, res) => {
   try {

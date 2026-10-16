@@ -129,6 +129,12 @@
     .valida-linea { font-size: 12px; margin-top: 5px; line-height: 1.5; }
     .valida-ok  { color: #00a884; }
     .valida-mal { color: #ff6b6b; }
+    .btn-field-val { background:none; border:1px solid #3a4952; border-radius:6px; color:#8696a0; font-size:11px; cursor:pointer; padding:4px 9px; margin-top:4px; align-self:flex-start; transition:border-color .15s,color .15s; }
+    .btn-field-val:hover { border-color:#00a884; color:#00a884; }
+    .val-ind { font-size:15px; min-width:18px; text-align:center; flex-shrink:0; line-height:1; }
+    .val-ind.ok  { color:#00a884; }
+    .val-ind.err { color:#ff6b6b; }
+    .val-ind.loading { color:#8696a0; font-size:11px; }
     .select { background: #2a3942; border: 1px solid #3a4952; border-radius: 8px; padding: 10px 12px; color: #e9edef; font-size: 14px; outline: none; width: 100%; }
     .link-box { background: #182229; border: 1px solid #2a3942; border-radius: 8px; padding: 12px; font-size: 12px; word-break: break-all; color: #8696a0; display: none; }
     .link-box strong { color: #00a884; display: block; margin-bottom: 6px; font-size: 11px; }
@@ -429,27 +435,44 @@
 
         <div class="modal-field">
           <label class="modal-label">WhatsApp Phone Number ID<span class="hint-wrap"><i class="hint-ico" onclick="toggleHint(event, this)">i</i><span class="hint-pop">Entrá a Meta for Developers → Tu app → WhatsApp → API Setup. El Phone Number ID aparece debajo del número registrado.</span></span></label>
-          <input class="modal-input" id="pfPhoneId" type="text" />
+          <div style="display:flex;align-items:center;gap:6px">
+            <input class="modal-input" id="pfPhoneId" type="text" style="flex:1;width:auto" />
+            <span class="val-ind" id="vi_phone" title=""></span>
+          </div>
         </div>
 
         <div class="modal-field">
           <label class="modal-label">WhatsApp Token<span class="hint-wrap"><i class="hint-ico" onclick="toggleHint(event, this)">i</i><span class="hint-pop">En la misma pantalla de API Setup, copiá el "Temporary access token". Para producción, generá un token permanente desde Sistema → Usuarios del sistema en Meta Business Manager.</span></span></label>
-          <input class="modal-input" id="pfToken" type="text" />
+          <div style="display:flex;align-items:center;gap:6px">
+            <input class="modal-input" id="pfToken" type="text" style="flex:1;width:auto" />
+            <span class="val-ind" id="vi_token" title=""></span>
+          </div>
+          <button class="btn-field-val" onclick="validarCampoWA()">Verificar WhatsApp</button>
         </div>
 
         <div class="modal-field">
           <label class="modal-label">WhatsApp Verify Token<span class="hint-wrap"><i class="hint-ico" onclick="toggleHint(event, this)">i</i><span class="hint-pop">Es una palabra clave que vos elegís (ej: "mia_webhook_2024"). Tenés que usarla también al configurar el webhook en Meta → Configuración → Webhooks.</span></span></label>
-          <input class="modal-input" id="pfVerify" type="text" />
+          <div style="display:flex;align-items:center;gap:6px">
+            <input class="modal-input" id="pfVerify" type="text" style="flex:1;width:auto" oninput="validarVerifyLocal()" />
+            <span class="val-ind" id="vi_verify" title=""></span>
+          </div>
         </div>
 
         <div class="modal-field">
           <label class="modal-label">Google Service Account JSON<span class="hint-wrap"><i class="hint-ico" onclick="toggleHint(event, this)">i</i><span class="hint-pop">En Google Cloud Console → IAM → Cuentas de servicio, creá una cuenta, generá una clave JSON y pegá el contenido completo acá. Luego compartí tu Google Calendar con el email de la cuenta de servicio dándole permisos de edición.</span></span></label>
-          <textarea class="modal-input" id="pfServiceAccount" rows="4" style="resize:vertical;font-family:monospace;font-size:11px;line-height:1.4"></textarea>
+          <div style="display:flex;align-items:flex-start;gap:6px">
+            <textarea class="modal-input" id="pfServiceAccount" rows="4" style="resize:vertical;font-family:monospace;font-size:11px;line-height:1.4;flex:1;width:auto" oninput="validarSALocal()"></textarea>
+            <span class="val-ind" id="vi_sa" title="" style="padding-top:4px"></span>
+          </div>
         </div>
 
         <div class="modal-field">
           <label class="modal-label">Calendar ID<span class="hint-wrap"><i class="hint-ico" onclick="toggleHint(event, this)">i</i><span class="hint-pop">Abrí Google Calendar → Configuración del calendario → Integrar calendario. El ID tiene formato algo@group.calendar.google.com o es tu email de Google.</span></span></label>
-          <input class="modal-input" id="pfCalendarId" type="text" />
+          <div style="display:flex;align-items:center;gap:6px">
+            <input class="modal-input" id="pfCalendarId" type="text" style="flex:1;width:auto" />
+            <span class="val-ind" id="vi_cal" title=""></span>
+          </div>
+          <button class="btn-field-val" onclick="validarCampoCalendar()">Verificar Google Calendar</button>
         </div>
 
         <div id="perfilValidacion" style="display:none;margin-top:10px;padding:9px 11px;background:#111b21;border:1px solid #2a3942;border-radius:8px"></div>
@@ -832,6 +855,78 @@
 
   // ── Integraciones / perfiles ─────────────
 
+  // ── Validación inline por campo ──────────
+  function setValInd(id, state, title) {
+    const el = document.getElementById(id);
+    if (!el) return;
+    el.className = "val-ind" + (state ? " " + state : "");
+    el.textContent = state === "ok" ? "✓" : state === "err" ? "✗" : state === "loading" ? "…" : "";
+    el.title = title || "";
+  }
+
+  function resetValIndicadores() {
+    ["vi_phone","vi_token","vi_verify","vi_sa","vi_cal"].forEach(id => setValInd(id, ""));
+  }
+
+  function validarVerifyLocal() {
+    const v = document.getElementById("pfVerify").value.trim();
+    setValInd("vi_verify", v ? "ok" : "", v ? "Token configurado" : "");
+  }
+
+  function validarSALocal() {
+    const v = document.getElementById("pfServiceAccount").value.trim();
+    if (!v) { setValInd("vi_sa", ""); return; }
+    try {
+      const obj = JSON.parse(v);
+      if (!obj.client_email || !obj.private_key) {
+        setValInd("vi_sa", "err", "Faltan client_email o private_key");
+      } else {
+        setValInd("vi_sa", "ok", obj.client_email);
+      }
+    } catch {
+      setValInd("vi_sa", "err", "JSON inválido");
+    }
+  }
+
+  async function validarCampoWA() {
+    const phoneId = document.getElementById("pfPhoneId").value.trim();
+    const token   = document.getElementById("pfToken").value.trim();
+    if (!phoneId || !token) { showToast("Completá Phone Number ID y Token para verificar"); return; }
+    setValInd("vi_phone", "loading"); setValInd("vi_token", "loading");
+    try {
+      const r = await fetch(`${API}/profiles/validate-field`, {
+        method: "POST", headers: authH(),
+        body: JSON.stringify({ service: "whatsapp", whatsapp_phone_number_id: phoneId, whatsapp_token: token }),
+      }).then(x => x.json());
+      const s = r.ok ? "ok" : "err", msg = r.ok ? "Credenciales válidas" : (r.error || "Error");
+      setValInd("vi_phone", s, msg); setValInd("vi_token", s, msg);
+      showToast(r.ok ? "WhatsApp OK ✓" : `WhatsApp: ${r.error || "error"}`);
+    } catch {
+      setValInd("vi_phone", "err", "Error"); setValInd("vi_token", "err", "Error");
+      showToast("Error de conexión");
+    }
+  }
+
+  async function validarCampoCalendar() {
+    const sa    = document.getElementById("pfServiceAccount").value.trim();
+    const calId = document.getElementById("pfCalendarId").value.trim();
+    if (!sa || !calId) { showToast("Completá el Service Account JSON y el Calendar ID para verificar"); return; }
+    setValInd("vi_cal", "loading");
+    try {
+      const r = await fetch(`${API}/profiles/validate-field`, {
+        method: "POST", headers: authH(),
+        body: JSON.stringify({ service: "calendar", google_service_account_json: sa, calendar_id: calId }),
+      }).then(x => x.json());
+      setValInd("vi_cal", r.ok ? "ok" : "err", r.ok ? "Acceso al calendario OK" : (r.error || "Error"));
+      if (r.ok) validarSALocal();
+      showToast(r.ok ? "Google Calendar OK ✓" : `Calendar: ${r.error || "error"}`);
+    } catch {
+      setValInd("vi_cal", "err", "Error");
+      showToast("Error de conexión");
+    }
+  }
+  // ─────────────────────────────────────────
+
   // Popover de ayuda: se abre uno por vez y se cierra al clickear afuera
   function toggleHint(ev, ico) {
     ev.stopPropagation();
@@ -892,6 +987,7 @@
     ["pfNombre","pfPhoneId","pfToken","pfVerify","pfServiceAccount","pfCalendarId"].forEach(id => {
       document.getElementById(id).value = "";
     });
+    resetValIndicadores();
     document.getElementById("perfilValidacion").style.display = "none";
     document.getElementById("perfilForm").style.display = "block";
   }
@@ -913,6 +1009,10 @@
       document.getElementById("pfVerify").value = creds.whatsapp_verify_token;
       document.getElementById("pfServiceAccount").value = creds.google_service_account_json;
       document.getElementById("pfCalendarId").value = creds.calendar_id;
+      resetValIndicadores();
+      // Inicializar los indicadores locales con los valores ya cargados
+      validarVerifyLocal();
+      validarSALocal();
       document.getElementById("perfilValidacion").style.display = "none";
       document.getElementById("perfilForm").style.display = "block";
     } catch (e) { showToast("Error cargando el perfil"); }
