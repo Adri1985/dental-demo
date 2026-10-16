@@ -102,13 +102,14 @@ async function initDB() {
     );
 
     CREATE TABLE IF NOT EXISTS patients (
-      telefono    TEXT PRIMARY KEY,
-      nombre      TEXT,
-      dni         TEXT,
-      obra_social TEXT,
-      modo        TEXT DEFAULT 'bot',
-      created_at  TIMESTAMPTZ DEFAULT NOW(),
-      updated_at  TIMESTAMPTZ DEFAULT NOW()
+      telefono       TEXT PRIMARY KEY,
+      nombre         TEXT,
+      dni            TEXT,
+      obra_social    TEXT,
+      modo           TEXT DEFAULT 'bot',
+      consultorio_id INTEGER REFERENCES consultorios(id) DEFAULT 1,
+      created_at     TIMESTAMPTZ DEFAULT NOW(),
+      updated_at     TIMESTAMPTZ DEFAULT NOW()
     );
 
     CREATE TABLE IF NOT EXISTS messages (
@@ -214,6 +215,11 @@ async function initDB() {
     ALTER TABLE practicas ADD COLUMN IF NOT EXISTS para_turno_directo BOOLEAN DEFAULT true;
     ALTER TABLE practicas ADD COLUMN IF NOT EXISTS precio             INTEGER DEFAULT 50;
   `).catch(e => console.log("[db] migracion practicas:", e.message));
+
+  await pool.query(`
+    ALTER TABLE patients ADD COLUMN IF NOT EXISTS consultorio_id INTEGER REFERENCES consultorios(id) DEFAULT 1;
+    CREATE INDEX IF NOT EXISTS idx_patients_consultorio ON patients(consultorio_id);
+  `).catch(e => console.log("[db] migracion patients consultorio_id:", e.message));
 
   await migrarEnvAPerfil().catch(e => console.log("[migration] error:", e.message));
 
@@ -363,31 +369,32 @@ async function getPatient(telefono) {
   return rows[0] || null;
 }
 
-async function upsertPatient({ telefono, nombre, dni, obra_social }) {
+async function upsertPatient({ telefono, nombre, dni, obra_social, consultorio_id = 1 }) {
   if (!USE_DB) {
     const now = new Date().toISOString();
     const existing = store.patients[telefono];
     store.patients[telefono] = {
       telefono,
-      nombre:      nombre      || existing?.nombre      || null,
-      dni:         dni         || existing?.dni         || null,
-      obra_social: obra_social || existing?.obra_social || null,
-      modo:        existing?.modo || "bot",
-      created_at:  existing?.created_at || now,
-      updated_at:  now,
+      nombre:         nombre         || existing?.nombre      || null,
+      dni:            dni            || existing?.dni         || null,
+      obra_social:    obra_social    || existing?.obra_social || null,
+      consultorio_id: existing?.consultorio_id || consultorio_id,
+      modo:           existing?.modo || "bot",
+      created_at:     existing?.created_at || now,
+      updated_at:     now,
     };
     return store.patients[telefono];
   }
   const { rows } = await pool.query(`
-    INSERT INTO patients (telefono, nombre, dni, obra_social)
-    VALUES ($1, $2, $3, $4)
+    INSERT INTO patients (telefono, nombre, dni, obra_social, consultorio_id)
+    VALUES ($1, $2, $3, $4, $5)
     ON CONFLICT (telefono) DO UPDATE SET
       nombre      = COALESCE(EXCLUDED.nombre, patients.nombre),
       dni         = COALESCE(EXCLUDED.dni, patients.dni),
       obra_social = COALESCE(EXCLUDED.obra_social, patients.obra_social),
       updated_at  = NOW()
     RETURNING *
-  `, [telefono, nombre || null, dni || null, obra_social || null]);
+  `, [telefono, nombre || null, dni || null, obra_social || null, consultorio_id]);
   return rows[0];
 }
 
@@ -417,17 +424,22 @@ async function setPatientMode(telefono, modo) {
   await pool.query("UPDATE patients SET modo = $1, updated_at = NOW() WHERE telefono = $2", [modo, telefono]);
 }
 
-async function getAllPatients() {
+async function getAllPatients(consultorio_id) {
   if (!USE_DB) {
-    return Object.values(store.patients).map(p => ({
+    const todos = Object.values(store.patients);
+    const filtrados = consultorio_id
+      ? todos.filter(p => !p.consultorio_id || String(p.consultorio_id) === String(consultorio_id))
+      : todos;
+    return filtrados.map(p => ({
       ...p, total_mensajes: (store.messages[p.telefono] || []).length,
     })).sort((a, b) => new Date(b.updated_at) - new Date(a.updated_at));
   }
   const { rows } = await pool.query(`
     SELECT p.*, COUNT(m.id)::int AS total_mensajes
     FROM patients p LEFT JOIN messages m ON m.telefono = p.telefono
+    WHERE p.consultorio_id = $1
     GROUP BY p.telefono ORDER BY p.updated_at DESC
-  `);
+  `, [consultorio_id || 1]);
   return rows;
 }
 

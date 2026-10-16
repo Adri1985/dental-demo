@@ -413,7 +413,7 @@ app.post("/webhook", async (req, res) => {
           new Promise((_, reject) => setTimeout(() => reject(new Error("timeout Google Calendar (8s)")), 8000)),
         ]);
       } catch(e) { console.error("[wh] error/timeout Calendar:", e.message); }
-      patient = await db.upsertPatient({ telefono, nombre: datosPrevios?.nombre || "Paciente", dni: datosPrevios?.dni || null, obra_social: datosPrevios?.obra_social || null });
+      patient = await db.upsertPatient({ telefono, nombre: datosPrevios?.nombre || "Paciente", dni: datosPrevios?.dni || null, obra_social: datosPrevios?.obra_social || null, consultorio_id: DEFAULT_CONSULTORIO_ID });
     }
     await db.addMessage(telefono, "user", texto, new Date().toISOString());
     if (patient.modo === "humano") { console.log(`[whatsapp] conversación pausada para ${telefono}`); return; }
@@ -450,7 +450,7 @@ app.post("/session", async (req, res) => {
   }
   let datosPrevios = null;
   try { datosPrevios = await findPatientByIdentifier(telefono, null, credsCalendar(await getPerfilActivo())); } catch(err) {}
-  patient = await db.upsertPatient({ telefono, nombre: datosPrevios?.nombre || nombre || "Paciente", dni: datosPrevios?.dni || null, obra_social: datosPrevios?.obra_social || null });
+  patient = await db.upsertPatient({ telefono, nombre: datosPrevios?.nombre || nombre || "Paciente", dni: datosPrevios?.dni || null, obra_social: datosPrevios?.obra_social || null, consultorio_id: DEFAULT_CONSULTORIO_ID });
   res.json({ nueva: !datosPrevios, recuperado: !!datosPrevios, nombre: patient.nombre, dni: patient.dni, obra_social: patient.obra_social, displayHistory: [] });
 });
 
@@ -476,7 +476,7 @@ app.delete("/session/:telefono", async (req, res) => {
   res.json({ ok: true });
 });
 
-app.get("/patients",                    authMiddleware, async (req, res) => { res.json(await db.getAllPatients()); });
+app.get("/patients",                    authMiddleware, async (req, res) => { res.json(await db.getAllPatients(consultorioDe(req))); });
 app.get("/patients/:telefono/messages", authMiddleware, async (req, res) => { res.json(await db.getMessages(req.params.telefono)); });
 app.post("/admin/pause/:telefono",      authMiddleware, async (req, res) => { await db.setPatientMode(req.params.telefono, "humano"); res.json({ ok: true }); });
 app.post("/admin/resume/:telefono",     authMiddleware, async (req, res) => { await db.setPatientMode(req.params.telefono, "bot"); await db.clearClaudeHistory(req.params.telefono); res.json({ ok: true }); });
