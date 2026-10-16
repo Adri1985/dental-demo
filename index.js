@@ -255,10 +255,19 @@ async function runAgent(userMessage, telefono, consultorio_id = DEFAULT_CONSULTO
   ]);
   console.log(`[agent] usando ${practicas.length} prácticas del catálogo`);
 
+  // Si el paciente pregunta sobre disponibilidad, forzamos check_availability
+  // en vez de dejar que Claude responda de memoria basándose en la hora actual.
+  const AVAILABILITY_RE = /\b(turno|turnos|lugar|disponib|horario|agendar|reservar|sacar turno|cuándo|cuando|esta tarde|esta mañana|hoy|libre|semana)\b/i;
+  const forcearDisponibilidad = AVAILABILITY_RE.test(userMessage);
+  const tool_choice = forcearDisponibilidad
+    ? { type: "tool", name: "check_availability" }
+    : { type: "auto" };
+  if (forcearDisponibilidad) console.log("[agent] forzando check_availability por consulta de disponibilidad");
+
   let response = await anthropic.messages.create({
     model: "claude-sonnet-4-5", max_tokens: 1024,
     system: getSystemPrompt(cfg, practicas, coberturas, buildPatientContext(patient)),
-    tools: TOOLS, messages: claudeHistory,
+    tools: TOOLS, tool_choice, messages: claudeHistory,
   });
 
   console.log(`[agent] stop_reason=${response.stop_reason} | tools_called=${response.content.filter(b=>b.type==="tool_use").map(b=>b.name).join(",") || "ninguno"}`);
