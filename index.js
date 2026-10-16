@@ -48,6 +48,23 @@ function credsCalendar(perfil) {
 // ─────────────────────────────────────────────
 //  VALIDACIÓN DE CREDENCIALES
 // ─────────────────────────────────────────────
+async function validarWhatsAppToken(token) {
+  if (!token) return { ok: false, error: "Falta el token" };
+  try {
+    const resp = await fetch(
+      `https://graph.facebook.com/v19.0/me?fields=id,name&access_token=${encodeURIComponent(token)}`
+    );
+    if (resp.ok) return { ok: true, error: null };
+    const texto = await resp.text().catch(() => "");
+    let codigo = null;
+    try { codigo = JSON.parse(texto)?.error?.code; } catch {}
+    if (resp.status === 401 || codigo === 190) return { ok: false, error: "Token inválido o vencido" };
+    return { ok: false, error: `Meta respondió ${resp.status}${texto ? ": " + texto.slice(0, 120) : ""}` };
+  } catch (err) {
+    return { ok: false, error: `No se pudo conectar con Meta: ${err.message}` };
+  }
+}
+
 async function validarWhatsApp({ whatsapp_phone_number_id, whatsapp_token }) {
   if (!whatsapp_phone_number_id || !whatsapp_token) {
     return { ok: false, error: "Faltan el Phone Number ID o el token" };
@@ -576,7 +593,11 @@ function consultorioDe(req) {
 app.post("/profiles/validate-field", authMiddleware, async (req, res) => {
   try {
     const { service, ...creds } = req.body;
-    if (service === "whatsapp") {
+    if (service === "whatsapp_token") {
+      res.json(await validarWhatsAppToken(creds.whatsapp_token));
+    } else if (service === "whatsapp_phone") {
+      res.json(await validarWhatsApp(creds));
+    } else if (service === "whatsapp") {
       res.json(await validarWhatsApp(creds));
     } else if (service === "calendar") {
       res.json(await validarCalendar(creds));

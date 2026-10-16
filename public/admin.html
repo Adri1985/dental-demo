@@ -135,6 +135,7 @@
     .val-ind.ok  { color:#00a884; }
     .val-ind.err { color:#ff6b6b; }
     .val-ind.loading { color:#8696a0; font-size:11px; }
+    .section-label-int { font-size:11px; font-weight:600; color:#00a884; text-transform:uppercase; letter-spacing:0.6px; margin:12px 0 8px; padding-bottom:6px; border-bottom:1px solid #2a3942; }
     .select { background: #2a3942; border: 1px solid #3a4952; border-radius: 8px; padding: 10px 12px; color: #e9edef; font-size: 14px; outline: none; width: 100%; }
     .link-box { background: #182229; border: 1px solid #2a3942; border-radius: 8px; padding: 12px; font-size: 12px; word-break: break-all; color: #8696a0; display: none; }
     .link-box strong { color: #00a884; display: block; margin-bottom: 6px; font-size: 11px; }
@@ -433,33 +434,38 @@
           <input class="modal-input" id="pfNombre" type="text" placeholder="Ej: Producción" />
         </div>
 
+        <div class="section-label-int">WhatsApp</div>
+
         <div class="modal-field">
-          <label class="modal-label">WhatsApp Phone Number ID<span class="hint-wrap"><i class="hint-ico" onclick="toggleHint(event, this)">i</i><span class="hint-pop">Entrá a Meta for Developers → Tu app → WhatsApp → API Setup. El Phone Number ID aparece debajo del número registrado.</span></span></label>
+          <label class="modal-label">Phone Number ID<span class="hint-wrap"><i class="hint-ico" onclick="toggleHint(event, this)">i</i><span class="hint-pop">Entrá a Meta for Developers → Tu app → WhatsApp → API Setup. El Phone Number ID aparece debajo del número registrado.</span></span></label>
           <div style="display:flex;align-items:center;gap:6px">
             <input class="modal-input" id="pfPhoneId" type="text" style="flex:1;width:auto" />
             <span class="val-ind" id="vi_phone" title=""></span>
           </div>
+          <button class="btn-field-val" onclick="validarCampoPhone()">Verificar Phone Number ID</button>
         </div>
 
         <div class="modal-field">
-          <label class="modal-label">WhatsApp Token<span class="hint-wrap"><i class="hint-ico" onclick="toggleHint(event, this)">i</i><span class="hint-pop">En la misma pantalla de API Setup, copiá el "Temporary access token". Para producción, generá un token permanente desde Sistema → Usuarios del sistema en Meta Business Manager.</span></span></label>
+          <label class="modal-label">Token<span class="hint-wrap"><i class="hint-ico" onclick="toggleHint(event, this)">i</i><span class="hint-pop">En la misma pantalla de API Setup, copiá el "Temporary access token". Para producción, generá un token permanente desde Sistema → Usuarios del sistema en Meta Business Manager.</span></span></label>
           <div style="display:flex;align-items:center;gap:6px">
             <input class="modal-input" id="pfToken" type="text" style="flex:1;width:auto" />
             <span class="val-ind" id="vi_token" title=""></span>
           </div>
-          <button class="btn-field-val" onclick="validarCampoWA()">Verificar WhatsApp</button>
+          <button class="btn-field-val" onclick="validarCampoToken()">Verificar token</button>
         </div>
 
         <div class="modal-field">
-          <label class="modal-label">WhatsApp Verify Token<span class="hint-wrap"><i class="hint-ico" onclick="toggleHint(event, this)">i</i><span class="hint-pop">Es una palabra clave que vos elegís (ej: "mia_webhook_2024"). Tenés que usarla también al configurar el webhook en Meta → Configuración → Webhooks.</span></span></label>
+          <label class="modal-label">Verify Token<span class="hint-wrap"><i class="hint-ico" onclick="toggleHint(event, this)">i</i><span class="hint-pop">Es una palabra clave que vos elegís (ej: "mia_webhook_2024"). Tenés que usarla también al configurar el webhook en Meta → Configuración → Webhooks.</span></span></label>
           <div style="display:flex;align-items:center;gap:6px">
             <input class="modal-input" id="pfVerify" type="text" style="flex:1;width:auto" oninput="validarVerifyLocal()" />
             <span class="val-ind" id="vi_verify" title=""></span>
           </div>
         </div>
 
+        <div class="section-label-int" style="margin-top:6px">Google Calendar</div>
+
         <div class="modal-field">
-          <label class="modal-label">Google Service Account JSON<span class="hint-wrap"><i class="hint-ico" onclick="toggleHint(event, this)">i</i><span class="hint-pop">En Google Cloud Console → IAM → Cuentas de servicio, creá una cuenta, generá una clave JSON y pegá el contenido completo acá. Luego compartí tu Google Calendar con el email de la cuenta de servicio dándole permisos de edición.</span></span></label>
+          <label class="modal-label">Service Account JSON<span class="hint-wrap"><i class="hint-ico" onclick="toggleHint(event, this)">i</i><span class="hint-pop">En Google Cloud Console → IAM → Cuentas de servicio, creá una cuenta, generá una clave JSON y pegá el contenido completo acá. Luego compartí tu Google Calendar con el email de la cuenta de servicio dándole permisos de edición.</span></span></label>
           <div style="display:flex;align-items:flex-start;gap:6px">
             <textarea class="modal-input" id="pfServiceAccount" rows="4" style="resize:vertical;font-family:monospace;font-size:11px;line-height:1.4;flex:1;width:auto" oninput="validarSALocal()"></textarea>
             <span class="val-ind" id="vi_sa" title="" style="padding-top:4px"></span>
@@ -888,21 +894,38 @@
     }
   }
 
-  async function validarCampoWA() {
-    const phoneId = document.getElementById("pfPhoneId").value.trim();
-    const token   = document.getElementById("pfToken").value.trim();
-    if (!phoneId || !token) { showToast("Completá Phone Number ID y Token para verificar"); return; }
-    setValInd("vi_phone", "loading"); setValInd("vi_token", "loading");
+  async function validarCampoToken() {
+    const token = document.getElementById("pfToken").value.trim();
+    if (!token) { showToast("Completá el Token para verificar"); return; }
+    setValInd("vi_token", "loading");
     try {
       const r = await fetch(`${API}/profiles/validate-field`, {
         method: "POST", headers: authH(),
-        body: JSON.stringify({ service: "whatsapp", whatsapp_phone_number_id: phoneId, whatsapp_token: token }),
+        body: JSON.stringify({ service: "whatsapp_token", whatsapp_token: token }),
       }).then(x => x.json());
-      const s = r.ok ? "ok" : "err", msg = r.ok ? "Credenciales válidas" : (r.error || "Error");
-      setValInd("vi_phone", s, msg); setValInd("vi_token", s, msg);
-      showToast(r.ok ? "WhatsApp OK ✓" : `WhatsApp: ${r.error || "error"}`);
+      setValInd("vi_token", r.ok ? "ok" : "err", r.ok ? "Token válido" : (r.error || "Error"));
+      showToast(r.ok ? "Token OK ✓" : `Token: ${r.error || "error"}`);
     } catch {
-      setValInd("vi_phone", "err", "Error"); setValInd("vi_token", "err", "Error");
+      setValInd("vi_token", "err", "Error de conexión");
+      showToast("Error de conexión");
+    }
+  }
+
+  async function validarCampoPhone() {
+    const phoneId = document.getElementById("pfPhoneId").value.trim();
+    const token   = document.getElementById("pfToken").value.trim();
+    if (!phoneId) { showToast("Completá el Phone Number ID para verificar"); return; }
+    if (!token) { showToast("Necesitás el Token para verificar el Phone Number ID"); return; }
+    setValInd("vi_phone", "loading");
+    try {
+      const r = await fetch(`${API}/profiles/validate-field`, {
+        method: "POST", headers: authH(),
+        body: JSON.stringify({ service: "whatsapp_phone", whatsapp_phone_number_id: phoneId, whatsapp_token: token }),
+      }).then(x => x.json());
+      setValInd("vi_phone", r.ok ? "ok" : "err", r.ok ? "Phone Number ID válido" : (r.error || "Error"));
+      showToast(r.ok ? "Phone Number ID OK ✓" : `Phone ID: ${r.error || "error"}`);
+    } catch {
+      setValInd("vi_phone", "err", "Error de conexión");
       showToast("Error de conexión");
     }
   }
