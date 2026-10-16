@@ -149,17 +149,20 @@ async function checkAvailability({ fecha_desde, fecha_hasta, duracion_minutos, e
 
   // Helper: dado un Date UTC, devuelve {year, month, day, dow} en Argentina
   function arParts(dt) {
-    const fmt = new Intl.DateTimeFormat("es-AR", {
+    // Usar en-US para evitar problemas con builds de ICU mínimo en Linux que pueden
+    // devolver nombres en inglés incluso con locale es-AR.
+    const fmt = new Intl.DateTimeFormat("en-US", {
       timeZone: "America/Argentina/Buenos_Aires",
       year: "numeric", month: "2-digit", day: "2-digit",
-      weekday: "short", hour: "2-digit", minute: "2-digit", hour12: false,
+      weekday: "short",
     });
     const parts = Object.fromEntries(fmt.formatToParts(dt).map(p => [p.type, p.value]));
     return {
       year:  parseInt(parts.year),
       month: parseInt(parts.month) - 1, // 0-indexed
       day:   parseInt(parts.day),
-      dow:   ["dom","lun","mar","mié","jue","vie","sáb"].indexOf(parts.weekday.toLowerCase().replace(".",""))
+      // en-US siempre devuelve "Sun","Mon","Tue","Wed","Thu","Fri","Sat" (estándar)
+      dow:   ["Sun","Mon","Tue","Wed","Thu","Fri","Sat"].indexOf(parts.weekday),
     };
   }
 
@@ -171,6 +174,9 @@ async function checkAvailability({ fecha_desde, fecha_hasta, duracion_minutos, e
 
   const slots = [];
   const ahora = new Date();
+  const ahoraAR = ahora.toLocaleString("es-AR", { timeZone: "America/Argentina/Buenos_Aires", hour12: false });
+  console.log(`[checkAvailability] ahora AR: ${ahoraAR} | duracion: ${duracion_minutos}min | rango: ${desdeDia.toISOString()} → ${hastaDia.toISOString()}`);
+  console.log(`[checkAvailability] horarios: mañana ${horarios?.manana_desde||"09:30"}-${horarios?.manana_hasta||"13:00"}, tarde ${horarios?.tarde_desde||"14:00"}-${horarios?.tarde_hasta||"17:00"}`);
 
   // Iterar cada día del rango
   let cursor = new Date(desdeDia);
@@ -181,7 +187,8 @@ async function checkAvailability({ fecha_desde, fecha_hasta, duracion_minutos, e
 
   while (cursor <= hastaRef) {
     const p = arParts(cursor);
-    
+    console.log(`[checkAvailability] día: ${p.year}-${String(p.month+1).padStart(2,'0')}-${String(p.day).padStart(2,'0')} dow=${p.dow}`);
+
     // Solo lunes (1) a viernes (5)
     if (p.dow >= 1 && p.dow <= 5) {
       // Franjas en hora AR, según la config del panel (fallback a 9:30-13:00 y 14:00-17:00)
@@ -195,15 +202,19 @@ async function checkAvailability({ fecha_desde, fecha_hasta, duracion_minutos, e
         { hIni: tIni.h, mIni: tIni.m, hFin: tFin.h, mFin: tFin.m },
       ].filter(f => (f.hIni * 60 + f.mIni) < (f.hFin * 60 + f.mFin));
 
+      console.log(`[checkAvailability] franjas activas (${franjas.length}): ${franjas.map(f => `${f.hIni}:${String(f.mIni).padStart(2,"0")}-${f.hFin}:${String(f.mFin).padStart(2,"0")} AR`).join(", ")}`);
+
       for (const franja of franjas) {
         let slotStart = arToUTC(p.year, p.month, p.day, franja.hIni, franja.mIni);
         const franjaFin = arToUTC(p.year, p.month, p.day, franja.hFin, franja.mFin);
+        console.log(`[checkAvailability]   franja ${franja.hIni}:${String(franja.mIni).padStart(2,"0")} AR → UTC ${slotStart.toISOString()} | fin UTC ${franjaFin.toISOString()} | ahora UTC ${ahora.toISOString()}`);
 
         while (slotStart < franjaFin) {
           const slotEnd = new Date(slotStart.getTime() + duracion_minutos * 60 * 1000);
-          
+
           if (slotEnd > franjaFin) break;
           if (slotStart <= ahora) {
+            // slot ya pasó (hora AR pasada), se omite
             slotStart = new Date(slotStart.getTime() + 30 * 60 * 1000);
             continue;
           }

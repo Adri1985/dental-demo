@@ -230,7 +230,9 @@ function humanDelay(text) {
 //  Lee cfg y prácticas de DB en cada llamada
 // ─────────────────────────────────────────────
 async function runAgent(userMessage, telefono, consultorio_id = DEFAULT_CONSULTORIO_ID) {
+  console.log(`[agent] mensaje entrante: "${userMessage.slice(0, 100)}"`);
   const patient = await db.getPatient(telefono);
+  console.log(`[agent] paciente: ${patient ? `${patient.nombre||"sin nombre"} | dni=${patient.dni||"-"} | os=${patient.obra_social||"-"}` : "nuevo (sin datos)"}`);
   let claudeHistory = await db.getClaudeHistory(telefono);
 
   // El perfil del paciente viaja en el system prompt, que se arma en cada
@@ -259,6 +261,8 @@ async function runAgent(userMessage, telefono, consultorio_id = DEFAULT_CONSULTO
     tools: TOOLS, messages: claudeHistory,
   });
 
+  console.log(`[agent] stop_reason=${response.stop_reason} | tools_called=${response.content.filter(b=>b.type==="tool_use").map(b=>b.name).join(",") || "ninguno"}`);
+
   while (response.stop_reason === "tool_use") {
     const toolResults = await Promise.all(
       response.content.filter(b => b.type === "tool_use").map(async block => ({
@@ -275,9 +279,11 @@ async function runAgent(userMessage, telefono, consultorio_id = DEFAULT_CONSULTO
       system: getSystemPrompt(cfg, practicas, coberturas, buildPatientContext(await db.getPatient(telefono) || patient)),
       tools: TOOLS, messages: claudeHistory,
     });
+    console.log(`[agent] (loop) stop_reason=${response.stop_reason} | tools_called=${response.content.filter(b=>b.type==="tool_use").map(b=>b.name).join(",") || "ninguno"}`);
   }
 
   const finalText = response.content.find(b => b.type === "text")?.text || "No pude procesar eso.";
+  console.log(`[agent] respuesta: "${finalText.slice(0, 200)}${finalText.length > 200 ? "…" : ""}`);
   claudeHistory.push({ role: "assistant", content: response.content });
   await db.saveClaudeHistory(telefono, claudeHistory);
   return finalText;

@@ -52,7 +52,7 @@ function buildKnowledgeBase(cfg = {}, practicas = [], coberturas = []) {
     `1. Saludar de forma breve\n2. Pedir: nombre completo, DNI y obra social (de a uno, nunca todos juntos)\n3. Informar el valor de la práctica que necesita\n4. Si acepta, buscar disponibilidad y asignar turno\n5. Confirmar el turno con todos los datos`;
 
   const flujoExistente = cfg.flujo_paciente_existente ||
-    `1. Saludar por su nombre (ya lo tenés guardado)\n2. Preguntar qué necesita\n3. Buscar disponibilidad y asignar turno\n4. Confirmar`;
+    `1. Saludar por su nombre (ya lo tenés guardado)\n2. Preguntar qué necesita\n3. Llamar check_availability para buscar slots libres y ofrecerle opciones\n4. Confirmar el turno elegido con create_appointment`;
 
   // Política desde DB o fallback
   const cancelacionHs   = cfg.cancelacion_anticipacion_hs || pol.cancelacion_anticipacion_hs;
@@ -163,6 +163,7 @@ CÓMO USÁS LOS DATOS DEL PACIENTE:
 - Cuando guardés datos nuevos o actualizados, usá la tool save_patient_data.
 
 REGLAS IMPORTANTES:
+- Ante cualquier pregunta sobre disponibilidad de turnos — "¿hay turno hoy?", "¿tenés lugar esta tarde?", "¿cuándo me podés atender?", "¿tiene horario libre?" — llamá INMEDIATAMENTE a check_availability. NUNCA respondas si hay o no hay turnos sin haberlo verificado antes con esa tool.
 - Nunca ofrezcas un horario sin antes verificar disponibilidad con check_availability.
 - Al llamar a check_availability y create_appointment, usá la duración exacta de la práctica según la lista. Si no coincide con ninguna, usá 30 minutos.
 - Ante cualquier palabra de alarma, usá flag_critical_issue de inmediato. No agendes ni des consejos.
@@ -191,7 +192,7 @@ ${perfilPaciente ? `\n${perfilPaciente}` : ""}
 const TOOLS = [
   {
     name: "check_availability",
-    description: "Verifica slots disponibles en el calendario. Llamar siempre antes de ofrecer un horario.",
+    description: "Verifica slots libres en el calendario. Llamar SIEMPRE que el paciente pregunte sobre disponibilidad o quiera sacar un turno, antes de responder cualquier cosa sobre horarios.",
     input_schema: {
       type: "object",
       properties: {
