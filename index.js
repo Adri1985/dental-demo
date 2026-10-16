@@ -576,6 +576,34 @@ app.get("/profiles", authMiddleware, async (req, res) => {
   catch (err) { console.error("[GET /profiles]", err.message); res.status(500).json({ error: "Error interno" }); }
 });
 
+// Devuelve las credenciales descifradas para mostrarlas y editarlas en el panel
+app.get("/profiles/:id/credentials", authMiddleware, async (req, res) => {
+  try {
+    const p = await db.getProfileById(req.params.id);
+    if (!p) return res.status(404).json({ error: "Perfil no encontrado" });
+    res.json({
+      whatsapp_phone_number_id:    p.whatsapp_phone_number_id    || "",
+      whatsapp_token:              p.whatsapp_token              || "",
+      whatsapp_verify_token:       p.whatsapp_verify_token       || "",
+      google_service_account_json: p.google_service_account_json || "",
+      calendar_id:                 p.calendar_id                 || "",
+    });
+  } catch (err) { console.error("[GET /profiles/credentials]", err.message); res.status(500).json({ error: "Error interno" }); }
+});
+
+// Re-valida un perfil usando las credenciales que tiene guardadas
+app.post("/profiles/:id/validate", authMiddleware, async (req, res) => {
+  try {
+    const p = await db.getProfileById(req.params.id);
+    if (!p) return res.status(404).json({ error: "Perfil no encontrado" });
+    const [whatsapp, calendar] = await Promise.all([
+      validarWhatsApp(p),
+      validarCalendar(p),
+    ]);
+    res.json({ whatsapp, calendar });
+  } catch (err) { console.error("[POST /profiles/:id/validate]", err.message); res.status(500).json({ error: "Error interno" }); }
+});
+
 app.post("/profiles", authMiddleware, async (req, res) => {
   try {
     const { nombre } = req.body;

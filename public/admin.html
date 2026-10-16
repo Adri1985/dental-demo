@@ -831,7 +831,6 @@
 
 
   // ── Integraciones / perfiles ─────────────
-  const PLACEHOLDER_SECRETO = "••••••••";
 
   // Popover de ayuda: se abre uno por vez y se cierra al clickear afuera
   function toggleHint(ev, ico) {
@@ -859,6 +858,12 @@
       }
       el.innerHTML = lista.map(p => {
         const faltantes = Object.entries(p.configurado || {}).filter(([, v]) => !v).length;
+        const val = JSON.parse(localStorage.getItem(`perfil_val_${p.id}`) || "null");
+        const valBadge = val
+          ? (val.wok && val.cok
+            ? `<span style="color:#00a884;font-size:11px;margin-top:3px;display:block">✓ Conexiones validadas</span>`
+            : `<span style="color:#ff6b6b;font-size:11px;margin-top:3px;display:block">✗ ${!val.wok ? "WhatsApp" : ""}${!val.wok && !val.cok ? " y " : ""}${!val.cok ? "Calendar" : ""} con error</span>`)
+          : "";
         return `
         <div class="perfil-row">
           <div style="flex:1;min-width:0">
@@ -868,7 +873,9 @@
             <div style="font-size:11px;color:#8696a0;margin-top:2px">
               ${faltantes ? faltantes + " credencial(es) sin configurar" : "Todas las credenciales configuradas"}
             </div>
+            ${valBadge}
           </div>
+          <button class="btn btn-sm" id="btnVal_${p.id}" onclick="validarPerfilEnLista(${p.id})">Validar</button>
           <button class="btn btn-sm" onclick="editarPerfil(${p.id})">Editar</button>
           ${p.activo ? "" : `<button class="btn btn-sm" style="color:#00a884" onclick="activarPerfil(${p.id})">Activar</button>`}
           ${p.activo ? "" : `<button class="btn btn-sm" style="color:#ff6b6b" onclick="eliminarPerfil(${p.id})">Eliminar</button>`}
@@ -883,9 +890,7 @@
     document.getElementById("perfilEditId").value = "";
     document.getElementById("perfilFormTitulo").textContent = "Nuevo perfil";
     ["pfNombre","pfPhoneId","pfToken","pfVerify","pfServiceAccount","pfCalendarId"].forEach(id => {
-      const el = document.getElementById(id);
-      el.value = "";
-      el.placeholder = "";
+      document.getElementById(id).value = "";
     });
     document.getElementById("perfilValidacion").style.display = "none";
     document.getElementById("perfilForm").style.display = "block";
@@ -893,29 +898,21 @@
 
   async function editarPerfil(id) {
     try {
-      const lista = await fetch(`${API}/profiles`, { headers: authH() }).then(r => r.json());
+      const [lista, creds] = await Promise.all([
+        fetch(`${API}/profiles`, { headers: authH() }).then(r => r.json()),
+        fetch(`${API}/profiles/${id}/credentials`, { headers: authH() }).then(r => r.json()),
+      ]);
       const p = lista.find(x => x.id === id);
       if (!p) return showToast("Perfil no encontrado");
 
       document.getElementById("perfilEditId").value = id;
       document.getElementById("perfilFormTitulo").textContent = `Editar "${p.nombre}"`;
       document.getElementById("pfNombre").value = p.nombre;
-      document.getElementById("pfNombre").placeholder = "";
-
-      // Los valores reales nunca viajan al navegador: si el campo ya está
-      // configurado se muestra el placeholder y solo se manda si lo reescriben.
-      const mapa = {
-        pfPhoneId:        "whatsapp_phone_number_id",
-        pfToken:          "whatsapp_token",
-        pfVerify:         "whatsapp_verify_token",
-        pfServiceAccount: "google_service_account_json",
-        pfCalendarId:     "calendar_id",
-      };
-      for (const [elId, campo] of Object.entries(mapa)) {
-        const el = document.getElementById(elId);
-        el.value = "";
-        el.placeholder = p.configurado?.[campo] ? PLACEHOLDER_SECRETO : "";
-      }
+      document.getElementById("pfPhoneId").value = creds.whatsapp_phone_number_id;
+      document.getElementById("pfToken").value = creds.whatsapp_token;
+      document.getElementById("pfVerify").value = creds.whatsapp_verify_token;
+      document.getElementById("pfServiceAccount").value = creds.google_service_account_json;
+      document.getElementById("pfCalendarId").value = creds.calendar_id;
       document.getElementById("perfilValidacion").style.display = "none";
       document.getElementById("perfilForm").style.display = "block";
     } catch (e) { showToast("Error cargando el perfil"); }
@@ -923,6 +920,20 @@
 
   function cerrarPerfilForm() {
     document.getElementById("perfilForm").style.display = "none";
+  }
+
+  async function validarPerfilEnLista(id) {
+    const btn = document.getElementById(`btnVal_${id}`);
+    if (btn) { btn.disabled = true; btn.textContent = "..."; }
+    try {
+      const r = await fetch(`${API}/profiles/${id}/validate`, { method: "POST", headers: authH() }).then(x => x.json());
+      localStorage.setItem(`perfil_val_${id}`, JSON.stringify({ wok: !!r.whatsapp?.ok, cok: !!r.calendar?.ok, ts: Date.now() }));
+      await cargarPerfiles();
+      showToast(r.whatsapp?.ok && r.calendar?.ok ? "Conexiones OK" : "Error en credenciales");
+    } catch (e) {
+      showToast("Error validando");
+      if (btn) { btn.disabled = false; btn.textContent = "Validar"; }
+    }
   }
 
   function pintarValidacion(r) {
@@ -971,6 +982,7 @@
           return;
         }
         pintarValidacion(data);
+        localStorage.setItem(`perfil_val_${id}`, JSON.stringify({ wok: !!data.whatsapp?.ok, cok: !!data.calendar?.ok, ts: Date.now() }));
         showToast("Perfil actualizado");
       } else {
         // Alta: primero validamos para poder mostrar el detalle por credencial
@@ -990,6 +1002,9 @@
           if (data.whatsapp || data.calendar) pintarValidacion(data);
           else showToast(data.error || "No se pudo crear el perfil");
           return;
+        }
+        if (data.perfil?.id) {
+          localStorage.setItem(`perfil_val_${data.perfil.id}`, JSON.stringify({ wok: !!val.whatsapp?.ok, cok: !!val.calendar?.ok, ts: Date.now() }));
         }
         showToast("Perfil creado");
       }
