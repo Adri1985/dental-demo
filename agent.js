@@ -18,7 +18,8 @@ function buildHorariosText(cfg = {}) {
 function buildPracticasText(practicas) {
   const lista = practicas && practicas.length > 0 ? practicas : config.practicas;
   return lista.map(p => {
-    let texto = `- ${p.nombre}: ${p.duracion_min || p.duracion} minutos`;
+    const precio = parseInt(p.precio) || 50;
+    let texto = `- ${p.nombre}: ${p.duracion_min || p.duracion} min, $${precio.toLocaleString("es-AR")}`;
     if (p.requiere) texto += `\n  → REQUIERE: ${Array.isArray(p.requiere) ? p.requiere.join(", ") : p.requiere}`;
     return texto;
   }).join("\n");
@@ -29,29 +30,26 @@ function esVerdadero(v) {
   return v === true || v === 1 || v === "true" || v === "t" || v === "1";
 }
 
-function buildCoberturasText(coberturas, precio_num) {
+function buildCoberturasText(coberturas) {
   if (!coberturas || coberturas.length === 0) {
-    return "- No hay convenios cargados. Todos los pacientes abonan el valor estándar.";
+    return "- No hay convenios cargados. Todos los pacientes abonan el valor estándar de cada práctica.";
   }
   return coberturas.map(c => {
     const pct = parseInt(c.descuento_pct) || 0;
-    if (pct <= 0) return `- ${c.obra_social}: sin descuento, abona $${precio_num.toLocaleString("es-AR")}`;
-    const final = Math.round(precio_num * (1 - pct / 100));
+    if (pct <= 0) return `- ${c.obra_social}: sin descuento, abona el precio estándar de cada práctica`;
     const alcance = esVerdadero(c.primera_consulta_only)
       ? "SOLO en la primera consulta (si ya es paciente del consultorio, abona el valor estándar)"
       : "SIEMPRE, en todas sus consultas (da igual si es paciente nuevo o ya viene hace años)";
-    return `- ${c.obra_social}: ${pct}% de descuento, abona $${final.toLocaleString("es-AR")} — aplica ${alcance}`;
+    return `- ${c.obra_social}: ${pct}% de descuento sobre el precio de la práctica — aplica ${alcance}`;
   }).join("\n");
 }
 
 function buildKnowledgeBase(cfg = {}, practicas = [], coberturas = []) {
-  const precio_num = parseInt(cfg.precio_consulta) || config.precio_consulta || 0;
-  const precio = precio_num.toLocaleString("es-AR");
   const pol = config.politica;
 
   // Flujos desde DB o fallback hardcoded
   const flujoNuevo = cfg.flujo_paciente_nuevo ||
-    `1. Saludar de forma breve\n2. Pedir: nombre completo, DNI y obra social (de a uno, nunca todos juntos)\n3. Informar el valor de la consulta ($${precio})\n4. Si acepta, buscar disponibilidad y asignar turno\n5. Confirmar el turno con todos los datos`;
+    `1. Saludar de forma breve\n2. Pedir: nombre completo, DNI y obra social (de a uno, nunca todos juntos)\n3. Informar el valor de la práctica que necesita\n4. Si acepta, buscar disponibilidad y asignar turno\n5. Confirmar el turno con todos los datos`;
 
   const flujoExistente = cfg.flujo_paciente_existente ||
     `1. Saludar por su nombre (ya lo tenés guardado)\n2. Preguntar qué necesita\n3. Buscar disponibilidad y asignar turno\n4. Confirmar`;
@@ -77,17 +75,15 @@ ${bienvenida}
 PROFESIONALES Y HORARIOS:
 ${buildHorariosText(cfg)}
 
-VALOR DE CONSULTA:
-- Consulta estándar (particular, sin convenio): $${precio} pesos
-- Tras informar el valor, preguntar si está de acuerdo para continuar con el turno
-
 DESCUENTOS POR OBRA SOCIAL:
-${buildCoberturasText(coberturas, precio_num)}
+${buildCoberturasText(coberturas)}
 
 CÓMO APLICAR LOS DESCUENTOS — MUY IMPORTANTE:
-- Si ya sabés la obra social del paciente, informale directamente el monto final con el descuento ya aplicado. No le muestres la cuenta ni el porcentaje, decile el número que tiene que pagar.
+- Cada práctica tiene su propio precio (lo ves en la sección PRÁCTICAS). Ese es el valor estándar (sin descuento).
+- Si el paciente tiene una obra social con convenio, calculá el precio final aplicando el porcentaje de descuento al precio de la práctica que va a hacer.
+- Informale directamente el monto final ya calculado. No le muestres la cuenta ni el porcentaje, decile el número que tiene que pagar.
 - Si el paciente pregunta el precio y todavía no sabés su obra social, preguntale cuál tiene antes de darle un valor.
-- Si su obra social NO figura en la lista de arriba, abona el valor estándar de $${precio}. Nunca inventes descuentos ni prometas convenios que no estén en la lista.
+- Si su obra social NO figura en la lista de arriba, abona el valor estándar de la práctica. Nunca inventes descuentos ni prometas convenios que no estén en la lista.
 - Cada convenio aclara su alcance y tenés que respetarlo tal cual: los que dicen "aplica SIEMPRE" valen en todas las consultas del paciente, sea nuevo o ya existente, y NUNCA los presentes como limitados a la primera consulta. Los que dicen "aplica SOLO en la primera consulta" valen únicamente si el paciente es nuevo.
 - No agregues condiciones, plazos ni límites que el convenio no diga.
 - Nunca negocies el precio ni ofrezcas descuentos adicionales por tu cuenta.
