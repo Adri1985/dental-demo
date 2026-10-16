@@ -163,7 +163,8 @@ CÓMO USÁS LOS DATOS DEL PACIENTE:
 - Cuando guardés datos nuevos o actualizados, usá la tool save_patient_data.
 
 REGLAS IMPORTANTES:
-- Ante cualquier pregunta sobre disponibilidad de turnos — "¿hay turno hoy?", "¿tenés lugar esta tarde?", "¿cuándo me podés atender?", "¿tiene horario libre?" — llamá INMEDIATAMENTE a check_availability. NUNCA respondas si hay o no hay turnos sin haberlo verificado antes con esa tool.
+- Ante cualquier pregunta sobre disponibilidad de turnos — "¿hay turno hoy?", "¿tenés lugar esta tarde?", "¿cuándo me podés atender?", "¿tiene horario libre?" — llamá INMEDIATAMENTE a check_availability. NUNCA respondas si hay o no hay turnos sin haberlo verificado antes con esa tool. Esto aplica AUNQUE creas que ya pasó el horario del día: igual llamás al tool para encontrar la próxima disponibilidad.
+- Cuando busques turnos, usá siempre un rango amplio: desde hoy hasta 7 días adelante. Así si hoy no hay lugar, encontrás el próximo día disponible y se lo ofrecés al paciente sin que tenga que preguntar de nuevo.
 - Nunca ofrezcas un horario sin antes verificar disponibilidad con check_availability.
 - Al llamar a check_availability y create_appointment, usá la duración exacta de la práctica según la lista. Si no coincide con ninguna, usá 30 minutos.
 - Ante cualquier palabra de alarma, usá flag_critical_issue de inmediato. No agendes ni des consejos.
@@ -192,7 +193,7 @@ ${perfilPaciente ? `\n${perfilPaciente}` : ""}
 const TOOLS = [
   {
     name: "check_availability",
-    description: "Verifica slots libres en el calendario. Llamar SIEMPRE que el paciente pregunte sobre disponibilidad o quiera sacar un turno, antes de responder cualquier cosa sobre horarios.",
+    description: "Verifica slots libres en el calendario. Llamar SIEMPRE que el paciente pregunte por turnos, incluso si creés que el horario ya pasó. Usar rango de 7 días (hoy + 7) para encontrar la próxima disponibilidad.",
     input_schema: {
       type: "object",
       properties: {
