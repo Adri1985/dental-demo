@@ -71,6 +71,8 @@
     .msg-time { font-size: 10px; color: #8696a0; margin-top: 3px; text-align: right; }
     .manual-badge { background:#f59e0b; color:#0b141a; font-size:9px; padding:1px 5px; border-radius:6px; margin-left:4px; font-weight:700; letter-spacing:0.3px; vertical-align:middle; }
     .msg-sender { font-size:10px; color:#f59e0b; font-weight:600; margin-bottom:2px; padding-left:2px; }
+    .msg-inner { max-width:70%; display:flex; flex-direction:column; }
+    .msg-inner .msg-bubble { max-width:100%; }
     .human-banner { background:#f59e0b18; border-top:2px solid #f59e0b; padding:7px 14px; font-size:12px; color:#f59e0b; display:flex; align-items:center; gap:6px; flex-shrink:0; }
     .manual-input-area { padding:8px 12px; border-top:1px solid #2a3942; display:flex; gap:8px; align-items:flex-end; flex-shrink:0; }
     .manual-input-area textarea { flex:1; background:#2a3942; border:1px solid #3a4952; border-radius:8px; padding:8px 10px; color:#e9edef; font-size:13px; outline:none; resize:none; font-family:inherit; max-height:120px; line-height:1.4; }
@@ -655,8 +657,10 @@
         const div = document.createElement("div");
         div.className = `msg-wrap ${msg.role}`;
         const manualTag = msg.es_manual ? ` <span class="manual-badge">Manual</span>` : "";
-        const senderLabel = msg.es_manual && msg.sent_by ? `<div class="msg-sender">${escHtml(msg.sent_by)}</div>` : "";
-        div.innerHTML = `<div>${senderLabel}<div class="msg-bubble">${escHtml(msg.text)}<div class="msg-time">${fmtTime(msg.ts)}${manualTag}</div></div></div>`;
+        const bubble = `<div class="msg-bubble">${escHtml(msg.text)}<div class="msg-time">${fmtTime(msg.ts)}${manualTag}</div></div>`;
+        div.innerHTML = msg.es_manual && msg.sent_by
+          ? `<div class="msg-inner"><div class="msg-sender">${escHtml(msg.sent_by)}</div>${bubble}</div>`
+          : bubble;
         fragment.appendChild(div);
       });
       const wasAtBottom = area.scrollHeight - area.scrollTop - area.clientHeight < 50;
@@ -672,8 +676,11 @@
       const d = msg.ts ? new Date(msg.ts).toLocaleDateString("es-AR") : null;
       if (d && d !== lastDate) { html += `<div class="date-sep"><span>${d}</span></div>`; lastDate = d; }
       const manualTag = msg.es_manual ? ` <span class="manual-badge">Manual</span>` : "";
-      const senderLabel = msg.es_manual && msg.sent_by ? `<div class="msg-sender">${escHtml(msg.sent_by)}</div>` : "";
-      html += `<div class="msg-wrap ${msg.role}"><div>${senderLabel}<div class="msg-bubble">${escHtml(msg.text)}<div class="msg-time">${fmtTime(msg.ts)}${manualTag}</div></div></div></div>`;
+      const bubble = `<div class="msg-bubble">${escHtml(msg.text)}<div class="msg-time">${fmtTime(msg.ts)}${manualTag}</div></div>`;
+      const inner = msg.es_manual && msg.sent_by
+        ? `<div class="msg-inner"><div class="msg-sender">${escHtml(msg.sent_by)}</div>${bubble}</div>`
+        : bubble;
+      html += `<div class="msg-wrap ${msg.role}">${inner}</div>`;
     });
     return html;
   }
@@ -702,7 +709,10 @@
         const senderName = me?.nombre || me?.email || "";
         const div = document.createElement("div");
         div.className = "msg-wrap assistant";
-        div.innerHTML = `<div>${senderName ? `<div class="msg-sender">${escHtml(senderName)}</div>` : ""}<div class="msg-bubble">${escHtml(mensaje)}<div class="msg-time">${fmtTime(r.ts)} <span class="manual-badge">Manual</span></div></div></div>`;
+        const bubble = `<div class="msg-bubble">${escHtml(mensaje)}<div class="msg-time">${fmtTime(r.ts)} <span class="manual-badge">Manual</span></div></div>`;
+        div.innerHTML = senderName
+          ? `<div class="msg-inner"><div class="msg-sender">${escHtml(senderName)}</div>${bubble}</div>`
+          : bubble;
         area.appendChild(div);
         area.scrollTop = area.scrollHeight;
       }
