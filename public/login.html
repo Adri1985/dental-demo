@@ -42,6 +42,12 @@
   <div class="footer">No tenés cuenta? <a class="link" href="/register.html">Registrarse</a></div>
 </div>
 <script>
+  // Si la DB está vacía, redirigir al registro directamente
+  fetch("/auth/needs-setup")
+    .then(r => r.json())
+    .then(d => { if (d.needsSetup) window.location.href = "/register.html"; })
+    .catch(() => {});
+
   // Si ya hay sesión válida, redirigir
   const t = localStorage.getItem("auth_token");
   if (t) {

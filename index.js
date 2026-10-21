@@ -318,6 +318,16 @@ async function runAgent(userMessage, telefono, consultorio_id = DEFAULT_CONSULTO
 // ─────────────────────────────────────────────
 //  AUTH ENDPOINTS
 // ─────────────────────────────────────────────
+app.get("/auth/needs-setup", async (req, res) => {
+  try {
+    if (!db.pool) return res.json({ needsSetup: true });
+    const { rows } = await db.pool.query("SELECT COUNT(*) FROM users");
+    res.json({ needsSetup: parseInt(rows[0].count) === 0 });
+  } catch {
+    res.json({ needsSetup: false });
+  }
+});
+
 app.post("/auth/register", async (req, res) => {
   try {
     const { email, password, nombre } = req.body;

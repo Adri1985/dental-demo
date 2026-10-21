@@ -780,4 +780,6 @@ module.exports = {
   createProfile, updateProfile, activateProfile, deleteProfile,
   // cifrado
   encrypt, decrypt,
+  // acceso directo al pool para queries puntuales
+  pool,
 };
