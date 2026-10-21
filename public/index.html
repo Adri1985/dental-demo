@@ -4,6 +4,24 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>Consultorio Demo — Mía</title>
+  <script>
+    (async () => {
+      const t = localStorage.getItem("auth_token");
+      if (t) {
+        try {
+          const d = await fetch("/auth/me", { headers: { Authorization: `Bearer ${t}` } }).then(r => r.json());
+          if (d.user) { window.location.replace(d.user.consultorio_id ? "/admin.html" : "/setup.html"); return; }
+        } catch {}
+        localStorage.removeItem("auth_token");
+      }
+      try {
+        const d = await fetch("/auth/needs-setup").then(r => r.json());
+        window.location.replace(d.needsSetup ? "/register.html" : "/login.html");
+      } catch {
+        window.location.replace("/login.html");
+      }
+    })();
+  </script>
   <style>
     * { box-sizing: border-box; margin: 0; padding: 0; }
 

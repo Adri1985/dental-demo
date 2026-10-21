@@ -509,8 +509,12 @@
   let selectedTel = null, patients = [];
   let userScrolling = false, scrollTimer = null;
 
-  // Auth guard
-  if (!authToken) { window.location.href = "/login.html"; }
+  // Auth guard: si no hay token, verifica si la DB está vacía para ir a register o login
+  if (!authToken) {
+    fetch("/auth/needs-setup").then(r => r.json())
+      .then(d => window.location.replace(d.needsSetup ? "/register.html" : "/login.html"))
+      .catch(() => window.location.replace("/login.html"));
+  }
 
   function authH() { return { "Authorization": `Bearer ${authToken}`, "Content-Type": "application/json" }; }
   function logout() { localStorage.removeItem("auth_token"); localStorage.removeItem("auth_user"); window.location.href = "/login.html"; }
