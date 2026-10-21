@@ -513,6 +513,24 @@ app.get("/patients/:telefono/messages", authMiddleware, async (req, res) => { re
 app.post("/admin/pause/:telefono",      authMiddleware, async (req, res) => { await db.setPatientMode(req.params.telefono, "humano"); res.json({ ok: true }); });
 app.post("/admin/resume/:telefono",     authMiddleware, async (req, res) => { await db.setPatientMode(req.params.telefono, "bot"); await db.clearClaudeHistory(req.params.telefono); res.json({ ok: true }); });
 
+app.post("/admin/send/:telefono", authMiddleware, async (req, res) => {
+  try {
+    const { telefono } = req.params;
+    const { mensaje } = req.body;
+    if (!mensaje || !mensaje.trim()) return res.status(400).json({ ok: false, error: "Mensaje vacío" });
+    const patient = await db.getPatient(telefono);
+    if (!patient) return res.status(404).json({ ok: false, error: "Paciente no encontrado" });
+    const perfil = await db.getActiveProfile(consultorioDe(req));
+    await sendWhatsAppMessage(telefono, mensaje.trim(), perfil);
+    const ts = new Date().toISOString();
+    await db.addMessage(telefono, "assistant", mensaje.trim(), ts, true);
+    res.json({ ok: true, ts });
+  } catch (err) {
+    console.error("[POST /admin/send]", err.message);
+    res.status(500).json({ ok: false, error: "Error interno" });
+  }
+});
+
 // Config
 app.get("/config",  authMiddleware, async (req, res) => { res.json(await db.getConfig()); });
 app.patch("/config", authMiddleware, async (req, res) => {
