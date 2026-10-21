@@ -532,8 +532,10 @@ app.post("/admin/send/:telefono", authMiddleware, async (req, res) => {
     if (!patient) return res.status(404).json({ ok: false, error: "Paciente no encontrado" });
     const perfil = await db.getActiveProfile(consultorioDe(req));
     await sendWhatsAppMessage(telefono, mensaje.trim(), perfil);
+    const sender = await db.getUserByEmail(req.user.email);
+    const sent_by = sender?.nombre || sender?.email || req.user.email;
     const ts = new Date().toISOString();
-    await db.addMessage(telefono, "assistant", mensaje.trim(), ts, true);
+    await db.addMessage(telefono, "assistant", mensaje.trim(), ts, true, sent_by);
     res.json({ ok: true, ts });
   } catch (err) {
     console.error("[POST /admin/send]", err.message);

@@ -223,7 +223,8 @@ async function initDB() {
 
   await pool.query(`
     ALTER TABLE messages ADD COLUMN IF NOT EXISTS es_manual BOOLEAN DEFAULT false;
-  `).catch(e => console.log("[db] migracion messages es_manual:", e.message));
+    ALTER TABLE messages ADD COLUMN IF NOT EXISTS sent_by   TEXT;
+  `).catch(e => console.log("[db] migracion messages es_manual/sent_by:", e.message));
 
   await migrarEnvAPerfil().catch(e => console.log("[migration] error:", e.message));
 
@@ -451,21 +452,21 @@ async function getAllPatients(consultorio_id) {
 //  MESSAGES
 // ─────────────────────────────────────────────
 
-async function addMessage(telefono, role, text, ts, es_manual = false) {
+async function addMessage(telefono, role, text, ts, es_manual = false, sent_by = null) {
   if (!USE_DB) {
     if (!store.messages[telefono]) store.messages[telefono] = [];
-    store.messages[telefono].push({ role, text, ts: ts || new Date().toISOString(), es_manual });
+    store.messages[telefono].push({ role, text, ts: ts || new Date().toISOString(), es_manual, sent_by });
     return;
   }
   await pool.query(
-    "INSERT INTO messages (telefono, role, text, ts, es_manual) VALUES ($1, $2, $3, $4, $5)",
-    [telefono, role, text, ts || new Date().toISOString(), es_manual]
+    "INSERT INTO messages (telefono, role, text, ts, es_manual, sent_by) VALUES ($1, $2, $3, $4, $5, $6)",
+    [telefono, role, text, ts || new Date().toISOString(), es_manual, sent_by]
   );
 }
 
 async function getMessages(telefono) {
   if (!USE_DB) return store.messages[telefono] || [];
-  const { rows } = await pool.query("SELECT role, text, ts, es_manual FROM messages WHERE telefono = $1 ORDER BY id ASC", [telefono]);
+  const { rows } = await pool.query("SELECT role, text, ts, es_manual, sent_by FROM messages WHERE telefono = $1 ORDER BY id ASC", [telefono]);
   return rows;
 }
 
