@@ -143,7 +143,9 @@ function authMiddleware(req, res, next) {
 //  WHATSAPP — enviar mensaje
 // ─────────────────────────────────────────────
 function normalizarParaEnvioAR(numero) {
-  if (numero && numero.startsWith("549") && numero.length === 13) return "54" + numero.slice(3);
+  // Cloud API v19+: enviar el número tal cual viene del webhook.
+  // La normalización vieja (quitar el 9 de 5491xx→5411xx) era para la API
+  // On-Premises y causa que los mensajes no lleguen con la Cloud API.
   return numero;
 }
 
