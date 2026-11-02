@@ -148,15 +148,22 @@ function normalizarParaEnvioAR(numero) {
 }
 
 async function sendWhatsAppMessage(to, text, perfil = null) {
+  const fuentePerfil = perfil ? "parámetro" : "getPerfilActivo()";
   const p       = perfil || await getPerfilActivo();
   const token   = p?.whatsapp_token           || process.env.WHATSAPP_TOKEN;
   const phoneId = p?.whatsapp_phone_number_id || process.env.WHATSAPP_PHONE_NUMBER_ID;
+
+  console.log(`[wa-send] perfil fuente: ${fuentePerfil} | perfilId: ${p?.id ?? "ninguno"} | perfilActivo: ${p?.activo ?? "-"}`);
+  console.log(`[wa-send] phoneId: ${phoneId ? phoneId.slice(0,6)+"…" : "VACÍO"} | token: ${token ? token.slice(0,8)+"…"+token.slice(-4) : "VACÍO"}`);
+
   if (!token || !phoneId) {
     console.error("[wa-send] no hay credenciales de WhatsApp: ni perfil activo ni env vars. Mensaje no enviado.");
     return;
   }
   const destinatario = normalizarParaEnvioAR(to);
-  if (destinatario !== to) console.log(`[wa-send] normalizado AR: ${to} -> ${destinatario}`);
+  console.log(`[wa-send] destinatario: ${to}${destinatario !== to ? " → normalizado: "+destinatario : " (sin cambios)"}`);
+  console.log(`[wa-send] enviando a https://graph.facebook.com/v19.0/${phoneId.slice(0,6)}…/messages`);
+
   const resp = await fetch(`https://graph.facebook.com/v19.0/${phoneId}/messages`, {
     method: "POST",
     headers: { "Authorization": `Bearer ${token}`, "Content-Type": "application/json" },
@@ -164,7 +171,7 @@ async function sendWhatsAppMessage(to, text, perfil = null) {
   });
   const body = await resp.text();
   if (!resp.ok) console.error(`[wa-send] Meta respondió ${resp.status}:`, body);
-  else console.log("[wa-send] OK:", body);
+  else console.log(`[wa-send] OK (${resp.status}):`, body.slice(0, 200));
 }
 
 // ─────────────────────────────────────────────
