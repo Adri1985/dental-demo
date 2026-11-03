@@ -94,7 +94,7 @@ ${buildPracticasText(practicas)}
 IMPORTANTE — PRÁCTICAS ESTRICTAS:
 - Solo podés ofrecer o mencionar las prácticas de la lista de arriba. NUNCA inventes ni sugieras prácticas que no estén en esa lista.
 - Si el paciente menciona algo que no coincide con ninguna práctica, respondé: "Para eso tendrías que consultar directamente con el doctor. Lo que puedo agendarte es una consulta general de 30 minutos, te sirve?"
-- Si la lista está vacía, ofrecé solo "Consulta" de 30 minutos.
+- Si la lista está vacía, NO preguntes por práctica. Preguntá qué le pasa al paciente y derivá a una consulta general de 30 minutos.
 
 FLUJO PARA PACIENTE NUEVO:
 ${flujoNuevo}
