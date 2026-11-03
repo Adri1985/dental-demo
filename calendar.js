@@ -319,6 +319,49 @@ async function createAppointment({ paciente_nombre, paciente_telefono, paciente_
 }
 
 /**
+ * Lista todos los eventos de un día específico.
+ * Parsea la descripción para devolver datos del paciente.
+ */
+async function getAppointmentsByDay(fecha, creds) {
+  const { sa, calendarId: CALENDAR_ID } = resolverCreds(creds);
+  const auth = getAuthClient(sa);
+  const calendar = google.calendar({ version: "v3", auth });
+
+  const inicio = new Date(`${fecha}T00:00:00-03:00`);
+  const fin    = new Date(`${fecha}T23:59:59-03:00`);
+
+  const { data } = await calendar.events.list({
+    calendarId: CALENDAR_ID,
+    timeMin: inicio.toISOString(),
+    timeMax: fin.toISOString(),
+    singleEvents: true,
+    orderBy: "startTime",
+  });
+
+  const extraer = (desc, campo) => {
+    const m = desc.match(new RegExp(`${campo}: (.+)`));
+    return m ? m[1].trim() : null;
+  };
+
+  return (data.items || [])
+    .filter(ev => ev.status !== "cancelled")
+    .map(ev => {
+      const desc = ev.description || "";
+      const start = new Date(ev.start.dateTime || ev.start.date);
+      return {
+        id:        ev.id,
+        summary:   ev.summary || "",
+        hora:      start.toLocaleTimeString("es-AR", { hour: "2-digit", minute: "2-digit", timeZone: "America/Argentina/Buenos_Aires" }),
+        inicio:    ev.start.dateTime || ev.start.date,
+        nombre:    extraer(desc, "Paciente") || ev.summary,
+        telefono:  extraer(desc, "Teléfono"),
+        dni:       extraer(desc, "DNI"),
+        practica:  extraer(desc, "Práctica") || ev.summary,
+      };
+    });
+}
+
+/**
  * Cancela un evento por ID.
  */
 async function cancelAppointment({ event_id, creds }) {
@@ -335,4 +378,5 @@ module.exports = {
   cancelAppointment,
   findPatientByIdentifier,
   getPatientAppointments,
+  getAppointmentsByDay,
 };

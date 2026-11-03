@@ -155,6 +155,31 @@
     .cfg-tab:hover { color: #e9edef; }
     .toast { position: fixed; bottom: 24px; left: 50%; transform: translateX(-50%); background: #2a3942; color: #e9edef; font-size: 13px; padding: 10px 20px; border-radius: 20px; opacity: 0; transition: opacity 0.3s; pointer-events: none; z-index: 999; }
     .toast.show { opacity: 1; }
+
+    /* ── Vista Turnos ── */
+    .turnos-panel { display: none; flex: 1; flex-direction: column; overflow: hidden; background: #0b141a; }
+    .turnos-panel.visible { display: flex; }
+    .turnos-toolbar { padding: 14px 20px; background: #202c33; border-bottom: 1px solid #2a3942; display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+    .turnos-fecha-btn { background: #2a3942; border: none; color: #e9edef; border-radius: 20px; padding: 6px 14px; font-size: 13px; cursor: pointer; }
+    .turnos-fecha-btn.active { background: #00a884; color: white; }
+    .turnos-fecha-btn:hover:not(.active) { background: #3a4952; }
+    .turnos-date-input { background: #2a3942; border: 1px solid #3a4952; color: #e9edef; border-radius: 20px; padding: 5px 12px; font-size: 13px; outline: none; cursor: pointer; }
+    .turnos-date-input:focus { border-color: #00a884; }
+    .turnos-body { flex: 1; overflow-y: auto; padding: 20px; }
+    .turno-card { background: #202c33; border-radius: 12px; padding: 14px 16px; margin-bottom: 10px; display: flex; align-items: center; gap: 14px; border: 1px solid #2a3942; }
+    .turno-hora { font-size: 20px; font-weight: 700; color: #00a884; min-width: 54px; text-align: center; }
+    .turno-info { flex: 1; min-width: 0; }
+    .turno-nombre { font-size: 15px; font-weight: 600; color: #e9edef; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    .turno-practica { font-size: 12px; color: #8696a0; margin-top: 2px; }
+    .turno-tel { font-size: 11px; color: #8696a0; margin-top: 2px; }
+    .turno-actions { display: flex; gap: 6px; flex-shrink: 0; }
+    .btn-recordatorio { background: #00a884; border: none; color: white; border-radius: 20px; padding: 7px 14px; font-size: 12px; font-weight: 600; cursor: pointer; white-space: nowrap; }
+    .btn-recordatorio:hover { background: #00c99d; }
+    .btn-recordatorio:disabled { background: #2a3942; color: #8696a0; cursor: default; }
+    .turnos-empty { text-align: center; color: #8696a0; padding: 60px 20px; font-size: 14px; }
+    .nav-view-btn { background: none; border: 1px solid #3a4952; color: #8696a0; border-radius: 20px; padding: 5px 12px; font-size: 12px; font-weight: 600; cursor: pointer; }
+    .nav-view-btn.active { background: #00a884; border-color: #00a884; color: white; }
+    .nav-view-btn:hover:not(.active) { border-color: #8696a0; color: #e9edef; }
     .fab { position: fixed; bottom: 24px; right: 24px; background: #00a884; color: white; border: none; border-radius: 50px; padding: 14px 20px; font-size: 14px; font-weight: 600; cursor: pointer; box-shadow: 0 4px 16px rgba(0,0,0,0.4); z-index: 50; }
     .fab:hover { background: #00c99d; }
     @media (max-width: 640px) {
@@ -186,11 +211,15 @@
   </div>
   <div class="header-right">
     <div class="live-badge">EN VIVO</div>
+    <button class="nav-view-btn active" id="btnViewChats" onclick="setView('chats')">💬 Chats</button>
+    <button class="nav-view-btn" id="btnViewTurnos" onclick="setView('turnos')">📅 Turnos</button>
     <button class="btn btn-sm" onclick="abrirConfig()">⚙ Config</button>
     <button class="btn btn-sm btn-danger" onclick="logout()">Salir</button>
     <button class="menu-btn" onclick="toggleMenu()">⋮</button>
   </div>
   <div class="dropdown-menu" id="dropdownMenu">
+    <button class="dropdown-item" onclick="closeMenu();setView('chats')">💬 Chats</button>
+    <button class="dropdown-item" onclick="closeMenu();setView('turnos')">📅 Turnos del día</button>
     <button class="dropdown-item" onclick="closeMenu();abrirConfig()">⚙ Config</button>
     <button class="dropdown-item danger" onclick="closeMenu();logout()">Salir</button>
   </div>
@@ -206,6 +235,20 @@
   </div>
   <div class="convo-panel" id="convoPanel">
     <div class="empty"><div class="empty-icon">💬</div><div class="empty-text">Seleccioná una conversación</div></div>
+  </div>
+
+  <!-- Vista Turnos del día -->
+  <div class="turnos-panel" id="turnosPanel">
+    <div class="turnos-toolbar">
+      <button class="turnos-fecha-btn active" id="tbHoy" onclick="seleccionarFechaTurnos('hoy')">Hoy</button>
+      <button class="turnos-fecha-btn" id="tbManana" onclick="seleccionarFechaTurnos('manana')">Mañana</button>
+      <button class="turnos-fecha-btn" id="tbPasado" onclick="seleccionarFechaTurnos('pasado')">Pasado</button>
+      <input type="date" class="turnos-date-input" id="turnosFechaInput" onchange="seleccionarFechaTurnos('custom')" />
+      <span id="turnosFechaLabel" style="font-size:12px;color:#8696a0;margin-left:4px"></span>
+    </div>
+    <div class="turnos-body" id="turnosBody">
+      <div class="turnos-empty">Cargando turnos...</div>
+    </div>
   </div>
 </div>
 
@@ -1456,6 +1499,105 @@
   loadPatients();
   setInterval(loadPatients, 3000);
   fetch(`${API}/config`, { headers: authH() }).then(r => r.json()).then(cfg => { if (cfg.bot_whatsapp_number) BOT_NUMBER = cfg.bot_whatsapp_number; }).catch(() => {});
+
+  // ── Vista Turnos ─────────────────────────────
+  let turnosFechaActual = fechaHoy();
+
+  function fechaHoy() {
+    return new Date().toLocaleDateString("sv-SE", { timeZone: "America/Argentina/Buenos_Aires" });
+  }
+  function fechaOffset(dias) {
+    const d = new Date();
+    d.setDate(d.getDate() + dias);
+    return d.toLocaleDateString("sv-SE", { timeZone: "America/Argentina/Buenos_Aires" });
+  }
+  function formatFechaLabel(fechaStr) {
+    const [y, m, d] = fechaStr.split("-").map(Number);
+    const hoy = fechaHoy();
+    const man = fechaOffset(1);
+    const pas = fechaOffset(2);
+    if (fechaStr === hoy) return "Hoy, " + new Date(y, m-1, d).toLocaleDateString("es-AR", { weekday: "long", day: "numeric", month: "long" });
+    if (fechaStr === man) return "Mañana, " + new Date(y, m-1, d).toLocaleDateString("es-AR", { weekday: "long", day: "numeric", month: "long" });
+    if (fechaStr === pas) return "Pasado, " + new Date(y, m-1, d).toLocaleDateString("es-AR", { weekday: "long", day: "numeric", month: "long" });
+    return new Date(y, m-1, d).toLocaleDateString("es-AR", { weekday: "long", day: "numeric", month: "long", year: "numeric" });
+  }
+
+  function setView(vista) {
+    const esTurnos = vista === "turnos";
+    document.getElementById("sidebar").style.display   = esTurnos ? "none" : "";
+    document.getElementById("convoPanel").style.display = esTurnos ? "none" : "";
+    document.getElementById("turnosPanel").classList.toggle("visible", esTurnos);
+    document.getElementById("btnViewChats").classList.toggle("active", !esTurnos);
+    document.getElementById("btnViewTurnos").classList.toggle("active", esTurnos);
+    if (esTurnos) cargarTurnos(turnosFechaActual);
+  }
+
+  function seleccionarFechaTurnos(cual) {
+    const hoy = fechaHoy(), man = fechaOffset(1), pas = fechaOffset(2);
+    const mapa = { hoy, manana: man, pasado: pas };
+    let fecha;
+    if (cual === "custom") {
+      fecha = document.getElementById("turnosFechaInput").value;
+      if (!fecha) return;
+    } else {
+      fecha = mapa[cual];
+      document.getElementById("turnosFechaInput").value = fecha;
+    }
+    turnosFechaActual = fecha;
+    ["tbHoy","tbManana","tbPasado"].forEach(id => document.getElementById(id).classList.remove("active"));
+    if (fecha === hoy)  document.getElementById("tbHoy").classList.add("active");
+    if (fecha === man)  document.getElementById("tbManana").classList.add("active");
+    if (fecha === pas)  document.getElementById("tbPasado").classList.add("active");
+    cargarTurnos(fecha);
+  }
+
+  async function cargarTurnos(fecha) {
+    const body = document.getElementById("turnosBody");
+    const label = document.getElementById("turnosFechaLabel");
+    label.textContent = formatFechaLabel(fecha);
+    body.innerHTML = '<div class="turnos-empty">Cargando...</div>';
+    try {
+      const turnos = await fetch(`${API}/appointments/day?fecha=${fecha}`, { headers: authH() }).then(r => r.json());
+      if (!turnos.length) {
+        body.innerHTML = `<div class="turnos-empty">Sin turnos para este día</div>`;
+        return;
+      }
+      body.innerHTML = turnos.map(t => `
+        <div class="turno-card" id="tc_${t.id}">
+          <div class="turno-hora">${t.hora}</div>
+          <div class="turno-info">
+            <div class="turno-nombre">${escHtml(t.nombre || "Sin nombre")}</div>
+            <div class="turno-practica">${escHtml(t.practica || "")}</div>
+            ${t.telefono ? `<div class="turno-tel">📱 ${escHtml(t.telefono)}</div>` : '<div class="turno-tel" style="color:#cc6666">Sin teléfono</div>'}
+          </div>
+          <div class="turno-actions">
+            ${t.telefono
+              ? `<button class="btn-recordatorio" id="btnRec_${t.id}" onclick="enviarRecordatorio('${escHtml(t.id)}','${escHtml(t.telefono)}','${escHtml(t.nombre||"")}','${escHtml(t.hora)}','${escHtml(t.practica||"")}')">Recordatorio</button>`
+              : `<button class="btn-recordatorio" disabled title="Sin teléfono">Sin tel.</button>`
+            }
+          </div>
+        </div>`).join("");
+    } catch (e) {
+      body.innerHTML = `<div class="turnos-empty" style="color:#ff6b6b">Error al cargar turnos. ¿Hay un calendario configurado?</div>`;
+    }
+  }
+
+  async function enviarRecordatorio(id, telefono, nombre, hora, practica) {
+    const btn = document.getElementById(`btnRec_${id}`);
+    if (!btn) return;
+    btn.disabled = true; btn.textContent = "Enviando...";
+    try {
+      const r = await fetch(`${API}/appointments/reminder`, {
+        method: "POST", headers: { ...authH(), "Content-Type": "application/json" },
+        body: JSON.stringify({ telefono, nombre, hora, practica }),
+      }).then(x => x.json());
+      if (r.ok) { btn.textContent = "✓ Enviado"; btn.style.background = "#2a3942"; }
+      else { btn.disabled = false; btn.textContent = "Recordatorio"; showToast("Error: " + (r.error || "no se pudo enviar")); }
+    } catch { btn.disabled = false; btn.textContent = "Recordatorio"; showToast("Error de conexión"); }
+  }
+
+  // Inicializar fecha en el input
+  document.getElementById("turnosFechaInput").value = fechaHoy();
 </script>
 </body>
 </html>

@@ -8,7 +8,7 @@ const crypto   = require("crypto");
 const Anthropic = require("@anthropic-ai/sdk");
 const {
   checkAvailability, createAppointment, cancelAppointment,
-  findPatientByIdentifier, getPatientAppointments,
+  findPatientByIdentifier, getPatientAppointments, getAppointmentsByDay,
 } = require("./calendar");
 const { google } = require("googleapis");
 const { getSystemPrompt, TOOLS, config } = require("./agent");
@@ -552,6 +552,36 @@ app.post("/admin/send/:telefono", authMiddleware, async (req, res) => {
   } catch (err) {
     console.error("[POST /admin/send]", err.message);
     res.status(500).json({ ok: false, error: "Error interno" });
+  }
+});
+
+// ─────────────────────────────────────────────
+//  TURNOS DEL DÍA
+// ─────────────────────────────────────────────
+app.get("/appointments/day", authMiddleware, async (req, res) => {
+  try {
+    const fecha = req.query.fecha || new Date().toLocaleDateString("sv-SE", { timeZone: "America/Argentina/Buenos_Aires" });
+    const perfil = await getPerfilActivo(consultorioDe(req));
+    if (!perfil?.calendar_id) return res.json([]);
+    const turnos = await getAppointmentsByDay(fecha, credsCalendar(perfil));
+    res.json(turnos);
+  } catch (err) {
+    console.error("[GET /appointments/day]", err.message);
+    res.json([]);
+  }
+});
+
+app.post("/appointments/reminder", authMiddleware, async (req, res) => {
+  try {
+    const { telefono, nombre, hora, practica } = req.body;
+    if (!telefono) return res.status(400).json({ ok: false, error: "Falta el teléfono" });
+    const perfil = await getPerfilActivo(consultorioDe(req));
+    const msg = `Hola${nombre ? " " + nombre.split(" ")[0] : ""}! 👋 Te recordamos tu turno de ${practica || "consulta"} hoy a las ${hora}. Por cualquier cambio escribinos. — ${(await db.getConsultorio(consultorioDe(req)))?.nombre || "El consultorio"}`;
+    await sendWhatsAppMessage(telefono, msg, perfil);
+    res.json({ ok: true });
+  } catch (err) {
+    console.error("[POST /appointments/reminder]", err.message);
+    res.status(500).json({ ok: false, error: err.message });
   }
 });
 
