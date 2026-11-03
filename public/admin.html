@@ -472,7 +472,10 @@
           </div>
         </div>
 
-        <div class="section-label-int" style="margin-top:6px">Google Calendar</div>
+        <div class="section-label-int" style="margin-top:6px;display:flex;align-items:center;gap:8px">
+          Google Calendar
+          <button class="btn-field-val" style="font-size:11px;padding:2px 8px" onclick="abrirGuiaCalendar()">¿Cómo configurarlo?</button>
+        </div>
 
         <div class="modal-field">
           <label class="modal-label">Service Account JSON<span class="hint-wrap"><i class="hint-ico" onclick="toggleHint(event, this)">i</i><span class="hint-pop">En Google Cloud Console → IAM → Cuentas de servicio, creá una cuenta, generá una clave JSON y pegá el contenido completo acá. Luego compartí tu Google Calendar con el email de la cuenta de servicio dándole permisos de edición.</span></span></label>
@@ -500,6 +503,55 @@
       </div>
     </div>
 
+  </div>
+</div>
+
+<!-- Modal guía Google Calendar -->
+<div class="modal-overlay" id="guiaCalendarOverlay" onclick="if(event.target===this)cerrarGuiaCalendar()">
+  <div class="modal" style="width:520px;max-width:96vw;max-height:88vh;overflow-y:auto;gap:0">
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px">
+      <div class="modal-title">Configurar Google Calendar</div>
+      <button onclick="cerrarGuiaCalendar()" style="background:none;border:none;color:#8696a0;font-size:20px;cursor:pointer;line-height:1">×</button>
+    </div>
+    <div style="font-size:13px;color:#8696a0;line-height:1.6">
+
+      <div style="background:#111b21;border-radius:8px;padding:12px 14px;margin-bottom:14px;border-left:3px solid #00a884">
+        Mía accede al calendario a través de una <strong style="color:#e9edef">cuenta de servicio</strong> de Google Cloud. No importa con qué cuenta de Gmail tengas el calendario — solo necesitás compartirlo con esa cuenta de servicio.
+      </div>
+
+      <div style="color:#e9edef;font-weight:600;margin-bottom:6px">Paso 1 — Crear la cuenta de servicio</div>
+      <ol style="padding-left:18px;margin-bottom:14px;display:flex;flex-direction:column;gap:5px">
+        <li>Ir a <a href="https://console.cloud.google.com" target="_blank" style="color:#00a884">console.cloud.google.com</a> e iniciar sesión con la misma cuenta de Gmail que tiene el calendario (o cualquier cuenta de Google — la cuenta de servicio puede ser de cualquier proyecto)</li>
+        <li>En el menú superior, seleccioná o creá un proyecto</li>
+        <li>Ir a <strong style="color:#e9edef">IAM y administración → Cuentas de servicio</strong></li>
+        <li>Clic en <strong style="color:#e9edef">"Crear cuenta de servicio"</strong>, poné cualquier nombre (ej: <code style="background:#2a3942;padding:1px 5px;border-radius:4px">mia-calendar</code>) y hacé clic en Continuar dos veces (no hace falta asignar roles)</li>
+        <li>Clic en la cuenta creada → pestaña <strong style="color:#e9edef">"Claves"</strong> → <strong style="color:#e9edef">"Agregar clave" → "Crear clave nueva" → JSON</strong></li>
+        <li>Se descarga un archivo <code style="background:#2a3942;padding:1px 5px;border-radius:4px">.json</code> — abrilo con un editor de texto, copiá todo el contenido y pegalo en el campo <strong style="color:#e9edef">Service Account JSON</strong></li>
+      </ol>
+
+      <div style="color:#e9edef;font-weight:600;margin-bottom:6px">Paso 2 — Compartir el calendario con la cuenta de servicio</div>
+      <ol style="padding-left:18px;margin-bottom:14px;display:flex;flex-direction:column;gap:5px">
+        <li>Abrí <strong style="color:#e9edef">Google Calendar</strong> con la cuenta que tiene el calendario (puede ser diferente a la del paso anterior)</li>
+        <li>Pasás el mouse sobre el calendario → tres puntos → <strong style="color:#e9edef">"Configuración y uso compartido"</strong></li>
+        <li>Bajás hasta <strong style="color:#e9edef">"Compartir con personas específicas"</strong> → clic en <strong style="color:#e9edef">"+ Agregar personas"</strong></li>
+        <li>Pegás el email de la cuenta de servicio — lo encontrás dentro del JSON que descargaste, en el campo <code style="background:#2a3942;padding:1px 5px;border-radius:4px">"client_email"</code> (tiene formato <code style="background:#2a3942;padding:1px 5px;border-radius:4px">nombre@proyecto.iam.gserviceaccount.com</code>)</li>
+        <li>Permisos: <strong style="color:#e9edef">"Realizar cambios en eventos"</strong> → Enviar</li>
+      </ol>
+
+      <div style="color:#e9edef;font-weight:600;margin-bottom:6px">Paso 3 — Obtener el Calendar ID</div>
+      <ol style="padding-left:18px;margin-bottom:14px;display:flex;flex-direction:column;gap:5px">
+        <li>En Google Calendar, en la misma pantalla de configuración del calendario, bajás hasta <strong style="color:#e9edef">"Integrar calendario"</strong></li>
+        <li>Copiás el <strong style="color:#e9edef">ID del calendario</strong>: tiene formato <code style="background:#2a3942;padding:1px 5px;border-radius:4px">algo@group.calendar.google.com</code> o si es el calendario principal, es tu email de Gmail</li>
+        <li>Pegás ese ID en el campo <strong style="color:#e9edef">Calendar ID</strong> del panel</li>
+      </ol>
+
+      <div style="background:#2a3942;border-radius:8px;padding:10px 12px;font-size:12px">
+        Una vez guardado, usá el botón <strong style="color:#e9edef">"Verificar Google Calendar"</strong> para confirmar que la conexión es correcta antes de guardar.
+      </div>
+    </div>
+    <div class="modal-actions" style="margin-top:16px">
+      <button class="btn btn-cancel" onclick="cerrarGuiaCalendar()">Cerrar</button>
+    </div>
   </div>
 </div>
 
@@ -1106,6 +1158,13 @@
 
   function cerrarPerfilForm() {
     document.getElementById("perfilForm").style.display = "none";
+  }
+
+  function abrirGuiaCalendar() {
+    document.getElementById("guiaCalendarOverlay").classList.add("show");
+  }
+  function cerrarGuiaCalendar() {
+    document.getElementById("guiaCalendarOverlay").classList.remove("show");
   }
 
   async function validarPerfilEnLista(id) {
