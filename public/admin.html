@@ -494,6 +494,18 @@
           <button class="btn-field-val" onclick="validarCampoCalendar()">Verificar Google Calendar</button>
         </div>
 
+        <div class="section-label-int" style="margin-top:14px">Modelo de IA</div>
+
+        <div class="modal-field">
+          <label class="modal-label">Modelo Claude</label>
+          <select class="modal-input" id="pfClaudeModel" style="cursor:pointer">
+            <option value="claude-haiku-4-5">Haiku 4.5 — económico, respuestas rápidas (recomendado)</option>
+            <option value="claude-sonnet-4-5">Sonnet 4.5 — mayor capacidad de razonamiento</option>
+            <option value="claude-sonnet-4-6">Sonnet 4.6 — última versión, más potente</option>
+          </select>
+          <span style="font-size:11px;color:#8696a0;margin-top:3px">Haiku es suficiente para turnos y consultas. Sonnet conviene si el agente falla en casos complejos.</span>
+        </div>
+
         <div id="perfilValidacion" style="display:none;margin-top:10px;padding:9px 11px;background:#111b21;border:1px solid #2a3942;border-radius:8px"></div>
 
         <div class="modal-actions" style="margin-top:10px">
@@ -1125,6 +1137,7 @@
     ["pfNombre","pfPhoneId","pfToken","pfVerify","pfServiceAccount","pfCalendarId"].forEach(id => {
       document.getElementById(id).value = "";
     });
+    document.getElementById("pfClaudeModel").value = "claude-haiku-4-5";
     resetValIndicadores();
     document.getElementById("perfilValidacion").style.display = "none";
     document.getElementById("perfilForm").style.display = "block";
@@ -1147,6 +1160,7 @@
       document.getElementById("pfVerify").value = creds.whatsapp_verify_token;
       document.getElementById("pfServiceAccount").value = creds.google_service_account_json;
       document.getElementById("pfCalendarId").value = creds.calendar_id;
+      document.getElementById("pfClaudeModel").value = creds.claude_model || "claude-haiku-4-5";
       resetValIndicadores();
       // Inicializar los indicadores locales con los valores ya cargados
       validarVerifyLocal();
@@ -1206,7 +1220,7 @@
       google_service_account_json: document.getElementById("pfServiceAccount").value.trim(),
       calendar_id:                 document.getElementById("pfCalendarId").value.trim(),
     };
-    const payload = { nombre };
+    const payload = { nombre, claude_model: document.getElementById("pfClaudeModel").value };
     for (const [k, v] of Object.entries(campos)) {
       if (!id || v) payload[k] = v;
     }

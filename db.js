@@ -226,6 +226,10 @@ async function initDB() {
     ALTER TABLE messages ADD COLUMN IF NOT EXISTS sent_by   TEXT;
   `).catch(e => console.log("[db] migracion messages es_manual/sent_by:", e.message));
 
+  await pool.query(`
+    ALTER TABLE integration_profiles ADD COLUMN IF NOT EXISTS claude_model TEXT DEFAULT 'claude-haiku-4-5';
+  `).catch(e => console.log("[db] migracion integration_profiles claude_model:", e.message));
+
   await migrarEnvAPerfil().catch(e => console.log("[migration] error:", e.message));
 
   console.log("[db] tablas listas (PostgreSQL)");
@@ -625,6 +629,7 @@ function resumirPerfil(row) {
   return {
     id: row.id, consultorio_id: row.consultorio_id, nombre: row.nombre,
     activo: !!row.activo, created_at: row.created_at, updated_at: row.updated_at,
+    claude_model: row.claude_model || "claude-haiku-4-5",
     configurado,
   };
 }
@@ -692,11 +697,12 @@ async function createProfile(data) {
   const { rows } = await pool.query(
     `INSERT INTO integration_profiles
        (consultorio_id, nombre, activo, whatsapp_phone_number_id, whatsapp_token,
-        whatsapp_verify_token, google_service_account_json, calendar_id)
-     VALUES ($1,$2,$3,$4,$5,$6,$7,$8) RETURNING *`,
+        whatsapp_verify_token, google_service_account_json, calendar_id, claude_model)
+     VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9) RETURNING *`,
     [data.consultorio_id, data.nombre, !!data.activo,
      cif.whatsapp_phone_number_id, cif.whatsapp_token, cif.whatsapp_verify_token,
-     cif.google_service_account_json, cif.calendar_id]
+     cif.google_service_account_json, cif.calendar_id,
+     data.claude_model || "claude-haiku-4-5"]
   );
   return resumirPerfil(rows[0]);
 }
@@ -705,6 +711,7 @@ async function updateProfile(id, data) {
   const sets = [], vals = [];
   let i = 1;
   if (data.nombre !== undefined) { sets.push(`nombre = $${i++}`); vals.push(data.nombre); }
+  if (data.claude_model !== undefined) { sets.push(`claude_model = $${i++}`); vals.push(data.claude_model); }
   for (const c of CAMPOS_CREDENCIAL) {
     // undefined = no se tocó. "" = se quiere borrar el valor.
     if (data[c] !== undefined) { sets.push(`${c} = $${i++}`); vals.push(encrypt(data[c])); }
@@ -715,6 +722,7 @@ async function updateProfile(id, data) {
     const row = store.profiles.find(p => String(p.id) === String(id));
     if (!row) return null;
     if (data.nombre !== undefined) row.nombre = data.nombre;
+    if (data.claude_model !== undefined) row.claude_model = data.claude_model;
     for (const c of CAMPOS_CREDENCIAL) if (data[c] !== undefined) row[c] = encrypt(data[c]);
     row.updated_at = new Date().toISOString();
     return resumirPerfil(row);

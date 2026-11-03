@@ -290,8 +290,10 @@ async function runAgent(userMessage, telefono, consultorio_id = DEFAULT_CONSULTO
     : { type: "auto" };
   if (forcearDisponibilidad) console.log("[agent] forzando check_availability por consulta de disponibilidad");
 
+  const claudeModel = perfil?.claude_model || "claude-haiku-4-5";
+  console.log(`[agent] modelo: ${claudeModel}`);
   let response = await anthropic.messages.create({
-    model: "claude-sonnet-4-5", max_tokens: 1024,
+    model: claudeModel, max_tokens: 1024,
     system: getSystemPrompt(cfg, practicas, coberturas, buildPatientContext(patient)),
     tools: TOOLS, tool_choice, messages: claudeHistory,
   });
@@ -308,7 +310,7 @@ async function runAgent(userMessage, telefono, consultorio_id = DEFAULT_CONSULTO
     claudeHistory.push({ role: "assistant", content: response.content });
     claudeHistory.push({ role: "user", content: toolResults });
     response = await anthropic.messages.create({
-      model: "claude-sonnet-4-5", max_tokens: 1024,
+      model: claudeModel, max_tokens: 1024,
       // Se relee el paciente: si el agente acaba de guardar datos con
       // save_patient_data, el perfil ya refleja el estado nuevo.
       system: getSystemPrompt(cfg, practicas, coberturas, buildPatientContext(await db.getPatient(telefono) || patient)),
@@ -679,6 +681,7 @@ app.get("/profiles/:id/credentials", authMiddleware, async (req, res) => {
       whatsapp_verify_token:       p.whatsapp_verify_token       || "",
       google_service_account_json: p.google_service_account_json || "",
       calendar_id:                 p.calendar_id                 || "",
+      claude_model:                p.claude_model                || "claude-haiku-4-5",
     });
   } catch (err) { console.error("[GET /profiles/credentials]", err.message); res.status(500).json({ error: "Error interno" }); }
 });
@@ -718,6 +721,7 @@ app.post("/profiles", authMiddleware, async (req, res) => {
       whatsapp_verify_token:       req.body.whatsapp_verify_token,
       google_service_account_json: req.body.google_service_account_json,
       calendar_id:                 req.body.calendar_id,
+      claude_model:                req.body.claude_model || "claude-haiku-4-5",
     });
     res.json({ ok: true, perfil, whatsapp, calendar });
   } catch (err) {
@@ -733,7 +737,7 @@ app.patch("/profiles/:id", authMiddleware, async (req, res) => {
 
     const b = req.body;
     const campos = {};
-    for (const c of ["nombre", "whatsapp_phone_number_id", "whatsapp_token",
+    for (const c of ["nombre", "claude_model", "whatsapp_phone_number_id", "whatsapp_token",
                      "whatsapp_verify_token", "google_service_account_json", "calendar_id"]) {
       if (b[c] !== undefined) campos[c] = b[c];
     }
