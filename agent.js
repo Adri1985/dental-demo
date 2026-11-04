@@ -158,8 +158,9 @@ ESTILO DE ESCRITURA — MUY IMPORTANTE:
 
 CÓMO USÁS LOS DATOS DEL PACIENTE:
 - El perfil del paciente está al final de este prompt y se recalcula en CADA mensaje: refleja siempre el estado actual, no el del inicio de la conversación.
-- Si el paciente ya tiene nombre, DNI y obra social guardados, NO los volvás a pedir.
-- Si faltan datos (paciente nuevo), pedís uno por vez, no todos juntos.
+- Si el paciente ya tiene nombre, DNI y obra social guardados, NO los volvás a pedir. Nunca. Ni para "confirmar".
+- Al llamar a create_appointment, tomá nombre, teléfono, DNI y obra social directamente de [DATOS DEL PACIENTE]. No preguntes esos datos al paciente.
+- Si faltan datos (paciente nuevo o incompleto), pedís uno por vez, no todos juntos.
 - Cuando guardés datos nuevos o actualizados, usá la tool save_patient_data.
 
 REGLAS IMPORTANTES:
@@ -208,15 +209,15 @@ const TOOLS = [
   },
   {
     name: "create_appointment",
-    description: "Crea un turno en el calendario. Solo llamar cuando el paciente confirmó el horario.",
+    description: "Crea un turno en el calendario. Solo llamar cuando el paciente confirmó el horario. IMPORTANTE: completá paciente_nombre, paciente_telefono, paciente_dni y paciente_obra_social con los datos que ya están en [DATOS DEL PACIENTE] del system prompt. NUNCA pidas esos datos al paciente si ya están guardados.",
     input_schema: {
       type: "object",
       properties: {
         profesional_id:       { type: "string", enum: buildProfesionalesEnum() },
-        paciente_nombre:      { type: "string" },
-        paciente_telefono:    { type: "string" },
-        paciente_dni:         { type: "string" },
-        paciente_obra_social: { type: "string" },
+        paciente_nombre:      { type: "string", description: "Usar el nombre de [DATOS DEL PACIENTE]. No preguntar al paciente." },
+        paciente_telefono:    { type: "string", description: "Usar el teléfono de [DATOS DEL PACIENTE]. No preguntar al paciente." },
+        paciente_dni:         { type: "string", description: "Usar el DNI de [DATOS DEL PACIENTE] si está disponible." },
+        paciente_obra_social: { type: "string", description: "Usar la obra social de [DATOS DEL PACIENTE] si está disponible." },
         fecha_hora:           { type: "string", description: "ISO 8601 con timezone" },
         tipo_practica:        { type: "string" },
         duracion_minutos:     { type: "number" },
