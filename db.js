@@ -234,6 +234,10 @@ async function initDB() {
     ALTER TABLE integration_profiles ADD COLUMN IF NOT EXISTS calendar_gmail TEXT;
   `).catch(e => console.log("[db] migracion integration_profiles calendar_gmail:", e.message));
 
+  await pool.query(`
+    ALTER TABLE patients ADD COLUMN IF NOT EXISTS en_alerta BOOLEAN DEFAULT false;
+  `).catch(e => console.log("[db] migracion patients en_alerta:", e.message));
+
   await migrarEnvAPerfil().catch(e => console.log("[migration] error:", e.message));
 
   console.log("[db] tablas listas (PostgreSQL)");
@@ -435,6 +439,11 @@ async function updatePatientData(telefono, { nombre, dni, obra_social }) {
 async function setPatientMode(telefono, modo) {
   if (!USE_DB) { if (store.patients[telefono]) store.patients[telefono].modo = modo; return; }
   await pool.query("UPDATE patients SET modo = $1, updated_at = NOW() WHERE telefono = $2", [modo, telefono]);
+}
+
+async function setPatientAlerta(telefono, valor) {
+  if (!USE_DB) { if (store.patients[telefono]) store.patients[telefono].en_alerta = valor; return; }
+  await pool.query("UPDATE patients SET en_alerta = $1 WHERE telefono = $2", [valor, telefono]);
 }
 
 async function getAllPatients(consultorio_id) {
@@ -787,7 +796,7 @@ module.exports = {
   // config
   getConfig, setConfig,
   // patients
-  getPatient, upsertPatient, updatePatientData, setPatientMode, getAllPatients,
+  getPatient, upsertPatient, updatePatientData, setPatientMode, setPatientAlerta, getAllPatients,
   // messages
   addMessage, getMessages, clearMessages,
   // claude history
