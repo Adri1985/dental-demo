@@ -102,20 +102,23 @@ async function validarCalendar({ google_service_account_json, calendar_id }) {
   if (!credentials.client_email || !credentials.private_key) {
     return { ok: false, error: "Al JSON le faltan client_email o private_key" };
   }
+  console.log(`[calendar] validando — service account: ${credentials.client_email} | calendar_id: ${calendar_id} | project: ${credentials.project_id || "?"}`);
   try {
     const auth = new google.auth.GoogleAuth({
       credentials, scopes: ["https://www.googleapis.com/auth/calendar"],
     });
     const calendar = google.calendar({ version: "v3", auth });
     await calendar.events.list({ calendarId: calendar_id, maxResults: 1 });
+    console.log(`[calendar] OK — acceso confirmado a ${calendar_id} con ${credentials.client_email}`);
     return { ok: true, error: null };
   } catch (err) {
     const msg    = err.message || "";
     const status = err.code || err.response?.status;
-    if (msg.includes("invalid_grant")) return { ok: false, error: "Service account inválida" };
-    if (status === 404) return { ok: false, error: "Calendar ID no encontrado o sin permisos" };
+    console.error(`[calendar] ERROR ${status} — service account: ${credentials.client_email} | calendar_id: ${calendar_id} | msg: ${msg.slice(0, 300)}`);
+    if (msg.includes("invalid_grant")) return { ok: false, error: "Service account inválida o expirada" };
+    if (status === 404) return { ok: false, error: `Calendar ID "${calendar_id}" no encontrado. Verificá que el ID sea correcto.` };
     if (status === 403) {
-      return { ok: false, error: `Sin permisos sobre el calendario. ¿Lo compartiste con ${credentials.client_email}?` };
+      return { ok: false, error: `Sin permisos. Compartí el calendario "${calendar_id}" con:\n${credentials.client_email}\n(permiso: Editor o superior)` };
     }
     return { ok: false, error: msg.slice(0, 200) || "Error desconocido al validar el calendario" };
   }
