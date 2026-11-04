@@ -180,6 +180,10 @@
     .nav-view-btn { background: none; border: 1px solid #3a4952; color: #8696a0; border-radius: 20px; padding: 5px 12px; font-size: 12px; font-weight: 600; cursor: pointer; }
     .nav-view-btn.active { background: #00a884; border-color: #00a884; color: white; }
     .nav-view-btn:hover:not(.active) { border-color: #8696a0; color: #e9edef; }
+    .nav-action-btn { background: none; border: 1px solid #3a4952; border-radius: 20px; padding: 5px 12px; font-size: 12px; font-weight: 600; cursor: pointer; color: #8696a0; }
+    .nav-action-btn:hover { border-color: #8696a0; color: #e9edef; }
+    .nav-action-btn.danger { color: #ff6b6b; border-color: #3a4952; }
+    .nav-action-btn.danger:hover { border-color: #ff6b6b; }
     .fab { position: fixed; bottom: 24px; right: 24px; background: #00a884; color: white; border: none; border-radius: 50px; padding: 14px 20px; font-size: 14px; font-weight: 600; cursor: pointer; box-shadow: 0 4px 16px rgba(0,0,0,0.4); z-index: 50; }
     .fab:hover { background: #00c99d; }
     @media (max-width: 640px) {
@@ -215,8 +219,8 @@
     <div class="live-badge">EN VIVO</div>
     <button class="nav-view-btn active" id="btnViewChats" onclick="setView('chats')">💬 Chats</button>
     <button class="nav-view-btn" id="btnViewTurnos" onclick="setView('turnos')">📅 Turnos</button>
-    <button class="btn btn-sm" onclick="abrirConfig()">⚙ Config</button>
-    <button class="btn btn-sm btn-danger" onclick="logout()">Salir</button>
+    <button class="nav-action-btn" onclick="abrirConfig()">⚙ Config</button>
+    <button class="nav-action-btn danger" onclick="logout()">Salir</button>
     <button class="menu-btn" onclick="toggleMenu()">⋮</button>
   </div>
   <div class="dropdown-menu" id="dropdownMenu">
