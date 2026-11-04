@@ -1508,8 +1508,7 @@
       document.getElementById("connWA").style.display = "inline";
     }
     if (info.calendar) {
-      const calLabel = info.calendar.length > 28 ? info.calendar.slice(0, 26) + "…" : info.calendar;
-      document.getElementById("connCalId").textContent = calLabel;
+      document.getElementById("connCalId").textContent = info.calendar;
       document.getElementById("connCal").style.display = "inline";
     }
   }).catch(() => {});

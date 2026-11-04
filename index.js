@@ -730,7 +730,30 @@ app.get("/profile/display-info", authMiddleware, async (req, res) => {
     const perfil = await getPerfilActivo(consultorioDe(req));
     if (!perfil) return res.json({ whatsapp: null, calendar: null });
 
-    const calendar = perfil.calendar_id || null;
+    // Derivar cuenta Gmail del calendar_id
+    // - Si es un email (ej: usuario@gmail.com) → mostrarlo directo
+    // - Si es un ID de grupo (@group.calendar.google.com) → llamar API para obtener el nombre
+    let calendar = null;
+    if (perfil.calendar_id) {
+      const id = perfil.calendar_id;
+      if (id.includes("@") && !id.endsWith(".google.com")) {
+        calendar = id; // ya es un email de Gmail
+      } else if (perfil.google_service_account_json) {
+        try {
+          const { google } = require("googleapis");
+          const creds = typeof perfil.google_service_account_json === "string"
+            ? JSON.parse(perfil.google_service_account_json)
+            : perfil.google_service_account_json;
+          const auth = new google.auth.GoogleAuth({ credentials: creds, scopes: ["https://www.googleapis.com/auth/calendar.readonly"] });
+          const cal = google.calendar({ version: "v3", auth });
+          const { data } = await cal.calendars.get({ calendarId: id });
+          // Para calendarios de grupo, el summary suele ser el nombre que le puso el usuario
+          calendar = data.summary || id;
+        } catch { calendar = id; }
+      } else {
+        calendar = id;
+      }
+    }
 
     // Obtener el número real de WhatsApp desde Meta API
     let whatsapp = null;
