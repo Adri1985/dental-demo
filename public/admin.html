@@ -194,16 +194,42 @@
     .fab { position: fixed; bottom: 24px; right: 24px; background: #00a884; color: white; border: none; border-radius: 50px; padding: 14px 20px; font-size: 14px; font-weight: 600; cursor: pointer; box-shadow: 0 4px 16px rgba(0,0,0,0.4); z-index: 50; }
     .fab:hover { background: #00c99d; }
     @media (max-width: 640px) {
+      /* Layout de pantalla completa para sidebar y conversación */
       .sidebar { width: 100%; position: absolute; inset: 0; top: 0; padding-top: 57px; z-index: 10; background: #0b141a; }
       .sidebar.hidden { display: none; }
       .convo-panel { position: absolute; inset: 0; top: 0; padding-top: 57px; z-index: 10; background: #0b141a; display: none; }
       .convo-panel.visible { display: flex; }
       .back-btn { display: block; }
-      .btn { font-size: 11px; padding: 5px 10px; }
-      /* En mobile: ocultar botones del header y mostrar el menú ⋮ */
-      .header-right .btn-sm { display: none; }
+
+      /* Header: ocultar todo excepto el menú ⋮ y el live badge */
+      .header-right .nav-view-btn { display: none; }
+      .header-right .nav-action-btn { display: none; }
       .header-right .live-badge { display: none; }
       .menu-btn { display: block; }
+
+      /* Header compacto para que el título no se corte */
+      .header { padding: 10px 12px; }
+      .header-title { font-size: 15px; }
+      .header-sub { font-size: 11px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 60vw; }
+
+      /* Conversación: header y burbujas */
+      .convo-header { padding: 10px 12px; gap: 8px; flex-wrap: wrap; }
+      .convo-actions { gap: 4px; }
+      .convo-actions .btn { font-size: 11px; padding: 5px 9px; }
+      .convo-actions .btn-clear-alerta { font-size: 11px; padding: 5px 9px; }
+      .msg-bubble { max-width: 85%; font-size: 13px; }
+      .msg-inner { max-width: 85%; }
+      .convo-detail { font-size: 10px; }
+
+      /* Data bar inferior: scroll horizontal en vez de wrap */
+      .patient-data-bar { flex-wrap: nowrap; overflow-x: auto; gap: 12px; }
+
+      /* Turnos panel full screen en mobile */
+      .turnos-panel { position: absolute; inset: 0; top: 57px; z-index: 10; padding: 0; }
+      .turno-card { flex-direction: column; align-items: flex-start; gap: 8px; }
+
+      /* Botones generales */
+      .btn { font-size: 11px; padding: 5px 10px; }
     }
   </style>
 </head>
