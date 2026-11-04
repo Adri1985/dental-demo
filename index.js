@@ -575,10 +575,38 @@ app.post("/appointments/reminder", authMiddleware, async (req, res) => {
   try {
     const { telefono, nombre, hora, practica } = req.body;
     if (!telefono) return res.status(400).json({ ok: false, error: "Falta el teléfono" });
-    const perfil = await getPerfilActivo(consultorioDe(req));
-    const msg = `Hola${nombre ? " " + nombre.split(" ")[0] : ""}! 👋 Te recordamos tu turno de ${practica || "consulta"} hoy a las ${hora}. Por cualquier cambio escribinos. — ${(await db.getConsultorio(consultorioDe(req)))?.nombre || "El consultorio"}`;
+
+    const consultorioId = consultorioDe(req);
+    const perfil = await getPerfilActivo(consultorioId);
+    const consultorio = await db.getConsultorio(consultorioId);
+    const msg = `Hola${nombre ? " " + nombre.split(" ")[0] : ""}! 👋 Te recordamos tu turno de ${practica || "consulta"} hoy a las ${hora}. Por cualquier cambio escribinos. — ${consultorio?.nombre || "El consultorio"}`;
+
     await sendWhatsAppMessage(telefono, msg, perfil);
-    res.json({ ok: true });
+
+    // Asegurar que el paciente existe en la DB para poder guardar el mensaje
+    await db.upsertPatient({ telefono, nombre: nombre || "Paciente", consultorio_id: consultorioId });
+
+    // Guardar en messages para que aparezca en el panel de conversaciones
+    const sender = await db.getUserByEmail(req.user.email);
+    const sent_by = sender?.nombre || sender?.email || req.user.email;
+    const ts = new Date().toISOString();
+    await db.addMessage(telefono, "assistant", msg, ts, true, sent_by);
+
+    // Guardar en claude_history para que el agente tenga contexto
+    // Claude requiere alternancia user/assistant: si el historial termina en
+    // assistant, insertamos una nota de sistema + el recordatorio como par.
+    let hist = await db.getClaudeHistory(telefono);
+    const ultimoRol = hist.length ? hist[hist.length - 1].role : null;
+    if (ultimoRol === "assistant" || !ultimoRol) {
+      hist.push({ role: "user",      content: "[El consultorio envió un recordatorio de turno al paciente]" });
+      hist.push({ role: "assistant", content: msg });
+    } else {
+      // ya termina en user (raro), solo añadir el recordatorio
+      hist.push({ role: "assistant", content: msg });
+    }
+    await db.saveClaudeHistory(telefono, hist);
+
+    res.json({ ok: true, ts });
   } catch (err) {
     console.error("[POST /appointments/reminder]", err.message);
     res.status(500).json({ ok: false, error: err.message });
