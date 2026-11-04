@@ -303,6 +303,7 @@ async function createAppointment({ paciente_nombre, paciente_telefono, paciente_
   };
 
   const { data } = await calendar.events.insert({ calendarId: CALENDAR_ID, resource: event });
+  console.log(`[calendar] turno creado — calendar: ${CALENDAR_ID} | paciente: ${paciente_nombre} (${paciente_telefono}) | práctica: ${tipo_practica} | inicio: ${start.toISOString()} | event_id: ${data.id}`);
 
   return {
     ok: true,
