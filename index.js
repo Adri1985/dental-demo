@@ -744,11 +744,12 @@ app.get("/profile/display-info", authMiddleware, async (req, res) => {
           const creds = typeof perfil.google_service_account_json === "string"
             ? JSON.parse(perfil.google_service_account_json)
             : perfil.google_service_account_json;
-          const auth = new google.auth.GoogleAuth({ credentials: creds, scopes: ["https://www.googleapis.com/auth/calendar.readonly"] });
+          const auth = new google.auth.GoogleAuth({ credentials: creds, scopes: ["https://www.googleapis.com/auth/calendar"] });
           const cal = google.calendar({ version: "v3", auth });
-          const { data } = await cal.calendars.get({ calendarId: id });
-          // Para calendarios de grupo, el summary suele ser el nombre que le puso el usuario
-          calendar = data.summary || id;
+          // Buscar el owner en la ACL del calendario
+          const { data: acl } = await cal.acl.list({ calendarId: id });
+          const owner = (acl.items || []).find(r => r.role === "owner" && r.scope?.type === "user");
+          calendar = owner?.scope?.value || id;
         } catch { calendar = id; }
       } else {
         calendar = id;
