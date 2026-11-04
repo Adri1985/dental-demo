@@ -339,6 +339,22 @@
 
     <!-- Tab: Prácticas -->
     <div class="cfg-panel" id="tab-practicas" style="display:none;overflow-y:auto;flex:1">
+      <!-- Práctica fija: Control de rutina -->
+      <div style="display:flex;align-items:center;gap:8px;padding:10px 0 10px;border-bottom:1px solid #2a3942;margin-bottom:12px">
+        <div style="flex:1;min-width:0">
+          <div style="display:flex;align-items:center;gap:6px">
+            <div style="font-size:14px;font-weight:500">Control de rutina</div>
+            <span style="font-size:10px;background:#1f2c33;color:#8696a0;padding:1px 6px;border-radius:4px">siempre activa</span>
+          </div>
+          <div style="font-size:11px;color:#8696a0;margin-top:2px">Fallback para cualquier consulta que no encaje en las demás prácticas</div>
+        </div>
+        <div style="display:flex;align-items:center;gap:6px;white-space:nowrap">
+          <input type="number" id="controlRutinaDuracion" min="10" step="5"
+            style="width:52px;background:#1f2c33;border:1px solid #2a3942;border-radius:6px;color:#e9edef;padding:4px 6px;font-size:13px;text-align:center"
+            onchange="guardarControlRutinaDuracion()" />
+          <span style="font-size:12px;color:#8696a0">min</span>
+        </div>
+      </div>
       <div id="practicasList" style="font-size:13px;margin-bottom:14px">Cargando...</div>
       <div style="border-top:1px solid #2a3942;padding-top:14px">
         <div style="font-size:13px;font-weight:600;margin-bottom:10px" id="practicasFormTitle">Nueva práctica</div>
@@ -1378,7 +1394,27 @@
 
   // ── Prácticas ─────────────────────────────
 
+  async function cargarControlRutina() {
+    try {
+      const cfg = await fetch(`${API}/config`, { headers: authH() }).then(r => r.json());
+      document.getElementById("controlRutinaDuracion").value = cfg.control_rutina_duracion || 30;
+    } catch {}
+  }
+
+  async function guardarControlRutinaDuracion() {
+    const dur = parseInt(document.getElementById("controlRutinaDuracion").value) || 30;
+    try {
+      await fetch(`${API}/config`, {
+        method: "PATCH",
+        headers: authH(),
+        body: JSON.stringify({ control_rutina_duracion: String(dur) }),
+      });
+      showToast("Duración guardada");
+    } catch { showToast("Error al guardar"); }
+  }
+
   async function cargarPracticas() {
+    cargarControlRutina();
     try {
       const res = await fetch(`${API}/practicas`, { headers: authH() });
       const lista = await res.json();
