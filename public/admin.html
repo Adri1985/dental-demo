@@ -206,6 +206,8 @@
       <div class="header-sub">
         <span id="consultorioNombre" style="color:#e9edef;font-weight:500"></span>
         <span id="lastUpdate" style="margin-left:6px"></span>
+        <span id="connWA" style="margin-left:8px;display:none">· 📱 <span id="connWANum" style="color:#00a884"></span></span>
+        <span id="connCal" style="margin-left:6px;display:none">· 📅 <span id="connCalId" style="color:#8696a0"></span></span>
       </div>
     </div>
   </div>
@@ -1499,6 +1501,18 @@
   loadPatients();
   setInterval(loadPatients, 3000);
   fetch(`${API}/config`, { headers: authH() }).then(r => r.json()).then(cfg => { if (cfg.bot_whatsapp_number) BOT_NUMBER = cfg.bot_whatsapp_number; }).catch(() => {});
+
+  fetch(`${API}/profile/display-info`, { headers: authH() }).then(r => r.json()).then(info => {
+    if (info.whatsapp) {
+      document.getElementById("connWANum").textContent = info.whatsapp;
+      document.getElementById("connWA").style.display = "inline";
+    }
+    if (info.calendar) {
+      const calLabel = info.calendar.length > 28 ? info.calendar.slice(0, 26) + "…" : info.calendar;
+      document.getElementById("connCalId").textContent = calLabel;
+      document.getElementById("connCal").style.display = "inline";
+    }
+  }).catch(() => {});
 
   // ── Vista Turnos ─────────────────────────────
   let turnosFechaActual = fechaHoy();

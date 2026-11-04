@@ -724,6 +724,36 @@ app.post("/profiles/validate", authMiddleware, async (req, res) => {
   }
 });
 
+// Info de conexión para mostrar en el header del panel
+app.get("/profile/display-info", authMiddleware, async (req, res) => {
+  try {
+    const perfil = await getPerfilActivo(consultorioDe(req));
+    if (!perfil) return res.json({ whatsapp: null, calendar: null });
+
+    const calendar = perfil.calendar_id || null;
+
+    // Obtener el número real de WhatsApp desde Meta API
+    let whatsapp = null;
+    if (perfil.whatsapp_phone_number_id && perfil.whatsapp_token) {
+      try {
+        const r = await fetch(
+          `https://graph.facebook.com/v19.0/${perfil.whatsapp_phone_number_id}?fields=display_phone_number`,
+          { headers: { Authorization: `Bearer ${perfil.whatsapp_token}` } }
+        );
+        if (r.ok) {
+          const d = await r.json();
+          whatsapp = d.display_phone_number || null;
+        }
+      } catch {}
+    }
+
+    res.json({ whatsapp, calendar });
+  } catch (err) {
+    console.error("[GET /profile/display-info]", err.message);
+    res.json({ whatsapp: null, calendar: null });
+  }
+});
+
 app.get("/profiles", authMiddleware, async (req, res) => {
   try { res.json(await db.getProfiles(consultorioDe(req))); }
   catch (err) { console.error("[GET /profiles]", err.message); res.status(500).json({ error: "Error interno" }); }
