@@ -913,35 +913,40 @@ app.get("/health", (_, res) => res.json({ status: "ok" }));
 async function logStartupState() {
   try {
     const perfiles = await db.getProfiles(DEFAULT_CONSULTORIO_ID);
+    const envSA  = process.env.GOOGLE_SERVICE_ACCOUNT_JSON;
+    const envCal = process.env.CALENDAR_ID_DR_DIEGO;
+    const envWAToken = process.env.WHATSAPP_TOKEN;
+    const envWAPhone = process.env.WHATSAPP_PHONE_NUMBER_ID;
+
     console.log(`\n${"=".repeat(60)}`);
-    console.log(`[startup] Perfiles cargados: ${perfiles.length}`);
+    console.log(`[startup] Perfiles en DB: ${perfiles.length}`);
+
     for (const p of perfiles) {
       const raw = await db.getProfileById(p.id);
-      let saEmail = "—";
+      let saEmailDB = "—";
       try {
         const sa = JSON.parse(raw.google_service_account_json || "{}");
-        saEmail = sa.client_email || "JSON sin client_email";
-      } catch { saEmail = "JSON inválido"; }
+        saEmailDB = sa.client_email || "JSON sin client_email";
+      } catch { saEmailDB = "JSON inválido"; }
+
+      // Calcular lo que realmente se usa en runtime
+      let saEmailRuntime = saEmailDB;
+      if (envSA) {
+        try { saEmailRuntime = JSON.parse(envSA).client_email || "JSON sin client_email (env)"; }
+        catch { saEmailRuntime = "JSON inválido (env)"; }
+      }
+      const calRuntime = envCal || raw.calendar_id || "—";
+
       console.log(`[startup] Perfil #${p.id} "${p.nombre}" | activo=${p.activo}`);
-      console.log(`  WA phone_number_id : ${raw.whatsapp_phone_number_id || "—"}`);
-      console.log(`  WA token (primeros 12): ${raw.whatsapp_token ? raw.whatsapp_token.slice(0,12)+"..." : "—"}`);
-      console.log(`  Calendar ID        : ${raw.calendar_id || "—"}`);
-      console.log(`  Service Account    : ${saEmail}`);
+      console.log(`  WA phone_number_id : ${envWAPhone ? envWAPhone+" (env)" : raw.whatsapp_phone_number_id || "—"}`);
+      console.log(`  WA token (12)      : ${envWAToken ? envWAToken.slice(0,12)+"... (env)" : raw.whatsapp_token ? raw.whatsapp_token.slice(0,12)+"..." : "—"}`);
+      console.log(`  Calendar ID        : ${calRuntime}${envCal ? " ← ENV VAR (sobreescribe DB: "+raw.calendar_id+")" : ""}`);
+      console.log(`  Service Account    : ${saEmailRuntime}${envSA ? " ← ENV VAR (sobreescribe DB: "+saEmailDB+")" : ""}`);
       console.log(`  calendar_gmail     : ${raw.calendar_gmail || "—"}`);
       console.log(`  claude_model       : ${raw.claude_model || "—"}`);
     }
     if (!perfiles.length) console.log("[startup] Sin perfiles — necesitás crear uno en Config → Integraciones");
-
-    // Avisar si hay env vars de credenciales seteadas pero se ignorarán (ya hay perfiles en DB)
-    const envVarsPresentes = [
-      process.env.WHATSAPP_TOKEN,
-      process.env.WHATSAPP_PHONE_NUMBER_ID,
-      process.env.GOOGLE_SERVICE_ACCOUNT_JSON,
-      process.env.CALENDAR_ID_DR_DIEGO,
-    ].filter(Boolean);
-    if (perfiles.length && envVarsPresentes.length) {
-      console.log(`[startup] ⚠ Hay ${envVarsPresentes.length} env var(s) de credenciales seteadas en Render, pero SE IGNORAN porque ya hay perfiles en la DB. Los valores activos son los de la DB (arriba).`);
-    }
+    if (envWAToken || envWAPhone) console.log(`[startup] ⚠ WHATSAPP_TOKEN / WHATSAPP_PHONE_NUMBER_ID en env vars son ignoradas — se usa la DB.`);
     console.log(`${"=".repeat(60)}\n`);
   } catch (e) {
     console.error("[startup] Error leyendo perfiles:", e.message);
