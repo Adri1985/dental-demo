@@ -116,11 +116,16 @@ async function validarCalendar({ google_service_account_json, calendar_id }) {
     const status = err.code || err.response?.status;
     console.error(`[calendar] ERROR ${status} — service account: ${credentials.client_email} | calendar_id: ${calendar_id} | msg: ${msg.slice(0, 300)}`);
     if (msg.includes("invalid_grant")) return { ok: false, error: "Service account inválida o expirada" };
+    if (msg.includes("has not been used in project") || msg.includes("it is disabled")) {
+      const match = msg.match(/project[= ](\d+)/);
+      const proj  = match ? match[1] : credentials.project_id || "?";
+      return { ok: false, error: `La Google Calendar API no está habilitada en el proyecto ${proj}. Habilitala en: https://console.developers.google.com/apis/api/calendar-json.googleapis.com/overview?project=${proj}` };
+    }
     if (status === 404) return { ok: false, error: `Calendar ID "${calendar_id}" no encontrado. Verificá que el ID sea correcto.` };
     if (status === 403) {
       return { ok: false, error: `Sin permisos. Compartí el calendario "${calendar_id}" con:\n${credentials.client_email}\n(permiso: Editor o superior)` };
     }
-    return { ok: false, error: msg.slice(0, 200) || "Error desconocido al validar el calendario" };
+    return { ok: false, error: msg.slice(0, 300) || "Error desconocido al validar el calendario" };
   }
 }
 
