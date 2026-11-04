@@ -38,11 +38,14 @@ async function getPerfilActivo(consultorio_id = DEFAULT_CONSULTORIO_ID) {
 }
 
 // Credenciales de Google que espera calendar.js
+// Si hay env vars GOOGLE_SERVICE_ACCOUNT_JSON / CALENDAR_ID_DR_DIEGO, tienen prioridad (modo test)
 function credsCalendar(perfil) {
-  return {
-    google_service_account_json: perfil?.google_service_account_json,
-    calendar_id:                 perfil?.calendar_id,
-  };
+  const sa  = process.env.GOOGLE_SERVICE_ACCOUNT_JSON || perfil?.google_service_account_json;
+  const cal = process.env.CALENDAR_ID_DR_DIEGO        || perfil?.calendar_id;
+  if (process.env.GOOGLE_SERVICE_ACCOUNT_JSON || process.env.CALENDAR_ID_DR_DIEGO) {
+    console.log(`[calendar-creds] usando env vars — calendar_id: ${cal}`);
+  }
+  return { google_service_account_json: sa, calendar_id: cal };
 }
 
 // ─────────────────────────────────────────────
