@@ -902,6 +902,37 @@ app.get("/health", (_, res) => res.json({ status: "ok" }));
 // ─────────────────────────────────────────────
 //  ARRANQUE
 // ─────────────────────────────────────────────
+async function logStartupState() {
+  try {
+    const perfiles = await db.getProfiles(DEFAULT_CONSULTORIO_ID);
+    console.log(`\n${"=".repeat(60)}`);
+    console.log(`[startup] Perfiles cargados: ${perfiles.length}`);
+    for (const p of perfiles) {
+      const raw = await db.getProfileById(p.id);
+      let saEmail = "—";
+      try {
+        const sa = JSON.parse(raw.google_service_account_json || "{}");
+        saEmail = sa.client_email || "JSON sin client_email";
+      } catch { saEmail = "JSON inválido"; }
+      console.log(`[startup] Perfil #${p.id} "${p.nombre}" | activo=${p.activo}`);
+      console.log(`  WA phone_number_id : ${raw.whatsapp_phone_number_id || "—"}`);
+      console.log(`  WA token (primeros 12): ${raw.whatsapp_token ? raw.whatsapp_token.slice(0,12)+"..." : "—"}`);
+      console.log(`  Calendar ID        : ${raw.calendar_id || "—"}`);
+      console.log(`  Service Account    : ${saEmail}`);
+      console.log(`  calendar_gmail     : ${raw.calendar_gmail || "—"}`);
+      console.log(`  claude_model       : ${raw.claude_model || "—"}`);
+    }
+    if (!perfiles.length) console.log("[startup] Sin perfiles — necesitás crear uno en Config → Integraciones");
+    console.log(`${"=".repeat(60)}\n`);
+  } catch (e) {
+    console.error("[startup] Error leyendo perfiles:", e.message);
+  }
+}
+
 db.initDB()
-  .then(() => { const PORT = process.env.PORT || 3000; app.listen(PORT, () => console.log(`Backend corriendo en http://localhost:${PORT}`)); })
+  .then(async () => {
+    const PORT = process.env.PORT || 3000;
+    app.listen(PORT, () => console.log(`Backend corriendo en http://localhost:${PORT}`));
+    await logStartupState();
+  })
   .catch((err) => { console.error("[db] Error al inicializar:", err); process.exit(1); });
