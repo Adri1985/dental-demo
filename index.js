@@ -472,12 +472,14 @@ app.post("/webhook", async (req, res) => {
     await db.addMessage(telefono, "user", texto, new Date().toISOString());
 
     // Detectar palabras de alarma en el mensaje del paciente
-    const cfg = await db.getConfig();
-    const palabrasAlarma = (cfg.palabras_alarma || "").split(",").map(p => p.trim().toLowerCase()).filter(Boolean);
-    if (palabrasAlarma.length && palabrasAlarma.some(p => texto.toLowerCase().includes(p))) {
-      await db.setPatientAlerta(telefono, true);
-      console.log(`[alerta] palabra de alarma detectada para ${telefono}`);
-    }
+    try {
+      const cfg = await db.getConfig();
+      const palabrasAlarma = (cfg.palabras_alarma || "").split(",").map(p => p.trim().toLowerCase()).filter(Boolean);
+      if (palabrasAlarma.length && palabrasAlarma.some(p => texto.toLowerCase().includes(p))) {
+        await db.setPatientAlerta(telefono, true);
+        console.log(`[alerta] palabra de alarma detectada para ${telefono}`);
+      }
+    } catch(e) { console.error("[alerta] error detectando alarma:", e.message); }
 
     if (patient.modo === "humano") { console.log(`[whatsapp] conversación pausada para ${telefono}`); return; }
     const reply = await runAgent(texto, telefono);
@@ -544,6 +546,7 @@ app.get("/patients/:telefono/messages", authMiddleware, async (req, res) => { re
 app.post("/admin/pause/:telefono",      authMiddleware, async (req, res) => { await db.setPatientMode(req.params.telefono, "humano"); res.json({ ok: true }); });
 app.post("/admin/resume/:telefono",     authMiddleware, async (req, res) => { await db.setPatientMode(req.params.telefono, "bot"); await db.clearClaudeHistory(req.params.telefono); res.json({ ok: true }); });
 app.post("/admin/alerta/:telefono/clear", authMiddleware, async (req, res) => { await db.setPatientAlerta(req.params.telefono, false); res.json({ ok: true }); });
+app.post("/admin/alerta/:telefono/set",   authMiddleware, async (req, res) => { await db.setPatientAlerta(req.params.telefono, true);  res.json({ ok: true }); });
 
 app.post("/admin/send/:telefono", authMiddleware, async (req, res) => {
   try {
