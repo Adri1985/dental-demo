@@ -584,7 +584,7 @@
         </div>
 
         <div class="modal-field">
-          <label class="modal-label">Calendar ID<span class="hint-wrap"><i class="hint-ico" onclick="toggleHint(event, this)">i</i><span class="hint-pop">Abrí Google Calendar → Configuración del calendario → Integrar calendario. El ID tiene formato algo@group.calendar.google.com o es tu email de Google.</span></span></label>
+          <label class="modal-label">Calendar ID<span class="hint-wrap"><i class="hint-ico" onclick="toggleHint(event, this)">i</i><span class="hint-pop">Abrí Google Calendar → Configuración del calendario → Integrar calendario → "ID del calendario". Si es el calendario principal de Gmail, el ID es directamente el email (ej: nombre@gmail.com). Si es un calendario secundario, tiene formato algo@group.calendar.google.com. Ambos son válidos.</span></span></label>
           <div style="display:flex;align-items:center;gap:6px">
             <input class="modal-input" id="pfCalendarId" type="text" style="flex:1;width:auto" />
             <span class="val-ind" id="vi_cal" title=""></span>
@@ -656,7 +656,7 @@
       <div style="color:#e9edef;font-weight:600;margin-bottom:6px">Paso 3 — Obtener el Calendar ID</div>
       <ol style="padding-left:18px;margin-bottom:14px;display:flex;flex-direction:column;gap:5px">
         <li>En Google Calendar, en la misma pantalla de configuración del calendario, bajás hasta <strong style="color:#e9edef">"Integrar calendario"</strong></li>
-        <li>Copiás el <strong style="color:#e9edef">ID del calendario</strong>: tiene formato <code style="background:#2a3942;padding:1px 5px;border-radius:4px">algo@group.calendar.google.com</code> o si es el calendario principal, es tu email de Gmail</li>
+        <li>Copiás el <strong style="color:#e9edef">ID del calendario</strong> que aparece debajo de "Integrar calendario":<br>— Si es el <strong style="color:#e9edef">calendario principal</strong> de esa cuenta, el ID es directamente el email: <code style="background:#2a3942;padding:1px 5px;border-radius:4px">nombre@gmail.com</code><br>— Si es un <strong style="color:#e9edef">calendario secundario</strong>, tiene el formato: <code style="background:#2a3942;padding:1px 5px;border-radius:4px">algo@group.calendar.google.com</code><br>Ambos formatos son válidos.</li>
         <li>Pegás ese ID en el campo <strong style="color:#e9edef">Calendar ID</strong> del panel</li>
       </ol>
 
