@@ -539,6 +539,11 @@
           <button class="btn-field-val" onclick="validarCampoCalendar()">Verificar Google Calendar</button>
         </div>
 
+        <div class="modal-field">
+          <label class="modal-label">Gmail del calendario <span style="color:#3a4952;font-weight:400">(opcional, solo para mostrar en el header)</span></label>
+          <input class="modal-input" id="pfCalendarGmail" type="email" placeholder="dueño@gmail.com" />
+        </div>
+
         <div class="section-label-int" style="margin-top:14px">Modelo de IA</div>
 
         <div class="modal-field">
@@ -1179,7 +1184,7 @@
   function nuevoPerfil() {
     document.getElementById("perfilEditId").value = "";
     document.getElementById("perfilFormTitulo").textContent = "Nuevo perfil";
-    ["pfNombre","pfPhoneId","pfToken","pfVerify","pfServiceAccount","pfCalendarId"].forEach(id => {
+    ["pfNombre","pfPhoneId","pfToken","pfVerify","pfServiceAccount","pfCalendarId","pfCalendarGmail"].forEach(id => {
       document.getElementById(id).value = "";
     });
     document.getElementById("pfClaudeModel").value = "claude-haiku-4-5";
@@ -1205,6 +1210,7 @@
       document.getElementById("pfVerify").value = creds.whatsapp_verify_token;
       document.getElementById("pfServiceAccount").value = creds.google_service_account_json;
       document.getElementById("pfCalendarId").value = creds.calendar_id;
+      document.getElementById("pfCalendarGmail").value = creds.calendar_gmail || "";
       document.getElementById("pfClaudeModel").value = creds.claude_model || "claude-haiku-4-5";
       resetValIndicadores();
       // Inicializar los indicadores locales con los valores ya cargados
@@ -1265,7 +1271,7 @@
       google_service_account_json: document.getElementById("pfServiceAccount").value.trim(),
       calendar_id:                 document.getElementById("pfCalendarId").value.trim(),
     };
-    const payload = { nombre, claude_model: document.getElementById("pfClaudeModel").value };
+    const payload = { nombre, claude_model: document.getElementById("pfClaudeModel").value, calendar_gmail: document.getElementById("pfCalendarGmail").value.trim() };
     for (const [k, v] of Object.entries(campos)) {
       if (!id || v) payload[k] = v;
     }

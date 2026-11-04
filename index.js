@@ -730,31 +730,8 @@ app.get("/profile/display-info", authMiddleware, async (req, res) => {
     const perfil = await getPerfilActivo(consultorioDe(req));
     if (!perfil) return res.json({ whatsapp: null, calendar: null });
 
-    // Derivar cuenta Gmail del calendar_id
-    // - Si es un email (ej: usuario@gmail.com) → mostrarlo directo
-    // - Si es un ID de grupo (@group.calendar.google.com) → llamar API para obtener el nombre
-    let calendar = null;
-    if (perfil.calendar_id) {
-      const id = perfil.calendar_id;
-      if (id.includes("@") && !id.endsWith(".google.com")) {
-        calendar = id; // ya es un email de Gmail
-      } else if (perfil.google_service_account_json) {
-        try {
-          const { google } = require("googleapis");
-          const creds = typeof perfil.google_service_account_json === "string"
-            ? JSON.parse(perfil.google_service_account_json)
-            : perfil.google_service_account_json;
-          const auth = new google.auth.GoogleAuth({ credentials: creds, scopes: ["https://www.googleapis.com/auth/calendar"] });
-          const cal = google.calendar({ version: "v3", auth });
-          // Buscar el owner en la ACL del calendario
-          const { data: acl } = await cal.acl.list({ calendarId: id });
-          const owner = (acl.items || []).find(r => r.role === "owner" && r.scope?.type === "user");
-          calendar = owner?.scope?.value || id;
-        } catch { calendar = id; }
-      } else {
-        calendar = id;
-      }
-    }
+    // Gmail del calendario: campo manual guardado en el perfil
+    const calendar = perfil.calendar_gmail || null;
 
     // Obtener el número real de WhatsApp desde Meta API
     let whatsapp = null;
@@ -795,6 +772,7 @@ app.get("/profiles/:id/credentials", authMiddleware, async (req, res) => {
       google_service_account_json: p.google_service_account_json || "",
       calendar_id:                 p.calendar_id                 || "",
       claude_model:                p.claude_model                || "claude-haiku-4-5",
+      calendar_gmail:              p.calendar_gmail              || "",
     });
   } catch (err) { console.error("[GET /profiles/credentials]", err.message); res.status(500).json({ error: "Error interno" }); }
 });
@@ -850,7 +828,7 @@ app.patch("/profiles/:id", authMiddleware, async (req, res) => {
 
     const b = req.body;
     const campos = {};
-    for (const c of ["nombre", "claude_model", "whatsapp_phone_number_id", "whatsapp_token",
+    for (const c of ["nombre", "claude_model", "calendar_gmail", "whatsapp_phone_number_id", "whatsapp_token",
                      "whatsapp_verify_token", "google_service_account_json", "calendar_id"]) {
       if (b[c] !== undefined) campos[c] = b[c];
     }
