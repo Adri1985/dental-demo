@@ -15,8 +15,13 @@ function buildHorariosText(cfg = {}) {
   return `- ${p.nombre}: ${h.dias} de ${mananaDesde} a ${mananaHasta} y ${tardeDesde} a ${tardeHasta} (último turno a las ${tardeHasta})`;
 }
 
+const PRACTICA_FALLBACK = { nombre: "Control de rutina", duracion_min: 30, precio: 0 };
+
 function buildPracticasText(practicas) {
-  const lista = practicas && practicas.length > 0 ? practicas : config.practicas;
+  let lista = practicas && practicas.length > 0 ? practicas : config.practicas;
+  // Siempre incluir "Control de rutina" como fallback si no está configurada
+  const yaIncluyeControl = lista.some(p => p.nombre.toLowerCase().includes("control de rutina") || p.nombre.toLowerCase().includes("control rutina"));
+  if (!yaIncluyeControl) lista = [...lista, PRACTICA_FALLBACK];
   return lista.map(p => {
     const precio = parseInt(p.precio) || 50;
     let texto = `- ${p.nombre}: ${p.duracion_min || p.duracion} min, $${precio.toLocaleString("es-AR")}`;
@@ -93,8 +98,8 @@ ${buildPracticasText(practicas)}
 
 IMPORTANTE — PRÁCTICAS ESTRICTAS:
 - Solo podés ofrecer o mencionar las prácticas de la lista de arriba. NUNCA inventes ni sugieras prácticas que no estén en esa lista.
-- Si el paciente menciona algo que no coincide con ninguna práctica, respondé: "Para eso tendrías que consultar directamente con el doctor. Lo que puedo agendarte es una consulta general de 30 minutos, te sirve?"
-- Si la lista está vacía, NO preguntes por práctica. Preguntá qué le pasa al paciente y derivá a una consulta general de 30 minutos.
+- "Control de rutina" es el comodín para todo lo que no encaje en las demás prácticas. Si el paciente menciona algo que no coincide con ninguna práctica específica, agendalo como "Control de rutina" (30 min). No explicás que es un comodín, simplemente lo agendás.
+- Cuando el paciente pregunta qué prácticas hay, siempre mencionás "Control de rutina" como opción disponible además de las demás.
 
 FLUJO PARA PACIENTE NUEVO:
 ${flujoNuevo}
