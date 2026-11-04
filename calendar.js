@@ -302,7 +302,17 @@ async function createAppointment({ paciente_nombre, paciente_telefono, paciente_
     end: { dateTime: end.toISOString(), timeZone: "America/Argentina/Buenos_Aires" },
   };
 
-  const { data } = await calendar.events.insert({ calendarId: CALENDAR_ID, resource: event });
+  let data;
+  try {
+    ({ data } = await calendar.events.insert({ calendarId: CALENDAR_ID, resource: event }));
+  } catch (err) {
+    const msg = err.message || "";
+    console.error(`[calendar] error al crear turno — calendar: ${CALENDAR_ID} | ${msg}`);
+    if (msg.toLowerCase().includes("writer access") || err.code === 403) {
+      return { ok: false, error: `La cuenta de servicio solo tiene permiso de lectura sobre el calendario "${CALENDAR_ID}". Cambiá el permiso a "Realizar cambios en eventos" (Editor) en Google Calendar → Configuración y uso compartido.` };
+    }
+    return { ok: false, error: msg.slice(0, 200) || "Error al crear el evento en Google Calendar" };
+  }
   console.log(`[calendar] turno creado — calendar: ${CALENDAR_ID} | paciente: ${paciente_nombre} (${paciente_telefono}) | práctica: ${tipo_practica} | inicio: ${start.toISOString()} | event_id: ${data.id}`);
 
   return {
