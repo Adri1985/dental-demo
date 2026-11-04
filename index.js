@@ -923,6 +923,17 @@ async function logStartupState() {
       console.log(`  claude_model       : ${raw.claude_model || "—"}`);
     }
     if (!perfiles.length) console.log("[startup] Sin perfiles — necesitás crear uno en Config → Integraciones");
+
+    // Avisar si hay env vars de credenciales seteadas pero se ignorarán (ya hay perfiles en DB)
+    const envVarsPresentes = [
+      process.env.WHATSAPP_TOKEN,
+      process.env.WHATSAPP_PHONE_NUMBER_ID,
+      process.env.GOOGLE_SERVICE_ACCOUNT_JSON,
+      process.env.CALENDAR_ID_DR_DIEGO,
+    ].filter(Boolean);
+    if (perfiles.length && envVarsPresentes.length) {
+      console.log(`[startup] ⚠ Hay ${envVarsPresentes.length} env var(s) de credenciales seteadas en Render, pero SE IGNORAN porque ya hay perfiles en la DB. Los valores activos son los de la DB (arriba).`);
+    }
     console.log(`${"=".repeat(60)}\n`);
   } catch (e) {
     console.error("[startup] Error leyendo perfiles:", e.message);
