@@ -191,13 +191,15 @@ async function sendWhatsAppMessage(to, text, perfil = null) {
 //  CONTEXTO DEL PACIENTE PARA CLAUDE
 // ─────────────────────────────────────────────
 function buildPatientContext(patient) {
-  const { nombre, dni, obra_social, telefono } = patient;
+  const { nombre, dni, obra_social, telefono, primer_turno_realizado } = patient;
   const completo = nombre && dni && obra_social;
+  const tieneTurnosPrevios = !!primer_turno_realizado;
+
   if (completo) {
-    return `[DATOS DEL PACIENTE]\nNombre: ${nombre}\nDNI: ${dni}\nObra social: ${obra_social}\nTeléfono: ${telefono}\nEstado: paciente registrado — NO volver a pedir nombre, DNI ni obra social. Ya están guardados.\nes_nuevo: false — NO decirle que llegue antes para completar ficha. Ya tiene datos registrados.`;
+    return `[DATOS DEL PACIENTE]\nNombre: ${nombre}\nDNI: ${dni}\nObra social: ${obra_social}\nTeléfono: ${telefono}\nEstado: paciente registrado — NO volver a pedir nombre, DNI ni obra social. Ya están guardados.\nes_nuevo: false — NO decirle que llegue antes para completar ficha. Ya tiene datos registrados.\ntiene_turnos_previos: ${tieneTurnosPrevios} — ${tieneTurnosPrevios ? "ya tuvo consultas anteriores, NO aplicar descuentos que digan 'solo primera consulta'." : "nunca tuvo un turno confirmado, puede aplicar descuentos de primera consulta si corresponde."}`;
   }
   const faltantes = [!nombre && "nombre", !dni && "DNI", !obra_social && "obra social"].filter(Boolean).join(", ");
-  return `[DATOS DEL PACIENTE]\nNombre: ${nombre || "pendiente"}\nDNI: ${dni || "pendiente"}\nObra social: ${obra_social || "pendiente"}\nTeléfono: ${telefono}\nEstado: paciente registrado con datos incompletos — SOLO pedir los campos que faltan (${faltantes}), de a uno. NO pedir datos que ya están cargados.\nes_nuevo: true — al confirmar el turno, avisarle que llegue unos minutos antes para completar la ficha (ver política del consultorio).`;
+  return `[DATOS DEL PACIENTE]\nNombre: ${nombre || "pendiente"}\nDNI: ${dni || "pendiente"}\nObra social: ${obra_social || "pendiente"}\nTeléfono: ${telefono}\nEstado: paciente registrado con datos incompletos — SOLO pedir los campos que faltan (${faltantes}), de a uno. NO pedir datos que ya están cargados.\nes_nuevo: true — al confirmar el turno, avisarle que llegue unos minutos antes para completar la ficha (ver política del consultorio).\ntiene_turnos_previos: ${tieneTurnosPrevios} — ${tieneTurnosPrevios ? "ya tuvo consultas anteriores, NO aplicar descuentos que digan 'solo primera consulta'." : "nunca tuvo un turno confirmado, puede aplicar descuentos de primera consulta si corresponde."}`;
 }
 
 // ─────────────────────────────────────────────
@@ -244,8 +246,8 @@ async function executeTool(name, input, telefono, cfg = {}, perfil = null) {
       }
       return { disponible: true, slots };
     }
-    case "create_appointment":
-      return await createAppointment({
+    case "create_appointment": {
+      const resultado = await createAppointment({
         ...input,
         creds,
         paciente_dni:         input.paciente_dni        || patient?.dni,
@@ -253,6 +255,12 @@ async function executeTool(name, input, telefono, cfg = {}, perfil = null) {
         paciente_nombre:      input.paciente_nombre      || patient?.nombre,
         paciente_telefono:    input.paciente_telefono    || telefono,
       });
+      // Marcar que el paciente ya realizó al menos un turno (desactiva descuento de primera consulta)
+      if (resultado?.event_id && !patient?.primer_turno_realizado) {
+        db.setPatientPrimerTurno(telefono).catch(e => console.error("[primer_turno] error:", e.message));
+      }
+      return resultado;
+    }
     case "cancel_appointment":
       return await cancelAppointment({ ...input, creds });
     case "get_patient_appointments": {

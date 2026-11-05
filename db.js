@@ -238,6 +238,10 @@ async function initDB() {
     ALTER TABLE patients ADD COLUMN IF NOT EXISTS en_alerta BOOLEAN DEFAULT false;
   `).catch(e => console.log("[db] migracion patients en_alerta:", e.message));
 
+  await pool.query(`
+    ALTER TABLE patients ADD COLUMN IF NOT EXISTS primer_turno_realizado BOOLEAN DEFAULT false;
+  `).catch(e => console.log("[db] migracion patients primer_turno_realizado:", e.message));
+
   await migrarEnvAPerfil().catch(e => console.log("[migration] error:", e.message));
 
   console.log("[db] tablas listas (PostgreSQL)");
@@ -444,6 +448,11 @@ async function setPatientMode(telefono, modo) {
 async function setPatientAlerta(telefono, valor) {
   if (!USE_DB) { if (store.patients[telefono]) store.patients[telefono].en_alerta = valor; return; }
   await pool.query("UPDATE patients SET en_alerta = $1 WHERE telefono = $2", [valor, telefono]);
+}
+
+async function setPatientPrimerTurno(telefono) {
+  if (!USE_DB) { if (store.patients[telefono]) store.patients[telefono].primer_turno_realizado = true; return; }
+  await pool.query("UPDATE patients SET primer_turno_realizado = true WHERE telefono = $1", [telefono]);
 }
 
 async function getAllPatients(consultorio_id) {
@@ -796,7 +805,7 @@ module.exports = {
   // config
   getConfig, setConfig,
   // patients
-  getPatient, upsertPatient, updatePatientData, setPatientMode, setPatientAlerta, getAllPatients,
+  getPatient, upsertPatient, updatePatientData, setPatientMode, setPatientAlerta, setPatientPrimerTurno, getAllPatients,
   // messages
   addMessage, getMessages, clearMessages,
   // claude history

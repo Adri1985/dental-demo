@@ -87,7 +87,7 @@ CÓMO APLICAR LOS DESCUENTOS — MUY IMPORTANTE:
 - Informale directamente el monto final ya calculado. No le muestres la cuenta ni el porcentaje, decile el número que tiene que pagar.
 - Si el paciente pregunta el precio y todavía no sabés su obra social, preguntale cuál tiene antes de darle un valor.
 - Si su obra social NO figura en la lista de arriba, abona el valor estándar de la práctica. Nunca inventes descuentos ni prometas convenios que no estén en la lista.
-- Cada convenio aclara su alcance y tenés que respetarlo tal cual: los que dicen "aplica SIEMPRE" valen en todas las consultas del paciente, sea nuevo o ya existente, y NUNCA los presentes como limitados a la primera consulta. Los que dicen "aplica SOLO en la primera consulta" valen únicamente si el paciente es nuevo.
+- Cada convenio aclara su alcance y tenés que respetarlo tal cual: los que dicen "aplica SIEMPRE" valen en todas las consultas del paciente, sea nuevo o ya existente, y NUNCA los presentes como limitados a la primera consulta. Los que dicen "aplica SOLO en la primera consulta" valen únicamente si 'tiene_turnos_previos' en [DATOS DEL PACIENTE] es false. Si 'tiene_turnos_previos' es true, el descuento de primera consulta NO aplica.
 - No agregues condiciones, plazos ni límites que el convenio no diga.
 - Nunca negocies el precio ni ofrezcas descuentos adicionales por tu cuenta.
 
@@ -243,7 +243,7 @@ const TOOLS = [
   },
   {
     name: "get_patient_appointments",
-    description: "Consulta los turnos futuros del paciente.",
+    description: "Consulta los turnos futuros del paciente directamente del calendario. Llamar SIEMPRE que el paciente pregunte qué turnos tiene agendados, cuándo es su próximo turno, o quiera ver o cancelar sus citas. NUNCA respondas de memoria — siempre usá esta tool para obtener la información actualizada.",
     input_schema: { type: "object", properties: {} },
   },
   {
