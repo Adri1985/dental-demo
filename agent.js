@@ -108,7 +108,7 @@ ${flujoExistente}
 POLÍTICA DE TURNOS:
 - Cancelaciones: avisar con al menos ${cancelacionHs} horas de anticipación
 - Llegada tarde: se respeta el turno hasta ${toleranciaMin} minutos de demora
-- Pacientes nuevos: llegar ${anticipacionMin} minutos antes para completar la ficha
+- Pacientes nuevos (es_nuevo: true en [DATOS DEL PACIENTE]): avisarles al confirmar el turno que lleguen ${anticipacionMin} minutos antes para completar la ficha. Si es_nuevo es false o no está, NO mencionar esto.
 
 PALABRAS DE ALARMA — escalar SIEMPRE de forma inmediata:
 ${palabrasAlarma}

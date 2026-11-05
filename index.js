@@ -194,10 +194,10 @@ function buildPatientContext(patient) {
   const { nombre, dni, obra_social, telefono } = patient;
   const completo = nombre && dni && obra_social;
   if (completo) {
-    return `[DATOS DEL PACIENTE]\nNombre: ${nombre}\nDNI: ${dni}\nObra social: ${obra_social}\nTeléfono: ${telefono}\nEstado: paciente registrado — NO volver a pedir nombre, DNI ni obra social. Ya están guardados.`;
+    return `[DATOS DEL PACIENTE]\nNombre: ${nombre}\nDNI: ${dni}\nObra social: ${obra_social}\nTeléfono: ${telefono}\nEstado: paciente registrado — NO volver a pedir nombre, DNI ni obra social. Ya están guardados.\nes_nuevo: false — NO decirle que llegue antes para completar ficha. Ya tiene datos registrados.`;
   }
   const faltantes = [!nombre && "nombre", !dni && "DNI", !obra_social && "obra social"].filter(Boolean).join(", ");
-  return `[DATOS DEL PACIENTE]\nNombre: ${nombre || "pendiente"}\nDNI: ${dni || "pendiente"}\nObra social: ${obra_social || "pendiente"}\nTeléfono: ${telefono}\nEstado: paciente registrado con datos incompletos — SOLO pedir los campos que faltan (${faltantes}), de a uno. NO pedir datos que ya están cargados.`;
+  return `[DATOS DEL PACIENTE]\nNombre: ${nombre || "pendiente"}\nDNI: ${dni || "pendiente"}\nObra social: ${obra_social || "pendiente"}\nTeléfono: ${telefono}\nEstado: paciente registrado con datos incompletos — SOLO pedir los campos que faltan (${faltantes}), de a uno. NO pedir datos que ya están cargados.\nes_nuevo: true — al confirmar el turno, avisarle que llegue unos minutos antes para completar la ficha (ver política del consultorio).`;
 }
 
 // ─────────────────────────────────────────────
