@@ -209,8 +209,7 @@ async function executeTool(name, input, telefono, cfg = {}, perfil = null) {
   const patient = await db.getPatient(telefono);
   switch (name) {
     case "check_availability": {
-      // Los horarios del panel mandan sobre las franjas por defecto del calendario
-      const slots = await checkAvailability({
+      const resultado = await checkAvailability({
         ...input,
         creds,
         horarios: {
@@ -220,11 +219,28 @@ async function executeTool(name, input, telefono, cfg = {}, perfil = null) {
           tarde_hasta:  cfg.horario_tarde_hasta,
         },
       });
+
+      // Respuesta estructurada cuando se buscó una hora específica
+      if (input.hora_preferida && resultado && typeof resultado === "object" && !Array.isArray(resultado)) {
+        const { hora_buscada, slots_en_horario, slots_alternativos } = resultado;
+        if (slots_en_horario.length === 0 && slots_alternativos.length === 0) {
+          return { disponible: false, mensaje: `No encontré turnos libres a las ${hora_buscada} ni horarios alternativos en los próximos 365 días.` };
+        }
+        return {
+          disponible: true,
+          hora_buscada,
+          // Si hay exactos, el agente los ofrece primero como lo pedido
+          slots_en_horario,
+          // Si no hay exactos, el agente DEBE decir "no hay a las HH:MM, pero tengo:" antes de listar estos
+          slots_alternativos,
+          sin_horario_exacto: slots_en_horario.length === 0,
+        };
+      }
+
+      // Respuesta plana para búsquedas sin hora preferida
+      const slots = Array.isArray(resultado) ? resultado : [];
       if (slots.length === 0) {
-        const msg = input.hora_preferida
-          ? `No encontré turnos libres a las ${input.hora_preferida} en los próximos 365 días. Podés ofrecer el primer turno disponible en cualquier horario.`
-          : "No encontré turnos libres en ese período.";
-        return { disponible: false, mensaje: msg };
+        return { disponible: false, mensaje: "No encontré turnos libres en ese período." };
       }
       return { disponible: true, slots };
     }

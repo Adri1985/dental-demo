@@ -258,35 +258,29 @@ async function checkAvailability({ fecha_desde, fecha_hasta, duracion_minutos, e
   console.log(`[checkAvailability] slots libres totales: ${slots.length}`);
 
   if (hora_preferida) {
-    // Parsear hora preferida "HH:MM" o "H:MM"
     const [hPref, mPref] = hora_preferida.split(":").map(Number);
     const minPref = hPref * 60 + (mPref || 0);
 
-    // Slots exactamente en ese horario (misma hora AR)
-    const enHorario = slots.filter(s => {
+    const getMinAR = s => {
       const ar = new Date(s.inicio).toLocaleString("en-US", {
         timeZone: "America/Argentina/Buenos_Aires",
         hour: "2-digit", minute: "2-digit", hour12: false,
       });
       const [h, m] = ar.split(":").map(Number);
-      return Math.abs(h * 60 + m - minPref) <= 0;
-    });
+      return h * 60 + m;
+    };
 
-    // Slots más próximos en fecha (alternativa) — los 4 primeros disponibles
-    const alternativos = slots.filter(s => {
-      const ar = new Date(s.inicio).toLocaleString("en-US", {
-        timeZone: "America/Argentina/Buenos_Aires",
-        hour: "2-digit", minute: "2-digit", hour12: false,
-      });
-      const [h, m] = ar.split(":").map(Number);
-      return Math.abs(h * 60 + m - minPref) > 0;
-    }).slice(0, 4);
+    const enHorario    = slots.filter(s => getMinAR(s) === minPref).slice(0, 3);
+    const alternativos = slots.filter(s => getMinAR(s) !== minPref).slice(0, 4);
 
-    console.log(`[checkAvailability] en horario ${hora_preferida}: ${enHorario.length} slots | alternativos: ${alternativos.length}`);
+    console.log(`[checkAvailability] en horario ${hora_preferida}: ${enHorario.length} exactos | ${alternativos.length} alternativos`);
 
-    // Devolver: primero el primer slot en el horario pedido, luego alternativos
-    const resultado = [...enHorario.slice(0, 1), ...alternativos];
-    return resultado.length ? resultado : slots.slice(0, 6);
+    // Devolver estructura separada para que el agente distinga exactos de alternativos
+    return {
+      hora_buscada: hora_preferida,
+      slots_en_horario: enHorario,       // vacío = no hay disponibilidad en ese horario
+      slots_alternativos: alternativos,  // siempre ofrecer como segunda opción
+    };
   }
 
   return slots.slice(0, 12);
