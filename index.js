@@ -220,7 +220,12 @@ async function executeTool(name, input, telefono, cfg = {}, perfil = null) {
           tarde_hasta:  cfg.horario_tarde_hasta,
         },
       });
-      if (slots.length === 0) return { disponible: false, mensaje: "No encontré turnos libres en ese período." };
+      if (slots.length === 0) {
+        const msg = input.hora_preferida
+          ? `No encontré turnos libres a las ${input.hora_preferida} en los próximos 60 días. Podés ofrecer el primer turno disponible en cualquier horario.`
+          : "No encontré turnos libres en ese período.";
+        return { disponible: false, mensaje: msg };
+      }
       return { disponible: true, slots };
     }
     case "create_appointment":

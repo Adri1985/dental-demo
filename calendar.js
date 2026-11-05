@@ -119,16 +119,25 @@ function parseHora(txt, fallback) {
  * Busca slots libres en el calendario del Dr. Diego.
  * Usa Date en timezone Argentina via Intl para evitar bugs de offset.
  */
-async function checkAvailability({ fecha_desde, fecha_hasta, duracion_minutos, excluir_event_id, horarios, creds }) {
+async function checkAvailability({ fecha_desde, fecha_hasta, duracion_minutos, excluir_event_id, horarios, hora_preferida, creds }) {
   const { sa, calendarId: CALENDAR_ID } = resolverCreds(creds);
   const auth = getAuthClient(sa);
   const calendar = google.calendar({ version: "v3", auth });
 
-  // Ampliar rango al mes completo para no perder eventos
+  // Si hay hora_preferida, expandir el rango automáticamente hasta 60 días
+  // para encontrar el primer slot disponible en ese horario
+  const MAX_DIAS_BUSQUEDA = hora_preferida ? 60 : null;
+
   const desdeDia = new Date(fecha_desde);
   desdeDia.setUTCHours(0, 0, 0, 0);
-  const hastaDia = new Date(fecha_hasta);
+  let hastaDia = new Date(fecha_hasta);
   hastaDia.setUTCHours(23, 59, 59, 999);
+
+  if (hora_preferida && MAX_DIAS_BUSQUEDA) {
+    const limiteMax = new Date(desdeDia.getTime() + MAX_DIAS_BUSQUEDA * 24 * 60 * 60 * 1000);
+    if (hastaDia < limiteMax) hastaDia = limiteMax;
+    console.log(`[checkAvailability] hora_preferida=${hora_preferida} — buscando hasta ${hastaDia.toISOString().slice(0,10)}`);
+  }
 
   const { data } = await calendar.events.list({
     calendarId: CALENDAR_ID,
@@ -247,7 +256,40 @@ async function checkAvailability({ fecha_desde, fecha_hasta, duracion_minutos, e
     cursor = new Date(cursor.getTime() + 24 * 60 * 60 * 1000);
   }
 
-  console.log(`[checkAvailability] slots libres: ${slots.map(s => s.label).join(", ")}`);
+  console.log(`[checkAvailability] slots libres totales: ${slots.length}`);
+
+  if (hora_preferida) {
+    // Parsear hora preferida "HH:MM" o "H:MM"
+    const [hPref, mPref] = hora_preferida.split(":").map(Number);
+    const minPref = hPref * 60 + (mPref || 0);
+
+    // Slots exactamente en ese horario (misma hora AR)
+    const enHorario = slots.filter(s => {
+      const ar = new Date(s.inicio).toLocaleString("en-US", {
+        timeZone: "America/Argentina/Buenos_Aires",
+        hour: "2-digit", minute: "2-digit", hour12: false,
+      });
+      const [h, m] = ar.split(":").map(Number);
+      return Math.abs(h * 60 + m - minPref) <= 0;
+    });
+
+    // Slots más próximos en fecha (alternativa) — los 4 primeros disponibles
+    const alternativos = slots.filter(s => {
+      const ar = new Date(s.inicio).toLocaleString("en-US", {
+        timeZone: "America/Argentina/Buenos_Aires",
+        hour: "2-digit", minute: "2-digit", hour12: false,
+      });
+      const [h, m] = ar.split(":").map(Number);
+      return Math.abs(h * 60 + m - minPref) > 0;
+    }).slice(0, 4);
+
+    console.log(`[checkAvailability] en horario ${hora_preferida}: ${enHorario.length} slots | alternativos: ${alternativos.length}`);
+
+    // Devolver: primero el primer slot en el horario pedido, luego alternativos
+    const resultado = [...enHorario.slice(0, 1), ...alternativos];
+    return resultado.length ? resultado : slots.slice(0, 6);
+  }
+
   return slots.slice(0, 12);
 }
 
