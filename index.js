@@ -560,7 +560,7 @@ app.delete("/session/:telefono", async (req, res) => {
 app.get("/patients",                    authMiddleware, async (req, res) => { res.json(await db.getAllPatients(consultorioDe(req))); });
 app.get("/patients/:telefono/messages", authMiddleware, async (req, res) => { res.json(await db.getMessages(req.params.telefono)); });
 app.post("/admin/pause/:telefono",      authMiddleware, async (req, res) => { await db.setPatientMode(req.params.telefono, "humano"); res.json({ ok: true }); });
-app.post("/admin/resume/:telefono",     authMiddleware, async (req, res) => { await db.setPatientMode(req.params.telefono, "bot"); await db.clearClaudeHistory(req.params.telefono); res.json({ ok: true }); });
+app.post("/admin/resume/:telefono",     authMiddleware, async (req, res) => { await db.setPatientMode(req.params.telefono, "bot"); res.json({ ok: true }); });
 app.post("/admin/alerta/:telefono/clear", authMiddleware, async (req, res) => { await db.setPatientAlerta(req.params.telefono, false); res.json({ ok: true }); });
 app.post("/admin/alerta/:telefono/set",   authMiddleware, async (req, res) => { await db.setPatientAlerta(req.params.telefono, true);  res.json({ ok: true }); });
 
