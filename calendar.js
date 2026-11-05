@@ -124,9 +124,8 @@ async function checkAvailability({ fecha_desde, fecha_hasta, duracion_minutos, e
   const auth = getAuthClient(sa);
   const calendar = google.calendar({ version: "v3", auth });
 
-  // Si hay hora_preferida, expandir el rango automáticamente hasta 60 días
-  // para encontrar el primer slot disponible en ese horario
-  const MAX_DIAS_BUSQUEDA = hora_preferida ? 60 : null;
+  // Si hay hora_preferida, expandir el rango automáticamente hasta 365 días
+  const MAX_DIAS_BUSQUEDA = hora_preferida ? 365 : null;
 
   const desdeDia = new Date(fecha_desde);
   desdeDia.setUTCHours(0, 0, 0, 0);
@@ -136,7 +135,7 @@ async function checkAvailability({ fecha_desde, fecha_hasta, duracion_minutos, e
   if (hora_preferida && MAX_DIAS_BUSQUEDA) {
     const limiteMax = new Date(desdeDia.getTime() + MAX_DIAS_BUSQUEDA * 24 * 60 * 60 * 1000);
     if (hastaDia < limiteMax) hastaDia = limiteMax;
-    console.log(`[checkAvailability] hora_preferida=${hora_preferida} — buscando hasta ${hastaDia.toISOString().slice(0,10)}`);
+    console.log(`[checkAvailability] hora_preferida=${hora_preferida} — buscando hasta ${hastaDia.toISOString().slice(0,10)} (máx ${MAX_DIAS_BUSQUEDA} días)`);
   }
 
   const { data } = await calendar.events.list({
