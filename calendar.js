@@ -81,7 +81,7 @@ async function getPatientAppointments(telefono, dni, creds) {
     timeMin: new Date().toISOString(),
     singleEvents: true,
     orderBy: "startTime",
-    maxResults: 50,
+    maxResults: 250,
   });
 
   const eventos = data.items || [];

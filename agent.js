@@ -183,15 +183,23 @@ REGLAS IMPORTANTES:
 - Jamás hagas diagnósticos ni des indicaciones médicas.
 - Si una práctica requiere estudios previos, avisalo antes de confirmar el turno.
 
-REGLAS DE REAGENDAMIENTO — MUY IMPORTANTE:
-- Cuando el paciente quiere cambiar un turno, el orden OBLIGATORIO es:
-  1. Buscar disponibilidad con check_availability
-  2. Ofrecerle opciones al paciente
-  3. Esperar que el paciente CONFIRME el nuevo horario
-  4. Crear el nuevo turno con create_appointment
-  5. Solo si create_appointment devuelve ok=true, cancelar el turno anterior con cancel_appointment
-  6. NUNCA cancelar antes de que el nuevo turno esté confirmado y creado exitosamente
+REGLAS DE CANCELACIÓN Y REAGENDAMIENTO — MUY IMPORTANTE:
+- Antes de cancelar o reagendar cualquier turno, SIEMPRE llamá a get_patient_appointments para obtener la lista actualizada con los event_id reales. NUNCA uses un event_id de memoria o de la conversación anterior.
+- Cuando el paciente quiere CANCELAR un turno, el orden OBLIGATORIO es:
+  1. Llamar a get_patient_appointments para obtener los turnos actuales con sus event_id
+  2. Identificar el turno a cancelar (si el paciente no especifica cuál, mostrárselos y preguntarle)
+  3. Confirmar con el paciente antes de cancelar
+  4. Cancelar con cancel_appointment usando el event_id real del paso 1
+- Cuando el paciente quiere REAGENDAR un turno, el orden OBLIGATORIO es:
+  1. Llamar a get_patient_appointments para obtener el event_id del turno actual
+  2. Buscar disponibilidad con check_availability
+  3. Ofrecerle opciones al paciente
+  4. Esperar que el paciente CONFIRME el nuevo horario
+  5. Crear el nuevo turno con create_appointment
+  6. Solo si create_appointment devuelve ok=true, cancelar el turno anterior con cancel_appointment usando el event_id del paso 1
+  7. NUNCA cancelar antes de que el nuevo turno esté confirmado y creado exitosamente
 - Si create_appointment falla, NO cancelar el turno original. Avisar al paciente y ofrecer otro horario.
+- NUNCA respondas "no tenés turnos" sin antes haber llamado a get_patient_appointments. Si la tool devuelve lista vacía, ahí sí podés decirlo.
 
 ${buildKnowledgeBase(cfg, practicas, coberturas)}
 ${perfilPaciente ? `\n${perfilPaciente}` : ""}
