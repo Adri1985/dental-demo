@@ -9,6 +9,7 @@ const Anthropic = require("@anthropic-ai/sdk");
 const {
   checkAvailability, createAppointment, cancelAppointment,
   findPatientByIdentifier, getPatientAppointments, getAppointmentsByDay,
+  getRegisteredPatientsInRange, createBlockEvent,
 } = require("./calendar");
 const { google } = require("googleapis");
 const { getSystemPrompt, TOOLS, config } = require("./agent");
@@ -662,6 +663,82 @@ app.post("/appointments/reminder", authMiddleware, async (req, res) => {
     res.json({ ok: true, ts });
   } catch (err) {
     console.error("[POST /appointments/reminder]", err.message);
+    res.status(500).json({ ok: false, error: err.message });
+  }
+});
+
+// Preview: pacientes registrados afectados por un bloqueo de rango
+app.get("/appointments/block-preview", authMiddleware, async (req, res) => {
+  try {
+    const { fecha, hora_inicio, hora_fin } = req.query;
+    if (!fecha || !hora_inicio || !hora_fin) return res.status(400).json({ ok: false, error: "Faltan parámetros" });
+    const perfil = await getPerfilActivo(consultorioDe(req));
+    if (!perfil?.calendar_id) return res.json({ pacientes: [] });
+    const pacientes = await getRegisteredPatientsInRange(fecha, hora_inicio, hora_fin, credsCalendar(perfil));
+    res.json({ pacientes });
+  } catch (err) {
+    console.error("[GET /appointments/block-preview]", err.message);
+    res.status(500).json({ ok: false, error: err.message });
+  }
+});
+
+// Crear bloqueo y notificar pacientes registrados afectados
+app.post("/appointments/block", authMiddleware, async (req, res) => {
+  try {
+    const { fecha, hora_inicio, hora_fin, etiqueta } = req.body;
+    if (!fecha || !hora_inicio || !hora_fin) return res.status(400).json({ ok: false, error: "Faltan parámetros" });
+
+    const consultorioId = consultorioDe(req);
+    const perfil  = await getPerfilActivo(consultorioId);
+    const consultorio = await db.getConsultorio(consultorioId);
+    const creds   = credsCalendar(perfil);
+
+    // Obtener pacientes registrados en ese rango antes de bloquear
+    const afectados = perfil?.calendar_id
+      ? await getRegisteredPatientsInRange(fecha, hora_inicio, hora_fin, creds)
+      : [];
+
+    // Crear el bloqueo en el calendario
+    if (perfil?.calendar_id) {
+      await createBlockEvent({ fecha, hora_inicio, hora_fin, etiqueta, creds });
+    }
+
+    // Notificar solo a pacientes con teléfono registrado
+    const notificados = [];
+    for (const p of afectados) {
+      if (!p.telefono) continue;
+      try {
+        const fechaLabel = new Date(`${fecha}T${hora_inicio}:00-03:00`).toLocaleDateString("es-AR", {
+          weekday: "long", day: "numeric", month: "long", timeZone: "America/Argentina/Buenos_Aires",
+        });
+        const msg = `Hola${p.nombre ? " " + p.nombre.split(" ")[0] : ""}! Te avisamos que tu turno del ${fechaLabel} a las ${p.hora} fue cancelado por el consultorio. Disculpá los inconvenientes, nos comunicaremos para reagendarlo. — ${consultorio?.nombre || "El consultorio"}`;
+
+        await sendWhatsAppMessage(p.telefono, msg, perfil);
+
+        // Guardar en historial
+        await db.upsertPatient({ telefono: p.telefono, nombre: p.nombre || "Paciente", consultorio_id: consultorioId });
+        const ts = new Date().toISOString();
+        await db.addMessage(p.telefono, "assistant", msg, ts, true, "Sistema");
+        let hist = await db.getClaudeHistory(p.telefono);
+        const ultimoRol = hist.length ? hist[hist.length - 1].role : null;
+        if (ultimoRol === "assistant" || !ultimoRol) {
+          hist.push({ role: "user",      content: "[El consultorio canceló el turno del paciente]" });
+          hist.push({ role: "assistant", content: msg });
+        } else {
+          hist.push({ role: "assistant", content: msg });
+        }
+        await db.saveClaudeHistory(p.telefono, hist);
+
+        notificados.push({ telefono: p.telefono, nombre: p.nombre, hora: p.hora });
+      } catch (e) {
+        console.error(`[block] error notificando ${p.telefono}:`, e.message);
+      }
+    }
+
+    console.log(`[block] ${fecha} ${hora_inicio}–${hora_fin} | bloqueo creado | notificados: ${notificados.length}/${afectados.length}`);
+    res.json({ ok: true, notificados, sin_telefono: afectados.length - notificados.length });
+  } catch (err) {
+    console.error("[POST /appointments/block]", err.message);
     res.status(500).json({ ok: false, error: err.message });
   }
 });

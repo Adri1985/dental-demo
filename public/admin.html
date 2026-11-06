@@ -185,6 +185,12 @@
     .btn-recordatorio:hover { background: #00c99d; }
     .btn-recordatorio:disabled { background: #2a3942; color: #8696a0; cursor: default; }
     .turnos-empty { text-align: center; color: #8696a0; padding: 60px 20px; font-size: 14px; }
+    .btn-bloquear-rango { margin-left: auto; background: none; border: 1px solid #f59e0b; color: #f59e0b; border-radius: 20px; padding: 5px 14px; font-size: 12px; font-weight: 600; cursor: pointer; white-space: nowrap; }
+    .btn-bloquear-rango:hover { background: rgba(245,158,11,0.1); }
+    .bloqueo-preview { background: #1a1500; border: 1px solid #f59e0b33; border-radius: 8px; padding: 10px 12px; margin-top: 10px; font-size: 13px; color: #e9edef; }
+    .bloqueo-preview-title { font-size: 11px; color: #f59e0b; font-weight: 600; margin-bottom: 6px; text-transform: uppercase; letter-spacing: 0.5px; }
+    .bloqueo-preview-item { padding: 3px 0; color: #8696a0; }
+    .bloqueo-preview-item span { color: #e9edef; }
     .nav-view-btn { background: none; border: 1px solid #3a4952; color: #8696a0; border-radius: 20px; padding: 5px 12px; font-size: 12px; font-weight: 600; cursor: pointer; }
     .nav-view-btn.active { background: #00a884; border-color: #00a884; color: white; }
     .nav-view-btn:hover:not(.active) { border-color: #8696a0; color: #e9edef; }
@@ -285,6 +291,7 @@
       <button class="turnos-fecha-btn" id="tbPasado" onclick="seleccionarFechaTurnos('pasado')">Pasado</button>
       <input type="date" class="turnos-date-input" id="turnosFechaInput" onchange="seleccionarFechaTurnos('custom')" />
       <span id="turnosFechaLabel" style="font-size:12px;color:#8696a0;margin-left:4px"></span>
+      <button class="btn-bloquear-rango" onclick="abrirModalBloqueo()">Bloquear horario</button>
     </div>
     <div class="turnos-body" id="turnosBody">
       <div class="turnos-empty">Cargando turnos...</div>
@@ -623,6 +630,38 @@
 </div>
 
 <!-- Modal guía Google Calendar -->
+<div class="modal-overlay" id="bloqueoOverlay" onclick="if(event.target===this)cerrarModalBloqueo()">
+  <div class="modal" style="width:420px;max-width:96vw">
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px">
+      <div class="modal-title">Bloquear horario</div>
+      <button onclick="cerrarModalBloqueo()" style="background:none;border:none;color:#8696a0;font-size:20px;cursor:pointer;line-height:1">×</button>
+    </div>
+    <div class="modal-field">
+      <label class="modal-label">Fecha</label>
+      <input class="modal-input" id="bloqueoFecha" type="date" />
+    </div>
+    <div class="modal-row">
+      <div class="modal-field">
+        <label class="modal-label">Desde</label>
+        <input class="modal-input" id="bloqueoDesde" type="time" step="900" />
+      </div>
+      <div class="modal-field">
+        <label class="modal-label">Hasta</label>
+        <input class="modal-input" id="bloqueoHasta" type="time" step="900" />
+      </div>
+    </div>
+    <div class="modal-field">
+      <label class="modal-label">Etiqueta (opcional)</label>
+      <input class="modal-input" id="bloqueoEtiqueta" type="text" placeholder="ej: Almuerzo, Reunión, Feriado..." />
+    </div>
+    <div id="bloqueoPreview"></div>
+    <div class="modal-actions" style="margin-top:16px">
+      <button class="modal-btn secondary" onclick="cerrarModalBloqueo()">Cancelar</button>
+      <button class="modal-btn" id="btnConfirmarBloqueo" onclick="confirmarBloqueo()" style="background:#f59e0b;color:#1a1200">Bloquear y notificar</button>
+    </div>
+  </div>
+</div>
+
 <div class="modal-overlay" id="guiaCalendarOverlay" onclick="if(event.target===this)cerrarGuiaCalendar()">
   <div class="modal" style="width:520px;max-width:96vw;max-height:88vh;overflow-y:auto;gap:0">
     <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px">
@@ -1706,6 +1745,71 @@
 
   // Inicializar fecha en el input
   document.getElementById("turnosFechaInput").value = fechaHoy();
+
+  // ─── BLOQUEO DE HORARIO ───────────────────────────────────────
+  function abrirModalBloqueo() {
+    document.getElementById("bloqueoFecha").value    = turnosFechaActual;
+    document.getElementById("bloqueoDesde").value    = "";
+    document.getElementById("bloqueoHasta").value    = "";
+    document.getElementById("bloqueoEtiqueta").value = "";
+    document.getElementById("bloqueoPreview").innerHTML = "";
+    document.getElementById("bloqueoOverlay").classList.add("show");
+    // Preview cuando cambian los campos
+    ["bloqueoFecha","bloqueoDesde","bloqueoHasta"].forEach(id =>
+      document.getElementById(id).addEventListener("change", cargarPreviewBloqueo, { once: false })
+    );
+  }
+
+  function cerrarModalBloqueo() {
+    document.getElementById("bloqueoOverlay").classList.remove("show");
+  }
+
+  async function cargarPreviewBloqueo() {
+    const fecha      = document.getElementById("bloqueoFecha").value;
+    const hora_inicio = document.getElementById("bloqueoDesde").value;
+    const hora_fin   = document.getElementById("bloqueoHasta").value;
+    const preview    = document.getElementById("bloqueoPreview");
+    if (!fecha || !hora_inicio || !hora_fin || hora_fin <= hora_inicio) { preview.innerHTML = ""; return; }
+    try {
+      const r = await fetch(`${API}/appointments/block-preview?fecha=${fecha}&hora_inicio=${hora_inicio}&hora_fin=${hora_fin}`, { headers: authH() }).then(r => r.json());
+      if (!r.pacientes || r.pacientes.length === 0) {
+        preview.innerHTML = `<div class="bloqueo-preview"><div class="bloqueo-preview-title">Sin turnos registrados en ese rango</div><div style="font-size:12px;color:#8696a0">No hay pacientes del sistema que se vean afectados.</div></div>`;
+      } else {
+        preview.innerHTML = `<div class="bloqueo-preview">
+          <div class="bloqueo-preview-title">Turnos afectados (${r.pacientes.length}) — se les enviará WhatsApp</div>
+          ${r.pacientes.map(p => `<div class="bloqueo-preview-item"><span>${escHtml(p.nombre || "Sin nombre")}</span> · ${escHtml(p.hora)} · ${escHtml(p.practica || "")}${!p.telefono ? ' <span style="color:#cc6666">(sin tel.)</span>' : ''}</div>`).join("")}
+        </div>`;
+      }
+    } catch(e) { preview.innerHTML = ""; }
+  }
+
+  async function confirmarBloqueo() {
+    const fecha       = document.getElementById("bloqueoFecha").value;
+    const hora_inicio = document.getElementById("bloqueoDesde").value;
+    const hora_fin    = document.getElementById("bloqueoHasta").value;
+    const etiqueta    = document.getElementById("bloqueoEtiqueta").value.trim();
+    if (!fecha || !hora_inicio || !hora_fin) return alert("Completá fecha y horario.");
+    if (hora_fin <= hora_inicio) return alert("La hora de fin debe ser posterior al inicio.");
+    const btn = document.getElementById("btnConfirmarBloqueo");
+    btn.disabled = true; btn.textContent = "Bloqueando...";
+    try {
+      const r = await fetch(`${API}/appointments/block`, {
+        method: "POST", headers: { ...authH(), "Content-Type": "application/json" },
+        body: JSON.stringify({ fecha, hora_inicio, hora_fin, etiqueta }),
+      }).then(r => r.json());
+      if (r.ok) {
+        cerrarModalBloqueo();
+        cargarTurnos(turnosFechaActual);
+        const msg = r.notificados.length
+          ? `Bloqueo creado. Se notificó a ${r.notificados.length} paciente${r.notificados.length > 1 ? "s" : ""}.`
+          : "Bloqueo creado. No había pacientes registrados para notificar.";
+        alert(msg);
+      } else {
+        alert("Error: " + (r.error || "desconocido"));
+      }
+    } catch(e) { alert("Error al crear el bloqueo."); }
+    finally { btn.disabled = false; btn.textContent = "Bloquear y notificar"; }
+  }
 </script>
 </body>
 </html>

@@ -421,6 +421,74 @@ async function cancelAppointment({ event_id, creds }) {
   return { ok: true };
 }
 
+/**
+ * Devuelve los eventos en un rango horario específico de un día.
+ * Filtra solo los que tienen "Teléfono:" en la descripción (creados por el agente).
+ */
+async function getRegisteredPatientsInRange(fecha, horaInicio, horaFin, creds) {
+  const { sa, calendarId: CALENDAR_ID } = resolverCreds(creds);
+  const auth = getAuthClient(sa);
+  const calendar = google.calendar({ version: "v3", auth });
+
+  const timeMin = new Date(`${fecha}T${horaInicio}:00-03:00`);
+  const timeMax = new Date(`${fecha}T${horaFin}:00-03:00`);
+
+  const { data } = await calendar.events.list({
+    calendarId: CALENDAR_ID,
+    timeMin: timeMin.toISOString(),
+    timeMax: timeMax.toISOString(),
+    singleEvents: true,
+    orderBy: "startTime",
+  });
+
+  const extraer = (desc, campo) => {
+    const m = desc.match(new RegExp(`${campo}: (.+)`));
+    return m ? m[1].trim() : null;
+  };
+
+  return (data.items || [])
+    .filter(ev => ev.status !== "cancelled" && (ev.description || "").includes("Teléfono:"))
+    .map(ev => {
+      const desc = ev.description || "";
+      const start = new Date(ev.start.dateTime || ev.start.date);
+      const end   = ev.end?.dateTime ? new Date(ev.end.dateTime) : null;
+      return {
+        event_id:  ev.id,
+        nombre:    extraer(desc, "Paciente") || ev.summary,
+        telefono:  extraer(desc, "Teléfono"),
+        practica:  extraer(desc, "Práctica") || ev.summary,
+        hora:      start.toLocaleTimeString("es-AR", { hour: "2-digit", minute: "2-digit", timeZone: "America/Argentina/Buenos_Aires" }),
+        inicio:    ev.start.dateTime,
+        duracion_min: end ? Math.round((end - start) / 60000) : null,
+      };
+    });
+}
+
+/**
+ * Crea un evento de bloqueo en el calendario (sin datos de paciente).
+ */
+async function createBlockEvent({ fecha, hora_inicio, hora_fin, etiqueta, creds }) {
+  const { sa, calendarId: CALENDAR_ID } = resolverCreds(creds);
+  const auth = getAuthClient(sa);
+  const calendar = google.calendar({ version: "v3", auth });
+
+  const start = new Date(`${fecha}T${hora_inicio}:00-03:00`);
+  const end   = new Date(`${fecha}T${hora_fin}:00-03:00`);
+
+  const { data } = await calendar.events.insert({
+    calendarId: CALENDAR_ID,
+    requestBody: {
+      summary:     etiqueta || "BLOQUEADO",
+      description: "Bloqueo manual desde el panel de administración.",
+      start: { dateTime: start.toISOString(), timeZone: "America/Argentina/Buenos_Aires" },
+      end:   { dateTime: end.toISOString(),   timeZone: "America/Argentina/Buenos_Aires" },
+    },
+  });
+
+  console.log(`[calendar] bloqueo creado — ${etiqueta || "BLOQUEADO"} | ${fecha} ${hora_inicio}–${hora_fin} | event_id: ${data.id}`);
+  return { ok: true, event_id: data.id };
+}
+
 module.exports = {
   checkAvailability,
   createAppointment,
@@ -428,4 +496,6 @@ module.exports = {
   findPatientByIdentifier,
   getPatientAppointments,
   getAppointmentsByDay,
+  getRegisteredPatientsInRange,
+  createBlockEvent,
 };
