@@ -394,15 +394,18 @@ async function getAppointmentsByDay(fecha, creds) {
     .map(ev => {
       const desc = ev.description || "";
       const start = new Date(ev.start.dateTime || ev.start.date);
+      const end   = ev.end?.dateTime ? new Date(ev.end.dateTime) : null;
+      const duracion_min = end ? Math.round((end - start) / 60000) : null;
       return {
-        id:        ev.id,
-        summary:   ev.summary || "",
-        hora:      start.toLocaleTimeString("es-AR", { hour: "2-digit", minute: "2-digit", timeZone: "America/Argentina/Buenos_Aires" }),
-        inicio:    ev.start.dateTime || ev.start.date,
-        nombre:    extraer(desc, "Paciente") || ev.summary,
-        telefono:  extraer(desc, "Teléfono"),
-        dni:       extraer(desc, "DNI"),
-        practica:  extraer(desc, "Práctica") || ev.summary,
+        id:           ev.id,
+        summary:      ev.summary || "",
+        hora:         start.toLocaleTimeString("es-AR", { hour: "2-digit", minute: "2-digit", timeZone: "America/Argentina/Buenos_Aires" }),
+        inicio:       ev.start.dateTime || ev.start.date,
+        nombre:       extraer(desc, "Paciente") || ev.summary,
+        telefono:     extraer(desc, "Teléfono"),
+        dni:          extraer(desc, "DNI"),
+        practica:     extraer(desc, "Práctica") || ev.summary,
+        duracion_min,
       };
     });
 }
