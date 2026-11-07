@@ -188,6 +188,35 @@ async function sendWhatsAppMessage(to, text, perfil = null) {
   else console.log(`[wa-send] OK (${resp.status}):`, body.slice(0, 200));
 }
 
+async function sendWhatsAppTemplate(to, templateName, params, perfil = null) {
+  const p       = perfil || await getPerfilActivo();
+  const token   = p?.whatsapp_token           || process.env.WHATSAPP_TOKEN;
+  const phoneId = p?.whatsapp_phone_number_id || process.env.WHATSAPP_PHONE_NUMBER_ID;
+  if (!token || !phoneId) { console.error("[wa-template] sin credenciales"); return; }
+  const destinatario = normalizarParaEnvioAR(to);
+  const body = {
+    messaging_product: "whatsapp",
+    to: destinatario,
+    type: "template",
+    template: {
+      name: templateName,
+      language: { code: "es_AR" },
+      components: [{
+        type: "body",
+        parameters: params.map(p => ({ type: "text", text: p })),
+      }],
+    },
+  };
+  const resp = await fetch(`https://graph.facebook.com/v19.0/${phoneId}/messages`, {
+    method: "POST",
+    headers: { "Authorization": `Bearer ${token}`, "Content-Type": "application/json" },
+    body: JSON.stringify(body),
+  });
+  const respText = await resp.text();
+  if (!resp.ok) console.error(`[wa-template] Meta respondió ${resp.status}:`, respText);
+  else console.log(`[wa-template] OK (${resp.status}) template=${templateName} → ${destinatario}`);
+}
+
 // ─────────────────────────────────────────────
 //  CONTEXTO DEL PACIENTE PARA CLAUDE
 // ─────────────────────────────────────────────
@@ -711,21 +740,23 @@ app.post("/appointments/block", authMiddleware, async (req, res) => {
         const fechaLabel = new Date(`${fecha}T${hora_inicio}:00-03:00`).toLocaleDateString("es-AR", {
           weekday: "long", day: "numeric", month: "long", timeZone: "America/Argentina/Buenos_Aires",
         });
-        const msg = `Hola${p.nombre ? " " + p.nombre.split(" ")[0] : ""}! Te avisamos que tu turno del ${fechaLabel} a las ${p.hora} fue cancelado por el consultorio. Disculpá los inconvenientes, nos comunicaremos para reagendarlo. — ${consultorio?.nombre || "El consultorio"}`;
+        const nombre = p.nombre ? p.nombre.split(" ")[0] : "paciente";
 
-        await sendWhatsAppMessage(p.telefono, msg, perfil);
+        // Usar template aprobada para poder notificar fuera de la ventana de 24hs
+        await sendWhatsAppTemplate(p.telefono, "cancelacion_turno", [nombre, fechaLabel, p.hora], perfil);
 
-        // Guardar en historial
+        // Guardar en historial para que aparezca en el panel y el agente tenga contexto
+        const msgHistorial = `Hola ${nombre}! Te avisamos que tu turno del ${fechaLabel} a las ${p.hora} fue cancelado por el consultorio. Disculpá los inconvenientes. Si querés, respondé este mensaje y te ayudo a encontrar otro horario disponible.`;
         await db.upsertPatient({ telefono: p.telefono, nombre: p.nombre || "Paciente", consultorio_id: consultorioId });
         const ts = new Date().toISOString();
-        await db.addMessage(p.telefono, "assistant", msg, ts, true, "Sistema");
+        await db.addMessage(p.telefono, "assistant", msgHistorial, ts, true, "Sistema");
         let hist = await db.getClaudeHistory(p.telefono);
         const ultimoRol = hist.length ? hist[hist.length - 1].role : null;
         if (ultimoRol === "assistant" || !ultimoRol) {
           hist.push({ role: "user",      content: "[El consultorio canceló el turno del paciente]" });
-          hist.push({ role: "assistant", content: msg });
+          hist.push({ role: "assistant", content: msgHistorial });
         } else {
-          hist.push({ role: "assistant", content: msg });
+          hist.push({ role: "assistant", content: msgHistorial });
         }
         await db.saveClaudeHistory(p.telefono, hist);
 
