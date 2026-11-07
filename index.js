@@ -663,11 +663,14 @@ app.post("/appointments/reminder", authMiddleware, async (req, res) => {
     const perfil = await getPerfilActivo(consultorioId);
     const consultorio = await db.getConsultorio(consultorioId);
 
-    // Determinar si el turno es hoy o en otra fecha
+    // Determinar si el turno es hoy, mañana o en otra fecha
     const hoyAR = new Date().toLocaleDateString("sv-SE", { timeZone: "America/Argentina/Buenos_Aires" });
+    const mananaAR = new Date(Date.now() + 86400000).toLocaleDateString("sv-SE", { timeZone: "America/Argentina/Buenos_Aires" });
     let cuandoLabel;
     if (!fecha || fecha === hoyAR) {
       cuandoLabel = `hoy a las ${hora}`;
+    } else if (fecha === mananaAR) {
+      cuandoLabel = `mañana a las ${hora}`;
     } else {
       const fechaFormateada = new Date(`${fecha}T12:00:00-03:00`).toLocaleDateString("es-AR", {
         weekday: "long", day: "numeric", month: "long", timeZone: "America/Argentina/Buenos_Aires",
