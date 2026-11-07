@@ -467,7 +467,7 @@ async function getRegisteredPatientsInRange(fecha, horaInicio, horaFin, creds) {
 /**
  * Crea un evento de bloqueo en el calendario (sin datos de paciente).
  */
-async function createBlockEvent({ fecha, hora_inicio, hora_fin, etiqueta, creds }) {
+async function createBlockEvent({ fecha, hora_inicio, hora_fin, etiqueta, descripcion, creds }) {
   const { sa, calendarId: CALENDAR_ID } = resolverCreds(creds);
   const auth = getAuthClient(sa);
   const calendar = google.calendar({ version: "v3", auth });
@@ -479,7 +479,7 @@ async function createBlockEvent({ fecha, hora_inicio, hora_fin, etiqueta, creds 
     calendarId: CALENDAR_ID,
     requestBody: {
       summary:     etiqueta || "BLOQUEADO",
-      description: "Bloqueo manual desde el panel de administración.",
+      description: descripcion || "Bloqueo manual desde el panel de administración.",
       start: { dateTime: start.toISOString(), timeZone: "America/Argentina/Buenos_Aires" },
       end:   { dateTime: end.toISOString(),   timeZone: "America/Argentina/Buenos_Aires" },
     },

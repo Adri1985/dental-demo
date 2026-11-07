@@ -727,9 +727,21 @@ app.post("/appointments/block", authMiddleware, async (req, res) => {
       ? await getRegisteredPatientsInRange(fecha, hora_inicio, hora_fin, creds)
       : [];
 
-    // Crear el bloqueo en el calendario
+    // Cancelar los turnos de pacientes afectados en el calendario
+    for (const p of afectados) {
+      if (p.event_id) {
+        await cancelAppointment({ event_id: p.event_id, creds }).catch(e =>
+          console.error(`[block] error cancelando evento ${p.event_id}:`, e.message)
+        );
+      }
+    }
+
+    // Crear el bloqueo con descripción de quiénes fueron cancelados
+    const descripcionBloqueo = afectados.length
+      ? `Bloqueo manual desde el panel.\nTurnos cancelados:\n${afectados.map(p => `- ${p.nombre || "Sin nombre"} (${p.hora})${p.telefono ? " — Tel: " + p.telefono : ""}`).join("\n")}`
+      : "Bloqueo manual desde el panel de administración.";
     if (perfil?.calendar_id) {
-      await createBlockEvent({ fecha, hora_inicio, hora_fin, etiqueta, creds });
+      await createBlockEvent({ fecha, hora_inicio, hora_fin, etiqueta, descripcion: descripcionBloqueo, creds });
     }
 
     // Notificar solo a pacientes con teléfono registrado
