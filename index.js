@@ -656,13 +656,26 @@ app.get("/appointments/day", authMiddleware, async (req, res) => {
 
 app.post("/appointments/reminder", authMiddleware, async (req, res) => {
   try {
-    const { telefono, nombre, hora, practica } = req.body;
+    const { telefono, nombre, hora, practica, fecha } = req.body;
     if (!telefono) return res.status(400).json({ ok: false, error: "Falta el teléfono" });
 
     const consultorioId = consultorioDe(req);
     const perfil = await getPerfilActivo(consultorioId);
     const consultorio = await db.getConsultorio(consultorioId);
-    const msg = `Hola${nombre ? " " + nombre.split(" ")[0] : ""}! 👋 Te recordamos tu turno de ${practica || "consulta"} hoy a las ${hora}. Por cualquier cambio escribinos. — ${consultorio?.nombre || "El consultorio"}`;
+
+    // Determinar si el turno es hoy o en otra fecha
+    const hoyAR = new Date().toLocaleDateString("sv-SE", { timeZone: "America/Argentina/Buenos_Aires" });
+    let cuandoLabel;
+    if (!fecha || fecha === hoyAR) {
+      cuandoLabel = `hoy a las ${hora}`;
+    } else {
+      const fechaFormateada = new Date(`${fecha}T12:00:00-03:00`).toLocaleDateString("es-AR", {
+        weekday: "long", day: "numeric", month: "long", timeZone: "America/Argentina/Buenos_Aires",
+      });
+      cuandoLabel = `el ${fechaFormateada} a las ${hora}`;
+    }
+
+    const msg = `Hola${nombre ? " " + nombre.split(" ")[0] : ""}! 👋 Te recordamos tu turno de ${practica || "consulta"} ${cuandoLabel}. Por cualquier cambio escribinos. — ${consultorio?.nombre || "El consultorio"}`;
 
     await sendWhatsAppMessage(telefono, msg, perfil);
 

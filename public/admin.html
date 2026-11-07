@@ -1717,7 +1717,7 @@
           </div>
           <div class="turno-actions">
             ${t.telefono
-              ? `<button class="btn-recordatorio" id="btnRec_${t.id}" onclick="enviarRecordatorio('${escHtml(t.id)}','${escHtml(t.telefono)}','${escHtml(t.nombre||"")}','${escHtml(t.hora)}','${escHtml(t.practica||"")}')">Recordatorio</button>`
+              ? `<button class="btn-recordatorio" id="btnRec_${t.id}" onclick="enviarRecordatorio('${escHtml(t.id)}','${escHtml(t.telefono)}','${escHtml(t.nombre||"")}','${escHtml(t.hora)}','${escHtml(t.practica||"")}','${turnosFechaActual}')">Recordatorio</button>`
               : `<button class="btn-recordatorio" disabled title="Sin teléfono">Sin tel.</button>`
             }
           </div>
@@ -1727,14 +1727,14 @@
     }
   }
 
-  async function enviarRecordatorio(id, telefono, nombre, hora, practica) {
+  async function enviarRecordatorio(id, telefono, nombre, hora, practica, fecha) {
     const btn = document.getElementById(`btnRec_${id}`);
     if (!btn) return;
     btn.disabled = true; btn.textContent = "Enviando...";
     try {
       const r = await fetch(`${API}/appointments/reminder`, {
         method: "POST", headers: { ...authH(), "Content-Type": "application/json" },
-        body: JSON.stringify({ telefono, nombre, hora, practica }),
+        body: JSON.stringify({ telefono, nombre, hora, practica, fecha }),
       }).then(x => x.json());
       if (r.ok) {
         btn.textContent = "✓ Enviado"; btn.style.background = "#2a3942";
