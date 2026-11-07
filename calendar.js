@@ -295,7 +295,12 @@ async function createAppointment({ paciente_nombre, paciente_telefono, paciente_
   const auth = getAuthClient(sa);
   const calendar = google.calendar({ version: "v3", auth });
 
-  const start = new Date(fecha_hora);
+  // Si fecha_hora no tiene offset explícito, asumir hora Argentina (-03:00)
+  // para evitar que el servidor UTC lo interprete como UTC y cree el turno 3hs tarde
+  const fechaHoraNormalizada = /Z|[+-]\d{2}:?\d{2}$/.test(fecha_hora)
+    ? fecha_hora
+    : fecha_hora.replace(" ", "T") + "-03:00";
+  const start = new Date(fechaHoraNormalizada);
   const end = new Date(start.getTime() + duracion_minutos * 60000);
 
   // ── Verificación de conflicto justo antes de crear ──────────────

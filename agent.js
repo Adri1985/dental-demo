@@ -237,7 +237,7 @@ const TOOLS = [
         paciente_telefono:    { type: "string", description: "Usar el teléfono de [DATOS DEL PACIENTE]. No preguntar al paciente." },
         paciente_dni:         { type: "string", description: "Usar el DNI de [DATOS DEL PACIENTE] si está disponible." },
         paciente_obra_social: { type: "string", description: "Usar la obra social de [DATOS DEL PACIENTE] si está disponible." },
-        fecha_hora:           { type: "string", description: "ISO 8601 con timezone" },
+        fecha_hora:           { type: "string", description: "Usar el campo 'inicio' exacto del slot devuelto por check_availability (ISO 8601 UTC). No reformatear ni reconstruir la fecha." },
         tipo_practica:        { type: "string" },
         duracion_minutos:     { type: "number" },
       },
