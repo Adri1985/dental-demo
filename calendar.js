@@ -85,16 +85,19 @@ async function getPatientAppointments(telefono, dni, creds) {
   });
 
   const eventos = data.items || [];
-
-  return eventos.filter((ev) => {
+  console.log(`[getPatientAppointments] buscando tel=${telefono} dni=${dni} | total eventos=${eventos.length}`);
+  const encontrados = eventos.filter((ev) => {
     const desc = ev.description || "";
     const matchTel = telefono && desc.includes(`Teléfono: ${telefono}`);
     const matchDni = dni && desc.includes(`DNI: ${dni}`);
+    if (matchTel || matchDni) console.log(`[getPatientAppointments] match: ${ev.summary} | ${ev.start?.dateTime}`);
     return matchTel || matchDni;
-  }).map((ev) => ({
-    event_id: ev.id,
-    titulo: ev.summary,
-    inicio: ev.start.dateTime,
+  });
+  console.log(`[getPatientAppointments] encontrados=${encontrados.length}`);
+  return encontrados.map((ev) => ({
+    event_id:  ev.id,
+    titulo:    ev.summary,
+    inicio:    ev.start.dateTime,
     label: new Date(ev.start.dateTime).toLocaleString("es-AR", {
       weekday: "long",
       day: "numeric",

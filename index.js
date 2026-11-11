@@ -355,7 +355,7 @@ async function runAgent(userMessage, telefono, consultorio_id = DEFAULT_CONSULTO
   // Si el paciente pregunta qué turnos YA tiene agendados, forzamos get_patient_appointments.
   // Si pregunta por disponibilidad para sacar un turno nuevo, forzamos check_availability.
   // "turno"/"turnos" puede significar cualquiera de las dos cosas, así que se detecta por contexto.
-  const MIS_TURNOS_RE = /\b(mis turnos|que turno|qué turno|cuál.*turno|cuando.*mi turno|tengo.*turno|turno.*tengo|turno.*agendado|próximo turno|cancelar.*turno|turno.*cancela)\b/i;
+  const MIS_TURNOS_RE = /\b(mis turno|que turno|qué turno|cuáles? turno|cuando.*mi turno|tengo.*turno|turno.*tengo|turno.*agendado|próximo turno|cancelar.*turno|turno.*cancela)/i;
   const AVAILABILITY_RE = /\b(disponib|horario|agendar|reservar|sacar turno|cuándo hay|cuando hay|esta tarde|esta mañana|libre|semana)\b/i;
   const forcearMisTurnos     = MIS_TURNOS_RE.test(userMessage);
   const forcearDisponibilidad = !forcearMisTurnos && AVAILABILITY_RE.test(userMessage);
