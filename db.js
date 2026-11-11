@@ -455,6 +455,22 @@ async function setPatientPrimerTurno(telefono) {
   await pool.query("UPDATE patients SET primer_turno_realizado = true WHERE telefono = $1", [telefono]);
 }
 
+async function searchPatients(q, consultorio_id) {
+  if (!USE_DB) {
+    const term = q.toLowerCase();
+    return Object.values(store.patients)
+      .filter(p => (!consultorio_id || String(p.consultorio_id) === String(consultorio_id)) &&
+        (p.nombre || "").toLowerCase().includes(term))
+      .slice(0, 8);
+  }
+  const { rows } = await pool.query(`
+    SELECT telefono, nombre, dni, obra_social FROM patients
+    WHERE consultorio_id = $1 AND nombre ILIKE $2
+    ORDER BY nombre LIMIT 8
+  `, [consultorio_id || 1, `%${q}%`]);
+  return rows;
+}
+
 async function getAllPatients(consultorio_id) {
   if (!USE_DB) {
     const todos = Object.values(store.patients);
@@ -805,7 +821,7 @@ module.exports = {
   // config
   getConfig, setConfig,
   // patients
-  getPatient, upsertPatient, updatePatientData, setPatientMode, setPatientAlerta, setPatientPrimerTurno, getAllPatients,
+  getPatient, upsertPatient, updatePatientData, setPatientMode, setPatientAlerta, setPatientPrimerTurno, getAllPatients, searchPatients,
   // messages
   addMessage, getMessages, clearMessages,
   // claude history

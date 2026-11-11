@@ -612,6 +612,11 @@ app.delete("/session/:telefono", async (req, res) => {
 });
 
 app.get("/patients",                    authMiddleware, async (req, res) => { res.json(await db.getAllPatients(consultorioDe(req))); });
+app.get("/patients/search",             authMiddleware, async (req, res) => {
+  const q = (req.query.q || "").trim();
+  if (q.length < 2) return res.json([]);
+  res.json(await db.searchPatients(q, consultorioDe(req)));
+});
 app.get("/patients/:telefono/messages", authMiddleware, async (req, res) => { res.json(await db.getMessages(req.params.telefono)); });
 app.post("/admin/pause/:telefono",      authMiddleware, async (req, res) => { await db.setPatientMode(req.params.telefono, "humano"); res.json({ ok: true }); });
 app.post("/admin/resume/:telefono",     authMiddleware, async (req, res) => { await db.setPatientMode(req.params.telefono, "bot"); res.json({ ok: true }); });
@@ -651,6 +656,65 @@ app.get("/appointments/day", authMiddleware, async (req, res) => {
   } catch (err) {
     console.error("[GET /appointments/day]", err.message);
     res.json([]);
+  }
+});
+
+// Crear turno manual desde el panel
+app.post("/appointments/manual", authMiddleware, async (req, res) => {
+  try {
+    const { telefono, nombre, fecha, hora, detalle, duracion_min, enviar_whatsapp } = req.body;
+    if (!fecha || !hora || !detalle) return res.status(400).json({ ok: false, error: "Faltan campos obligatorios" });
+
+    const consultorioId = consultorioDe(req);
+    const perfil  = await getPerfilActivo(consultorioId);
+    const consultorio = await db.getConsultorio(consultorioId);
+    const creds   = credsCalendar(perfil);
+
+    // Crear el evento en Google Calendar
+    const fecha_hora = `${fecha}T${hora}:00-03:00`;
+    const result = await createAppointment({
+      paciente_nombre:      nombre || "Paciente",
+      paciente_telefono:    telefono || "",
+      paciente_dni:         "",
+      paciente_obra_social: "",
+      fecha_hora,
+      tipo_practica: detalle,
+      duracion_minutos: parseInt(duracion_min) || 30,
+      creds,
+    });
+
+    if (!result.ok && result.error) return res.status(409).json({ ok: false, error: result.error });
+
+    // Enviar WhatsApp con template si se pidió y hay teléfono
+    if (enviar_whatsapp && telefono) {
+      const fechaLabel = new Date(`${fecha}T12:00:00-03:00`).toLocaleDateString("es-AR", {
+        weekday: "long", day: "numeric", month: "long", timeZone: "America/Argentina/Buenos_Aires",
+      });
+      const primerNombre = (nombre || "").split(" ")[0] || "paciente";
+      await sendWhatsAppTemplate(telefono, "turno_manual", [primerNombre, fechaLabel, hora, detalle], perfil)
+        .catch(e => console.error("[manual] error enviando template:", e.message));
+
+      // Guardar en historial
+      const msgHistorial = `Hola ${primerNombre}! Tu turno quedó confirmado para el ${fechaLabel} a las ${hora}. Motivo: ${detalle}. Por cualquier cambio escribinos. Que tengas buen dia.`;
+      await db.upsertPatient({ telefono, nombre: nombre || "Paciente", consultorio_id: consultorioId });
+      const ts = new Date().toISOString();
+      await db.addMessage(telefono, "assistant", msgHistorial, ts, true, "Sistema");
+      let hist = await db.getClaudeHistory(telefono);
+      const ultimoRol = hist.length ? hist[hist.length - 1].role : null;
+      if (ultimoRol === "assistant" || !ultimoRol) {
+        hist.push({ role: "user",      content: "[El consultorio agendó un turno manual para el paciente]" });
+        hist.push({ role: "assistant", content: msgHistorial });
+      } else {
+        hist.push({ role: "assistant", content: msgHistorial });
+      }
+      await db.saveClaudeHistory(telefono, hist);
+    }
+
+    console.log(`[manual] turno creado — ${nombre} | ${fecha} ${hora} | ${detalle} | wa: ${enviar_whatsapp}`);
+    res.json({ ok: true, event_id: result.event_id });
+  } catch (err) {
+    console.error("[POST /appointments/manual]", err.message);
+    res.status(500).json({ ok: false, error: err.message });
   }
 });
 

@@ -299,34 +299,71 @@
   </div>
 </div>
 
-<button class="fab" onclick="abrirNuevoTurno()">+ Nuevo turno</button>
+<button class="fab" onclick="abrirNuevoTurno(turnosFechaActual)">+ Nuevo turno</button>
 
 <!-- Modal nuevo turno -->
-<div class="modal-overlay" id="turnoOverlay">
-  <div class="modal">
-    <div class="modal-title">Generar link de turno</div>
-    <div class="modal-field"><label class="modal-label">Nombre del paciente</label><input class="modal-input" id="tNombre" type="text" placeholder="Juan Pérez" /></div>
-    <div class="modal-field">
-      <label class="modal-label">Práctica</label>
-      <select class="select" id="tPractica">
-        <option value="">Cargando...</option>
-      </select>
+<div class="modal-overlay" id="turnoOverlay" onclick="if(event.target===this)cerrarNuevoTurno()">
+  <div class="modal" style="width:460px;max-width:96vw">
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px">
+      <div class="modal-title">Nuevo turno</div>
+      <button onclick="cerrarNuevoTurno()" style="background:none;border:none;color:#8696a0;font-size:20px;cursor:pointer;line-height:1">×</button>
     </div>
+
+    <!-- Búsqueda de paciente -->
+    <div class="modal-field" style="position:relative">
+      <label class="modal-label">Buscar paciente</label>
+      <input class="modal-input" id="tBusqueda" type="text" placeholder="Escribí apellido o nombre..." autocomplete="off" oninput="buscarPaciente(this.value)" />
+      <div id="tBusquedaDropdown" style="display:none;position:absolute;top:100%;left:0;right:0;background:#202c33;border:1px solid #2a3942;border-radius:8px;z-index:200;max-height:180px;overflow-y:auto;margin-top:2px"></div>
+    </div>
+
     <div class="modal-row">
-      <div class="modal-field"><label class="modal-label">Fecha</label><input class="modal-input" id="tFecha" type="date" /></div>
-      <div class="modal-field"><label class="modal-label">Hora</label><input class="modal-input" id="tHora" type="time" step="1800" /></div>
-    </div>
-    <div class="link-box" id="linkBox">
-      <strong>Mensaje que recibirá Mía:</strong>
-      <span id="linkMensaje"></span>
-      <div style="margin-top:8px;display:flex;gap:12px">
-        <a id="linkUrl" href="#" target="_blank" style="color:#00a884;font-size:12px">Abrir link</a>
-        <span style="cursor:pointer;color:#00a884;font-size:12px" onclick="copiarLink()">Copiar link</span>
+      <div class="modal-field">
+        <label class="modal-label">Nombre</label>
+        <input class="modal-input" id="tNombre" type="text" placeholder="Juan Pérez" />
+      </div>
+      <div class="modal-field">
+        <label class="modal-label">Teléfono</label>
+        <input class="modal-input" id="tTelefono" type="text" placeholder="549..." />
       </div>
     </div>
-    <div class="modal-actions">
-      <button class="btn btn-cancel" onclick="document.getElementById('turnoOverlay').classList.remove('show')">Cancelar</button>
-      <button class="btn btn-primary" onclick="generarLink()">Generar link</button>
+
+    <!-- Práctica -->
+    <div class="modal-field">
+      <label class="modal-label">Práctica</label>
+      <select class="select" id="tPractica" onchange="onPracticaChange(this.value)">
+        <option value="">Seleccionar...</option>
+      </select>
+    </div>
+
+    <!-- Detalle libre -->
+    <div class="modal-field">
+      <label class="modal-label">Detalle / motivo <span style="color:#8696a0;font-weight:400">(se envía al paciente)</span></label>
+      <input class="modal-input" id="tDetalle" type="text" placeholder="ej: control implante, extracción, blanqueamiento..." />
+    </div>
+
+    <div class="modal-row">
+      <div class="modal-field">
+        <label class="modal-label">Fecha</label>
+        <input class="modal-input" id="tFecha" type="date" />
+      </div>
+      <div class="modal-field">
+        <label class="modal-label">Hora</label>
+        <input class="modal-input" id="tHora" type="time" step="900" />
+      </div>
+      <div class="modal-field" style="max-width:80px">
+        <label class="modal-label">Min.</label>
+        <input class="modal-input" id="tDuracion" type="number" min="15" step="15" value="30" />
+      </div>
+    </div>
+
+    <label style="display:flex;align-items:center;gap:8px;font-size:13px;cursor:pointer;margin-top:4px;color:#e9edef">
+      <input type="checkbox" id="tEnviarWA" checked style="width:15px;height:15px" />
+      Enviar confirmación por WhatsApp al paciente
+    </label>
+
+    <div class="modal-actions" style="margin-top:16px">
+      <button class="modal-btn secondary" onclick="cerrarNuevoTurno()">Cancelar</button>
+      <button class="modal-btn" id="btnConfirmarTurnoManual" onclick="confirmarTurnoManual()">Crear turno</button>
     </div>
   </div>
 </div>
@@ -944,38 +981,130 @@
   }
 
   // Modal nuevo turno
-  async function abrirNuevoTurno() {
-    document.getElementById("tFecha").value = new Date().toISOString().split("T")[0];
+  let _practicasCache = [];
+  let _busquedaTimer = null;
+
+  async function abrirNuevoTurno(fechaPreset) {
+    // Reset campos
+    document.getElementById("tBusqueda").value = "";
+    document.getElementById("tNombre").value = "";
+    document.getElementById("tTelefono").value = "";
+    document.getElementById("tDetalle").value = "";
+    document.getElementById("tDuracion").value = "30";
+    document.getElementById("tEnviarWA").checked = true;
+    document.getElementById("tBusquedaDropdown").style.display = "none";
+
+    // Fecha: preset desde el día que se está viendo, o hoy
+    const hoy = fechaPreset || new Date().toISOString().split("T")[0];
+    document.getElementById("tFecha").value = hoy;
     document.getElementById("tHora").value = "09:30";
-    document.getElementById("linkBox").style.display = "none";
-    // Cargar prácticas para turno directo
+
+    // Cargar prácticas
     try {
       const practicas = await fetch(`${API}/practicas/turno-directo`, { headers: authH() }).then(r => r.json());
+      _practicasCache = practicas;
       const sel = document.getElementById("tPractica");
-      if (practicas.length) {
-        sel.innerHTML = practicas.map(p => `<option value="${escHtml(p.nombre)}">${escHtml(p.nombre)} (${p.duracion_min} min)</option>`).join("");
-      } else {
-        sel.innerHTML = '<option value="Consulta">Consulta (30 min)</option>';
-      }
+      sel.innerHTML = '<option value="">Seleccionar...</option>';
+      practicas.forEach(p => {
+        const opt = document.createElement("option");
+        opt.value = p.nombre;
+        opt.dataset.duracion = p.duracion_min;
+        opt.textContent = `${p.nombre} (${p.duracion_min} min)`;
+        sel.appendChild(opt);
+      });
+      const optOtro = document.createElement("option");
+      optOtro.value = "__otro__";
+      optOtro.textContent = "Otro (ingresar manualmente)";
+      sel.appendChild(optOtro);
     } catch(e) {
-      document.getElementById("tPractica").innerHTML = '<option value="Consulta">Consulta (30 min)</option>';
+      document.getElementById("tPractica").innerHTML = '<option value="">Seleccionar...</option><option value="__otro__">Otro</option>';
     }
+
     document.getElementById("turnoOverlay").classList.add("show");
-    setTimeout(() => document.getElementById("tNombre").focus(), 100);
+    setTimeout(() => document.getElementById("tBusqueda").focus(), 100);
   }
-  function generarLink() {
+
+  function cerrarNuevoTurno() {
+    document.getElementById("turnoOverlay").classList.remove("show");
+    document.getElementById("tBusquedaDropdown").style.display = "none";
+  }
+
+  function onPracticaChange(val) {
+    if (val === "__otro__") {
+      document.getElementById("tDetalle").value = "";
+      document.getElementById("tDuracion").value = "30";
+      document.getElementById("tDetalle").focus();
+      return;
+    }
+    const p = _practicasCache.find(x => x.nombre === val);
+    if (p) {
+      document.getElementById("tDetalle").value = p.nombre;
+      document.getElementById("tDuracion").value = p.duracion_min;
+    }
+  }
+
+  function buscarPaciente(q) {
+    clearTimeout(_busquedaTimer);
+    const dd = document.getElementById("tBusquedaDropdown");
+    if (q.length < 2) { dd.style.display = "none"; return; }
+    _busquedaTimer = setTimeout(async () => {
+      try {
+        const res = await fetch(`${API}/patients/search?q=${encodeURIComponent(q)}`, { headers: authH() }).then(r => r.json());
+        if (!res.length) { dd.style.display = "none"; return; }
+        dd.innerHTML = res.map(p =>
+          `<div onclick="seleccionarPaciente(${JSON.stringify(p).replace(/"/g,'&quot;')})"
+                style="padding:10px 14px;cursor:pointer;border-bottom:1px solid #2a3942;font-size:13px;color:#e9edef"
+                onmouseover="this.style.background='#2a3942'" onmouseout="this.style.background=''">`+
+          `<strong>${escHtml(p.nombre)}</strong> <span style="color:#8696a0">${p.telefono}</span>`+
+          `${p.obra_social ? ` · <span style="color:#8696a0">${escHtml(p.obra_social)}</span>` : ""}</div>`
+        ).join("");
+        dd.style.display = "block";
+      } catch(e) { dd.style.display = "none"; }
+    }, 280);
+  }
+
+  function seleccionarPaciente(p) {
+    document.getElementById("tBusqueda").value = p.nombre;
+    document.getElementById("tNombre").value = p.nombre;
+    document.getElementById("tTelefono").value = p.telefono;
+    document.getElementById("tBusquedaDropdown").style.display = "none";
+  }
+
+  async function confirmarTurnoManual() {
     const nombre = document.getElementById("tNombre").value.trim();
-    const practica = document.getElementById("tPractica").value;
+    const telefono = document.getElementById("tTelefono").value.trim();
+    const detalle = document.getElementById("tDetalle").value.trim();
     const fecha = document.getElementById("tFecha").value;
     const hora = document.getElementById("tHora").value;
-    if (!nombre || !fecha || !hora) { showToast("Completá todos los campos"); return; }
-    const mensaje = `TURNO_DIRECTO|${nombre}|${practica}|${fecha}|${hora}`;
-    const url = `https://wa.me/${BOT_NUMBER}?text=${encodeURIComponent(mensaje)}`;
-    document.getElementById("linkMensaje").textContent = mensaje;
-    document.getElementById("linkUrl").href = url;
-    document.getElementById("linkBox").style.display = "block";
+    const duracion = parseInt(document.getElementById("tDuracion").value) || 30;
+    const enviarWA = document.getElementById("tEnviarWA").checked;
+
+    if (!nombre) { showToast("Ingresá el nombre del paciente"); return; }
+    if (!fecha || !hora) { showToast("Completá fecha y hora"); return; }
+    if (!detalle) { showToast("Ingresá el motivo/detalle"); return; }
+
+    const btn = document.getElementById("btnConfirmarTurnoManual");
+    btn.textContent = "Guardando...";
+    btn.disabled = true;
+
+    try {
+      const body = { nombre, telefono, detalle, fecha, hora, duracion_min: duracion, enviar_whatsapp: enviarWA && !!telefono };
+      const res = await fetch(`${API}/appointments/manual`, { method: "POST", headers: authH(), body: JSON.stringify(body) }).then(r => r.json());
+      if (res.ok || res.id) {
+        showToast(enviarWA && telefono ? "Turno creado y mensaje enviado" : "Turno creado");
+        cerrarNuevoTurno();
+        // Refrescar vista de turnos si está abierta
+        if (typeof cargarTurnos === "function") cargarTurnos();
+      } else {
+        showToast(res.error || "Error al crear turno");
+      }
+    } catch(e) {
+      showToast("Error al crear turno");
+    } finally {
+      btn.textContent = "Crear turno";
+      btn.disabled = false;
+    }
   }
-  function copiarLink() { copiarTexto(document.getElementById("linkUrl").href); }
 
   // Modal configuración unificado
   async function abrirConfig(tab) {
