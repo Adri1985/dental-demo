@@ -76,15 +76,21 @@ async function getPatientAppointments(telefono, dni, creds) {
   const auth = getAuthClient(sa);
   const calendar = google.calendar({ version: "v3", auth });
 
-  const { data } = await calendar.events.list({
-    calendarId: CALENDAR_ID,
-    timeMin: new Date().toISOString(),
-    singleEvents: true,
-    orderBy: "startTime",
-    maxResults: 250,
-  });
-
-  const eventos = data.items || [];
+  // Traer todos los eventos con paginación (el límite por página es 2500)
+  let eventos = [];
+  let pageToken;
+  do {
+    const { data } = await calendar.events.list({
+      calendarId: CALENDAR_ID,
+      timeMin: new Date().toISOString(),
+      singleEvents: true,
+      orderBy: "startTime",
+      maxResults: 2500,
+      ...(pageToken ? { pageToken } : {}),
+    });
+    eventos = eventos.concat(data.items || []);
+    pageToken = data.nextPageToken;
+  } while (pageToken);
   console.log(`[getPatientAppointments] buscando tel=${telefono} dni=${dni} | total eventos=${eventos.length}`);
   const encontrados = eventos.filter((ev) => {
     const desc = ev.description || "";
