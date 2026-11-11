@@ -352,13 +352,19 @@ async function runAgent(userMessage, telefono, consultorio_id = DEFAULT_CONSULTO
   ]);
   console.log(`[agent] usando ${practicas.length} prácticas del catálogo`);
 
-  // Si el paciente pregunta sobre disponibilidad, forzamos check_availability
-  // en vez de dejar que Claude responda de memoria basándose en la hora actual.
-  const AVAILABILITY_RE = /\b(turno|turnos|lugar|disponib|horario|agendar|reservar|sacar turno|cuándo|cuando|esta tarde|esta mañana|hoy|libre|semana)\b/i;
-  const forcearDisponibilidad = AVAILABILITY_RE.test(userMessage);
-  const tool_choice = forcearDisponibilidad
-    ? { type: "tool", name: "check_availability" }
-    : { type: "auto" };
+  // Si el paciente pregunta qué turnos YA tiene agendados, forzamos get_patient_appointments.
+  // Si pregunta por disponibilidad para sacar un turno nuevo, forzamos check_availability.
+  // "turno"/"turnos" puede significar cualquiera de las dos cosas, así que se detecta por contexto.
+  const MIS_TURNOS_RE = /\b(mis turnos|que turno|qué turno|cuál.*turno|cuando.*mi turno|tengo.*turno|turno.*tengo|turno.*agendado|próximo turno|cancelar.*turno|turno.*cancela)\b/i;
+  const AVAILABILITY_RE = /\b(disponib|horario|agendar|reservar|sacar turno|cuándo hay|cuando hay|esta tarde|esta mañana|libre|semana)\b/i;
+  const forcearMisTurnos     = MIS_TURNOS_RE.test(userMessage);
+  const forcearDisponibilidad = !forcearMisTurnos && AVAILABILITY_RE.test(userMessage);
+  const tool_choice = forcearMisTurnos
+    ? { type: "tool", name: "get_patient_appointments" }
+    : forcearDisponibilidad
+      ? { type: "tool", name: "check_availability" }
+      : { type: "auto" };
+  if (forcearMisTurnos)      console.log("[agent] forzando get_patient_appointments por consulta de turnos propios");
   if (forcearDisponibilidad) console.log("[agent] forzando check_availability por consulta de disponibilidad");
 
   const claudeModel = perfil?.claude_model || "claude-haiku-4-5";
