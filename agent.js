@@ -279,6 +279,17 @@ const TOOLS = [
       required: ["descripcion"],
     },
   },
+  {
+    name: "notificar_doctor_rechazo",
+    description: "Usar cuando el paciente no puede en ninguna de las fechas ofrecidas y hay una coordinación pendiente iniciada por el doctor. Notifica al doctor para que proponga un nuevo rango.",
+    input_schema: {
+      type: "object",
+      properties: {
+        motivo: { type: "string", description: "Resumen de por qué el paciente no puede" },
+      },
+      required: [],
+    },
+  },
 ];
 
 module.exports = { getSystemPrompt, TOOLS, config, ESTILOS };

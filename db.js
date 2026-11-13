@@ -247,6 +247,23 @@ async function initDB() {
     ALTER TABLE patients ADD COLUMN IF NOT EXISTS source    TEXT     DEFAULT 'manual';
   `).catch(e => console.log("[db] migracion patients is_active/source:", e.message));
 
+  await pool.query(`
+    CREATE TABLE IF NOT EXISTS pending_tasks (
+      id           SERIAL PRIMARY KEY,
+      telefono     TEXT REFERENCES patients(telefono) ON DELETE CASCADE,
+      motivo       TEXT,
+      fecha_desde  TEXT,
+      fecha_hasta  TEXT,
+      duracion_min INTEGER DEFAULT 30,
+      status       TEXT DEFAULT 'preview',
+      created_by   TEXT,
+      created_at   TIMESTAMPTZ DEFAULT NOW(),
+      updated_at   TIMESTAMPTZ DEFAULT NOW()
+    );
+    CREATE INDEX IF NOT EXISTS idx_pending_tasks_telefono ON pending_tasks(telefono);
+    CREATE INDEX IF NOT EXISTS idx_pending_tasks_status   ON pending_tasks(status);
+  `).catch(e => console.log("[db] migracion pending_tasks:", e.message));
+
   await migrarEnvAPerfil().catch(e => console.log("[migration] error:", e.message));
 
   console.log("[db] tablas listas (PostgreSQL)");
@@ -473,6 +490,56 @@ async function searchPatients(q, consultorio_id) {
     WHERE consultorio_id = $1 AND nombre ILIKE $2
     ORDER BY nombre LIMIT 8
   `, [consultorio_id || 1, `%${q}%`]);
+  return rows;
+}
+
+// ─────────────────────────────────────────────
+//  PENDING TASKS
+// ─────────────────────────────────────────────
+
+async function createPendingTask({ telefono, motivo, fecha_desde, fecha_hasta, duracion_min = 30, created_by }) {
+  if (!USE_DB) return null;
+  // Cancela cualquier tarea activa previa para este paciente antes de crear la nueva
+  await pool.query(
+    "UPDATE pending_tasks SET status = 'cancelled', updated_at = NOW() WHERE telefono = $1 AND status IN ('preview','sent','needs_doctor')",
+    [telefono]
+  );
+  const { rows } = await pool.query(
+    `INSERT INTO pending_tasks (telefono, motivo, fecha_desde, fecha_hasta, duracion_min, created_by)
+     VALUES ($1, $2, $3, $4, $5, $6) RETURNING *`,
+    [telefono, motivo || null, fecha_desde || null, fecha_hasta || null, duracion_min, created_by || null]
+  );
+  return rows[0];
+}
+
+async function getPendingTask(telefono) {
+  if (!USE_DB) return null;
+  const { rows } = await pool.query(
+    "SELECT * FROM pending_tasks WHERE telefono = $1 AND status IN ('preview','sent','needs_doctor') ORDER BY created_at DESC LIMIT 1",
+    [telefono]
+  );
+  return rows[0] || null;
+}
+
+async function updatePendingTaskStatus(id, status) {
+  if (!USE_DB) return null;
+  const { rows } = await pool.query(
+    "UPDATE pending_tasks SET status = $1, updated_at = NOW() WHERE id = $2 RETURNING *",
+    [status, id]
+  );
+  return rows[0] || null;
+}
+
+async function getPendingTasksNeedingReview(consultorio_id = 1) {
+  if (!USE_DB) return [];
+  const { rows } = await pool.query(
+    `SELECT pt.*, p.nombre AS nombre_paciente
+     FROM pending_tasks pt
+     JOIN patients p ON p.telefono = pt.telefono
+     WHERE p.consultorio_id = $1 AND pt.status = 'needs_doctor'
+     ORDER BY pt.updated_at DESC`,
+    [consultorio_id]
+  );
   return rows;
 }
 
@@ -878,6 +945,8 @@ async function deleteProfile(id) {
 
 module.exports = {
   initDB,
+  // pending tasks
+  createPendingTask, getPendingTask, updatePendingTaskStatus, getPendingTasksNeedingReview,
   // vcf import + patient update
   bulkImportPatients, updatePatientFull,
   // auth

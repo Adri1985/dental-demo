@@ -1865,12 +1865,61 @@
   let _miaHistoria = [];
   let _miaPensando = false;
 
+  async function checkPendingTasks() {
+    try {
+      const tasks = await fetch(`${API}/admin/pending-tasks`, { headers: authH() }).then(r => r.json());
+      const btn = document.getElementById("btnMiaChat");
+      const badge = document.getElementById("miaBadge");
+      if (tasks.length > 0) {
+        if (!badge) {
+          const b = document.createElement("span");
+          b.id = "miaBadge";
+          b.style.cssText = "position:absolute;top:-4px;right:-4px;width:8px;height:8px;background:#ef4444;border-radius:50%;pointer-events:none";
+          btn.style.position = "relative";
+          btn.appendChild(b);
+        }
+      } else if (badge) {
+        badge.remove();
+      }
+      return tasks;
+    } catch { return []; }
+  }
+
   function toggleMiaChat() {
     _miaAbierto = !_miaAbierto;
     const drawer = document.getElementById("miaChatDrawer");
     drawer.style.right = _miaAbierto ? "0" : "-380px";
     document.getElementById("btnMiaChat").classList.toggle("active", _miaAbierto);
-    if (_miaAbierto) setTimeout(() => document.getElementById("miaChatInput").focus(), 300);
+    if (_miaAbierto) {
+      mostrarAlertasPendientes();
+      setTimeout(() => document.getElementById("miaChatInput").focus(), 300);
+    }
+  }
+
+  async function mostrarAlertasPendientes() {
+    const tasks = await checkPendingTasks();
+    const area = document.getElementById("miaChatMensajes");
+    // Remover alertas anteriores
+    area.querySelectorAll(".pending-task-alert").forEach(el => el.remove());
+    tasks.forEach(t => {
+      const div = document.createElement("div");
+      div.className = "pending-task-alert";
+      div.style.cssText = "background:#2a1a00;border:1px solid #f59e0b55;border-radius:8px;padding:10px 12px;font-size:12px;color:#fcd34d;line-height:1.5";
+      div.innerHTML = `
+        <div style="font-weight:700;margin-bottom:4px">⚠ ${escHtml(t.nombre_paciente)} no pudo en las fechas ofrecidas</div>
+        <div style="color:#8696a0;margin-bottom:8px">Motivo: ${escHtml(t.motivo || "—")} · ${new Date(t.updated_at).toLocaleString("es-AR", { timeZone:"America/Argentina/Buenos_Aires", day:"numeric", month:"short", hour:"2-digit", minute:"2-digit" })}</div>
+        <div style="display:flex;gap:8px">
+          <button onclick="selectPatient('${t.telefono}');if(_miaAbierto)toggleMiaChat()" style="background:#2a3942;border:none;border-radius:6px;padding:4px 10px;color:#e9edef;font-size:11px;cursor:pointer">Ver conversación</button>
+          <button onclick="desestimardAlerta(${t.id}, this.parentElement.parentElement)" style="background:none;border:1px solid #374151;border-radius:6px;padding:4px 10px;color:#8696a0;font-size:11px;cursor:pointer">Desestimar</button>
+        </div>`;
+      area.insertBefore(div, area.firstChild);
+    });
+  }
+
+  async function desestimardAlerta(taskId, card) {
+    await fetch(`${API}/admin/pending-tasks/${taskId}/dismiss`, { method: "POST", headers: authH() }).catch(() => {});
+    card.remove();
+    checkPendingTasks();
   }
 
   function miaChatKeydown(e) {
@@ -2100,6 +2149,8 @@
 
   loadPatients();
   setInterval(loadPatients, 3000);
+  setInterval(checkPendingTasks, 15000); // badge rojo en botón Mía
+  checkPendingTasks();
   fetch(`${API}/config`, { headers: authH() }).then(r => r.json()).then(cfg => { if (cfg.bot_whatsapp_number) BOT_NUMBER = cfg.bot_whatsapp_number; }).catch(() => {});
 
   fetch(`${API}/profile/display-info`, { headers: authH() }).then(r => r.json()).then(info => {

@@ -310,6 +310,12 @@ async function executeTool(name, input, telefono, cfg = {}, perfil = null) {
       if (doctorTel) await sendWhatsAppMessage(doctorTel, `URGENCIA — ${input.paciente_nombre || patient?.nombre || "Paciente"} (${telefono})\n${input.descripcion}`, perfil);
       return { ok: true, accion: `Alerta enviada al ${config.profesionales[0].nombre}. El paciente será contactado a la brevedad.` };
     }
+    case "notificar_doctor_rechazo": {
+      const task = await db.getPendingTask(telefono);
+      if (task) await db.updatePendingTaskStatus(task.id, "needs_doctor");
+      console.log(`[agent] paciente ${telefono} rechazó opciones — pending_task marcado needs_doctor`);
+      return { ok: true };
+    }
     default: return { error: `Tool desconocida: ${name}` };
   }
 }
@@ -367,11 +373,19 @@ async function runAgent(userMessage, telefono, consultorio_id = DEFAULT_CONSULTO
   if (forcearMisTurnos)      console.log("[agent] forzando get_patient_appointments por consulta de turnos propios");
   if (forcearDisponibilidad) console.log("[agent] forzando check_availability por consulta de disponibilidad");
 
+  // Verificar si hay una coordinación pendiente iniciada por el doctor
+  const pendingTask = await db.getPendingTask(telefono).catch(() => null);
+  const pendingCtx = pendingTask
+    ? `\n\nCOORDINACIÓN PENDIENTE (iniciada por el doctor): El doctor pidió coordinar un turno para "${pendingTask.motivo || "práctica pendiente"}". Ya le enviaste opciones de fechas al paciente.
+Si el paciente dice que no puede en ninguna de esas fechas o pide otras opciones, respondele exactamente: "Perfecto, dejame consultarle al doctor si podemos hacerlo en otra fecha. ¡Gracias por avisarme!" y usá la tool notificar_doctor_rechazo.
+Si el paciente confirma una fecha, procedé a agendar el turno normalmente.`
+    : "";
+
   const claudeModel = perfil?.claude_model || "claude-haiku-4-5";
-  console.log(`[agent] modelo: ${claudeModel}`);
+  console.log(`[agent] modelo: ${claudeModel}${pendingTask ? " | pending_task: " + pendingTask.id : ""}`);
   let response = await anthropic.messages.create({
     model: claudeModel, max_tokens: 1024,
-    system: getSystemPrompt(cfg, practicas, coberturas, buildPatientContext(patient)),
+    system: getSystemPrompt(cfg, practicas, coberturas, buildPatientContext(patient)) + pendingCtx,
     tools: TOOLS, tool_choice, messages: claudeHistory,
   });
 
@@ -390,7 +404,7 @@ async function runAgent(userMessage, telefono, consultorio_id = DEFAULT_CONSULTO
       model: claudeModel, max_tokens: 1024,
       // Se relee el paciente: si el agente acaba de guardar datos con
       // save_patient_data, el perfil ya refleja el estado nuevo.
-      system: getSystemPrompt(cfg, practicas, coberturas, buildPatientContext(await db.getPatient(telefono) || patient)),
+      system: getSystemPrompt(cfg, practicas, coberturas, buildPatientContext(await db.getPatient(telefono) || patient)) + pendingCtx,
       tools: TOOLS, messages: claudeHistory,
     });
     console.log(`[agent] (loop) stop_reason=${response.stop_reason} | tools_called=${response.content.filter(b=>b.type==="tool_use").map(b=>b.name).join(",") || "ninguno"}`);
@@ -900,11 +914,17 @@ app.post("/admin/mia-chat", authMiddleware, async (req, res) => {
 
           else if (name === "preparar_mensaje_paciente") {
             const { telefono, nombre_paciente, motivo, mensaje: msgPaciente } = input;
-            // Asegurar que el paciente existe en la DB
             await db.upsertPatient({ telefono, nombre: nombre_paciente, consultorio_id });
-            // Guardar el mensaje como preview (no enviado)
             const ts = new Date().toISOString();
             await db.addMessage(telefono, "assistant", msgPaciente, ts, true, "preview_template");
+            // Crear / reemplazar pending_task para este paciente
+            const sender = await db.getUserByEmail(req.user.email);
+            await db.createPendingTask({
+              telefono,
+              motivo,
+              fecha_desde: null, fecha_hasta: null, duracion_min: 30,
+              created_by: sender?.nombre || sender?.email || "doctor",
+            });
             accion = { tipo: "preview_guardado", telefono, nombre_paciente, mensaje: msgPaciente };
             result = `Preview guardado en la conversación de ${nombre_paciente}. El mensaje aparece en el panel de Chats marcado como pendiente de envío por WhatsApp.`;
           }
@@ -923,6 +943,20 @@ app.post("/admin/mia-chat", authMiddleware, async (req, res) => {
     console.error("[admin/mia-chat]", err);
     res.status(500).json({ ok: false, error: err.message });
   }
+});
+
+app.get("/admin/pending-tasks", authMiddleware, async (req, res) => {
+  try {
+    const tasks = await db.getPendingTasksNeedingReview(consultorioDe(req));
+    res.json(tasks);
+  } catch (err) { res.status(500).json({ error: err.message }); }
+});
+
+app.post("/admin/pending-tasks/:id/dismiss", authMiddleware, async (req, res) => {
+  try {
+    await db.updatePendingTaskStatus(req.params.id, "cancelled");
+    res.json({ ok: true });
+  } catch (err) { res.status(500).json({ error: err.message }); }
 });
 
 // ─────────────────────────────────────────────
