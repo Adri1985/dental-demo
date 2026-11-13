@@ -617,7 +617,9 @@ app.delete("/session/:telefono", async (req, res) => {
   res.json({ ok: true });
 });
 
-app.get("/patients", authMiddleware, async (req, res) => {
+app.get("/patients", authMiddleware, async (req, res) => { res.json(await db.getAllPatients(consultorioDe(req))); });
+
+app.get("/patients/list", authMiddleware, async (req, res) => {
   const { status, q, page = 1, limit = 50 } = req.query;
   const consultorio_id = consultorioDe(req);
   if (!db.pool) return res.json({ patients: [], total: 0 });

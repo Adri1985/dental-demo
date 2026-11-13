@@ -1676,7 +1676,7 @@
   async function cargarPacientes(page = 1) {
     _pacPage = page;
     const q = document.getElementById("pacBusqueda").value.trim();
-    const url = `${API}/patients?status=${_pacFilter}&page=${page}&limit=${PAC_LIMIT}${q.length >= 2 ? "&q=" + encodeURIComponent(q) : ""}`;
+    const url = `${API}/patients/list?status=${_pacFilter}&page=${page}&limit=${PAC_LIMIT}${q.length >= 2 ? "&q=" + encodeURIComponent(q) : ""}`;
     document.getElementById("pacTabla").innerHTML = '<div style="color:#8696a0">Cargando…</div>';
     try {
       const { patients, total } = await fetch(url, { headers: authH() }).then(r => r.json());
