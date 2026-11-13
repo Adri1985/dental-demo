@@ -242,6 +242,11 @@ async function initDB() {
     ALTER TABLE patients ADD COLUMN IF NOT EXISTS primer_turno_realizado BOOLEAN DEFAULT false;
   `).catch(e => console.log("[db] migracion patients primer_turno_realizado:", e.message));
 
+  await pool.query(`
+    ALTER TABLE patients ADD COLUMN IF NOT EXISTS is_active BOOLEAN DEFAULT true;
+    ALTER TABLE patients ADD COLUMN IF NOT EXISTS source    TEXT     DEFAULT 'manual';
+  `).catch(e => console.log("[db] migracion patients is_active/source:", e.message));
+
   await migrarEnvAPerfil().catch(e => console.log("[migration] error:", e.message));
 
   console.log("[db] tablas listas (PostgreSQL)");
@@ -469,6 +474,69 @@ async function searchPatients(q, consultorio_id) {
     ORDER BY nombre LIMIT 8
   `, [consultorio_id || 1, `%${q}%`]);
   return rows;
+}
+
+async function bulkImportPatients(contacts, consultorio_id = 1) {
+  // contacts: [{ nombre, telefono, is_active }]
+  // Returns { imported, skipped }
+  if (!USE_DB) return { imported: 0, skipped: contacts.length };
+  let imported = 0, skipped = 0;
+  for (const c of contacts) {
+    try {
+      const { rowCount } = await pool.query(`
+        INSERT INTO patients (telefono, nombre, is_active, source, consultorio_id)
+        VALUES ($1, $2, $3, 'vcf', $4)
+        ON CONFLICT (telefono) DO NOTHING
+      `, [c.telefono, c.nombre, c.is_active, consultorio_id]);
+      if (rowCount > 0) imported++; else skipped++;
+    } catch {
+      skipped++;
+    }
+  }
+  return { imported, skipped };
+}
+
+async function updatePatientFull(oldTelefono, { nombre, telefono: newTelefono, obra_social, dni, is_active }, consultorio_id = 1) {
+  // Permite cambiar el teléfono (que es PK) usando una transacción
+  if (!USE_DB) return null;
+  const tel = (newTelefono || oldTelefono).trim();
+  if (tel !== oldTelefono) {
+    // Cambio de teléfono: mover el registro en una transacción
+    const client = await pool.connect();
+    try {
+      await client.query("BEGIN");
+      await client.query(`
+        INSERT INTO patients (telefono, nombre, dni, obra_social, is_active, source, consultorio_id, modo, created_at, updated_at)
+        SELECT $1, COALESCE($2, nombre), COALESCE($3, dni), COALESCE($4, obra_social), $5, source, consultorio_id, modo, created_at, NOW()
+        FROM patients WHERE telefono = $6
+        ON CONFLICT (telefono) DO NOTHING
+      `, [tel, nombre || null, dni || null, obra_social || null, is_active !== undefined ? is_active : true, oldTelefono]);
+      await client.query("UPDATE messages      SET telefono = $1 WHERE telefono = $2", [tel, oldTelefono]);
+      await client.query("UPDATE claude_history SET telefono = $1 WHERE telefono = $2", [tel, oldTelefono]);
+      await client.query("DELETE FROM patients WHERE telefono = $1", [oldTelefono]);
+      await client.query("COMMIT");
+      const { rows } = await pool.query("SELECT * FROM patients WHERE telefono = $1", [tel]);
+      return rows[0] || null;
+    } catch (e) {
+      await client.query("ROLLBACK");
+      throw e;
+    } finally {
+      client.release();
+    }
+  }
+  // Sin cambio de teléfono: UPDATE simple
+  const sets = ["updated_at = NOW()"];
+  const vals = [];
+  let i = 1;
+  if (nombre      !== undefined) { sets.push(`nombre      = $${i++}`); vals.push(nombre || null); }
+  if (obra_social !== undefined) { sets.push(`obra_social = $${i++}`); vals.push(obra_social || null); }
+  if (dni         !== undefined) { sets.push(`dni         = $${i++}`); vals.push(dni || null); }
+  if (is_active   !== undefined) { sets.push(`is_active   = $${i++}`); vals.push(is_active); }
+  vals.push(oldTelefono);
+  const { rows } = await pool.query(
+    `UPDATE patients SET ${sets.join(", ")} WHERE telefono = $${i} RETURNING *`, vals
+  );
+  return rows[0] || null;
 }
 
 async function getAllPatients(consultorio_id) {
@@ -810,6 +878,8 @@ async function deleteProfile(id) {
 
 module.exports = {
   initDB,
+  // vcf import + patient update
+  bulkImportPatients, updatePatientFull,
   // auth
   createConsultorio, getConsultorio,
   createUser, getUserByEmail, updateUserConsultorio, getUsersByConsultorio,

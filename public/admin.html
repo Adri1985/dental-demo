@@ -160,6 +160,15 @@
     .cfg-tab { background: none; border: none; color: #8696a0; font-size: 12px; font-weight: 600; padding: 7px 10px; cursor: pointer; border-bottom: 2px solid transparent; margin-bottom: -1px; white-space: nowrap; flex-shrink: 0; }
     .cfg-tab.active { color: #00a884; border-bottom-color: #00a884; }
     .cfg-tab:hover { color: #e9edef; }
+    .pac-filter { background: #2a3942; border: none; color: #8696a0; font-size: 11px; font-weight: 600; padding: 4px 8px; border-radius: 4px; cursor: pointer; }
+    .pac-filter.active { background: #00a884; color: #fff; }
+    .pac-row { display: flex; align-items: center; gap: 8px; padding: 7px 0; border-bottom: 1px solid #2a3942; }
+    .pac-row:last-child { border-bottom: none; }
+    .pac-badge { font-size: 10px; font-weight: 700; padding: 2px 6px; border-radius: 10px; white-space: nowrap; }
+    .pac-badge.ok  { background: #00a884; color: #fff; }
+    .pac-badge.bad { background: #3a2a2a; color: #e06060; border: 1px solid #5a3a3a; }
+    .pac-edit-btn { background: none; border: 1px solid #2a3942; color: #8696a0; font-size: 11px; padding: 2px 7px; border-radius: 4px; cursor: pointer; }
+    .pac-edit-btn:hover { color: #e9edef; border-color: #4a5962; }
     .toast { position: fixed; bottom: 24px; left: 50%; transform: translateX(-50%); background: #2a3942; color: #e9edef; font-size: 13px; padding: 10px 20px; border-radius: 20px; opacity: 0; transition: opacity 0.3s; pointer-events: none; z-index: 999; }
     .toast.show { opacity: 1; }
 
@@ -370,7 +379,7 @@
 
 <!-- Modal configuración unificado con tabs -->
 <div class="modal-overlay" id="configOverlay">
-  <div class="modal" style="width:560px;max-height:90vh;display:flex;flex-direction:column">
+  <div class="modal" style="width:560px;max-height:90vh;display:flex;flex-direction:column;position:relative">
     <div class="modal-title">Configuración</div>
 
     <!-- Tabs -->
@@ -382,6 +391,7 @@
       <button class="cfg-tab" onclick="switchTab('flujos')">Flujos</button>
       <button class="cfg-tab" onclick="switchTab('equipo')">Equipo</button>
       <button class="cfg-tab" onclick="switchTab('integraciones')">Integraciones</button>
+      <button class="cfg-tab" onclick="switchTab('pacientes')">Pacientes</button>
     </div>
 
     <!-- Tab: Horarios -->
@@ -659,6 +669,61 @@
         <div class="modal-actions" style="margin-top:10px">
           <button class="btn btn-cancel" onclick="cerrarPerfilForm()">Cancelar</button>
           <button class="btn btn-primary" id="btnGuardarPerfil" onclick="guardarPerfil()">Guardar y validar</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- Tab: Pacientes -->
+    <div class="cfg-panel" id="tab-pacientes" style="display:none;overflow-y:auto;flex:1;padding-bottom:4px">
+
+      <!-- Toolbar -->
+      <div style="display:flex;align-items:center;gap:8px;margin-bottom:12px;flex-wrap:wrap">
+        <input class="modal-input" id="pacBusqueda" type="text" placeholder="Buscar por nombre o teléfono…" style="flex:1;min-width:140px" oninput="debouncePacientes()" />
+        <div style="display:flex;gap:4px">
+          <button class="pac-filter active" data-f="all"      onclick="setPacFilter(this,'all')">Todos</button>
+          <button class="pac-filter"        data-f="active"   onclick="setPacFilter(this,'active')">Activos</button>
+          <button class="pac-filter"        data-f="inactive" onclick="setPacFilter(this,'inactive')">Inactivos</button>
+        </div>
+        <label class="btn btn-primary" style="cursor:pointer;font-size:12px;padding:5px 10px;position:relative">
+          Importar VCF
+          <input type="file" accept=".vcf,text/vcard" style="position:absolute;inset:0;opacity:0;cursor:pointer" onchange="importarVCF(this)" />
+        </label>
+      </div>
+
+      <!-- Stats -->
+      <div id="pacStats" style="font-size:11px;color:#8696a0;margin-bottom:10px"></div>
+
+      <!-- Tabla -->
+      <div id="pacTabla" style="font-size:13px">
+        <div style="color:#8696a0">Abrí esta pestaña para cargar los pacientes.</div>
+      </div>
+
+      <!-- Paginación -->
+      <div id="pacPag" style="display:flex;justify-content:center;gap:8px;margin-top:12px;font-size:12px"></div>
+
+    </div>
+
+    <!-- Modal edición paciente (dentro del configOverlay) -->
+    <div id="pacEditOverlay" style="display:none;position:absolute;inset:0;background:rgba(0,0,0,.55);z-index:10;border-radius:12px;align-items:center;justify-content:center">
+      <div style="background:#1f2c34;border-radius:10px;padding:20px;width:320px;max-width:90%;box-shadow:0 4px 24px #0006">
+        <div style="font-size:14px;font-weight:600;color:#e9edef;margin-bottom:14px">Editar paciente</div>
+        <input type="hidden" id="pacEditTelOrig" />
+        <div class="modal-field">
+          <label class="modal-label">Nombre</label>
+          <input class="modal-input" id="pacEditNombre" type="text" />
+        </div>
+        <div class="modal-field">
+          <label class="modal-label">Teléfono <span style="font-size:10px;color:#8696a0">(formato WhatsApp: 549XXXXXXXXXX)</span></label>
+          <input class="modal-input" id="pacEditTel" type="text" oninput="validarTelPacEdit()" />
+          <div id="pacEditTelHint" style="font-size:11px;margin-top:3px"></div>
+        </div>
+        <div class="modal-field">
+          <label class="modal-label">Obra social</label>
+          <input class="modal-input" id="pacEditOS" type="text" />
+        </div>
+        <div class="modal-actions" style="margin-top:4px">
+          <button class="btn btn-cancel" onclick="cerrarEditPac()">Cancelar</button>
+          <button class="btn btn-primary" id="btnGuardarPac" onclick="guardarEditPac()">Guardar</button>
         </div>
       </div>
     </div>
@@ -1125,7 +1190,7 @@
 
   function switchTab(nombre) {
     document.querySelectorAll(".cfg-tab").forEach((t, i) => {
-      const tabs = ["horarios","estilo","practicas","coberturas","flujos","equipo","integraciones"];
+      const tabs = ["horarios","estilo","practicas","coberturas","flujos","equipo","integraciones","pacientes"];
       t.classList.toggle("active", tabs[i] === nombre);
     });
     document.querySelectorAll(".cfg-panel").forEach(p => p.style.display = "none");
@@ -1135,6 +1200,7 @@
     if (nombre === "flujos")     cargarFlujos();
     if (nombre === "equipo")     cargarEquipo();
     if (nombre === "integraciones") cargarPerfiles();
+    if (nombre === "pacientes")     cargarPacientes();
   }
   async function guardarConfig() {
     const num = document.getElementById("cfgBotNumber").value.trim().replace(/\D/g, "");
@@ -1602,6 +1668,138 @@
     } catch(e) { showToast("Error generando invitación"); }
   }
   function copiarInvLink() { copiarTexto(document.getElementById("invLinkText").textContent); }
+
+  // ── Pacientes ─────────────────────────────────────────────────────────────
+  let _pacFilter = "all", _pacPage = 1, _pacTimer = null, _pacTotal = 0;
+  const PAC_LIMIT = 50;
+
+  async function cargarPacientes(page = 1) {
+    _pacPage = page;
+    const q = document.getElementById("pacBusqueda").value.trim();
+    const url = `${API}/patients?status=${_pacFilter}&page=${page}&limit=${PAC_LIMIT}${q.length >= 2 ? "&q=" + encodeURIComponent(q) : ""}`;
+    document.getElementById("pacTabla").innerHTML = '<div style="color:#8696a0">Cargando…</div>';
+    try {
+      const { patients, total } = await fetch(url, { headers: authH() }).then(r => r.json());
+      _pacTotal = total;
+      document.getElementById("pacStats").textContent =
+        `${total.toLocaleString()} paciente${total !== 1 ? "s" : ""}` +
+        (q ? ` · búsqueda: "${q}"` : "");
+      if (!patients.length) {
+        document.getElementById("pacTabla").innerHTML = '<div style="color:#8696a0;padding:8px 0">Sin resultados</div>';
+        document.getElementById("pacPag").innerHTML = "";
+        return;
+      }
+      document.getElementById("pacTabla").innerHTML = patients.map(p => `
+        <div class="pac-row">
+          <span class="pac-badge ${p.is_active !== false ? "ok" : "bad"}">${p.is_active !== false ? "Activo" : "Inactivo"}</span>
+          <div style="flex:1;min-width:0">
+            <div style="font-size:13px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${escHtml(p.nombre || "—")}</div>
+            <div style="font-size:11px;color:#8696a0">${escHtml(p.telefono)}</div>
+          </div>
+          ${p.obra_social ? `<div style="font-size:11px;color:#8696a0;white-space:nowrap">${escHtml(p.obra_social)}</div>` : ""}
+          <button class="pac-edit-btn" onclick='abrirEditPac(${JSON.stringify(p)})'>Editar</button>
+        </div>
+      `).join("");
+      // Paginación
+      const totalPages = Math.ceil(total / PAC_LIMIT);
+      let pag = "";
+      if (page > 1)          pag += `<button class="pac-filter" onclick="cargarPacientes(${page-1})">← Anterior</button>`;
+      pag += `<span style="color:#8696a0;font-size:11px;line-height:1.8">${page} / ${totalPages}</span>`;
+      if (page < totalPages) pag += `<button class="pac-filter" onclick="cargarPacientes(${page+1})">Siguiente →</button>`;
+      document.getElementById("pacPag").innerHTML = pag;
+    } catch(e) {
+      document.getElementById("pacTabla").innerHTML = `<div style="color:#e06060">Error: ${escHtml(e.message)}</div>`;
+    }
+  }
+
+  function debouncePacientes() {
+    clearTimeout(_pacTimer);
+    _pacTimer = setTimeout(() => cargarPacientes(1), 350);
+  }
+
+  function setPacFilter(btn, filter) {
+    _pacFilter = filter;
+    document.querySelectorAll(".pac-filter").forEach(b => b.classList.remove("active"));
+    btn.classList.add("active");
+    cargarPacientes(1);
+  }
+
+  function abrirEditPac(p) {
+    document.getElementById("pacEditTelOrig").value = p.telefono;
+    document.getElementById("pacEditNombre").value  = p.nombre || "";
+    document.getElementById("pacEditTel").value     = p.telefono;
+    document.getElementById("pacEditOS").value      = p.obra_social || "";
+    document.getElementById("pacEditTelHint").textContent = "";
+    document.getElementById("pacEditTelHint").style.color = "";
+    document.getElementById("pacEditOverlay").style.display = "flex";
+  }
+
+  function cerrarEditPac() {
+    document.getElementById("pacEditOverlay").style.display = "none";
+  }
+
+  function validarTelPacEdit() {
+    const val = document.getElementById("pacEditTel").value.replace(/\D/g, "");
+    const hint = document.getElementById("pacEditTelHint");
+    const btn  = document.getElementById("btnGuardarPac");
+    if (val.startsWith("549") && val.length === 13) {
+      hint.textContent = "✓ Formato correcto para WhatsApp AR";
+      hint.style.color = "#00a884";
+      btn.disabled = false;
+    } else if (val.length < 7) {
+      hint.textContent = "Número muy corto";
+      hint.style.color = "#e06060";
+      btn.disabled = true;
+    } else {
+      hint.textContent = "Formato no estándar — se guardará igual pero puede fallar en WhatsApp";
+      hint.style.color = "#f59e0b";
+      btn.disabled = false;
+    }
+  }
+
+  async function guardarEditPac() {
+    const telOrig = document.getElementById("pacEditTelOrig").value;
+    const nombre  = document.getElementById("pacEditNombre").value.trim();
+    const tel     = document.getElementById("pacEditTel").value.replace(/\D/g, "");
+    const os      = document.getElementById("pacEditOS").value.trim();
+    if (!nombre) { showToast("El nombre no puede estar vacío"); return; }
+    if (!tel || tel.length < 7) { showToast("Teléfono inválido"); return; }
+    const digits = tel;
+    const is_active = digits.startsWith("549") && digits.length === 13;
+    try {
+      const res = await fetch(`${API}/patients/${encodeURIComponent(telOrig)}`, {
+        method: "PUT",
+        headers: authH(),
+        body: JSON.stringify({ nombre, telefono: tel, obra_social: os, is_active }),
+      });
+      const data = await res.json();
+      if (!res.ok) { showToast(data.error || "Error al guardar"); return; }
+      cerrarEditPac();
+      showToast("Paciente actualizado");
+      cargarPacientes(_pacPage);
+    } catch(e) { showToast("Error: " + e.message); }
+  }
+
+  async function importarVCF(input) {
+    const file = input.files[0];
+    if (!file) return;
+    input.value = "";
+    const text = await file.text();
+    if (!text.includes("BEGIN:VCARD")) { showToast("Archivo inválido — debe ser .vcf"); return; }
+    showToast("Importando…");
+    try {
+      const res = await fetch(`${API}/patients/import-vcf`, {
+        method: "POST",
+        headers: { ...authH(), "Content-Type": "text/plain" },
+        body: text,
+      });
+      const data = await res.json();
+      if (!res.ok) { showToast(data.error || "Error en la importación"); return; }
+      showToast(`✓ ${data.imported} importados · ${data.activos} activos · ${data.inactivos} inactivos · ${data.skipped} ya existían`);
+      cargarPacientes(1);
+    } catch(e) { showToast("Error: " + e.message); }
+  }
+  // ── Fin Pacientes ──────────────────────────────────────────────────────────
 
   // Cerrar modales clickeando afuera
   ["turnoOverlay","configOverlay"].forEach(id => {

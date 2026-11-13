@@ -617,12 +617,119 @@ app.delete("/session/:telefono", async (req, res) => {
   res.json({ ok: true });
 });
 
-app.get("/patients",                    authMiddleware, async (req, res) => { res.json(await db.getAllPatients(consultorioDe(req))); });
-app.get("/patients/search",             authMiddleware, async (req, res) => {
+app.get("/patients", authMiddleware, async (req, res) => {
+  const { status, q, page = 1, limit = 50 } = req.query;
+  const consultorio_id = consultorioDe(req);
+  if (!db.pool) return res.json({ patients: [], total: 0 });
+  let where = "p.consultorio_id = $1";
+  const vals = [consultorio_id];
+  let i = 2;
+  if (status === "active")   { where += ` AND p.is_active = true`;  }
+  if (status === "inactive") { where += ` AND p.is_active = false`; }
+  if (q && q.trim().length >= 2) {
+    where += ` AND (p.nombre ILIKE $${i} OR p.telefono ILIKE $${i})`;
+    vals.push(`%${q.trim()}%`); i++;
+  }
+  const offset = (parseInt(page) - 1) * parseInt(limit);
+  const [{ rows }, { rows: cnt }] = await Promise.all([
+    db.pool.query(
+      `SELECT p.*, COUNT(m.id)::int AS total_mensajes
+       FROM patients p LEFT JOIN messages m ON m.telefono = p.telefono
+       WHERE ${where} GROUP BY p.telefono ORDER BY p.is_active ASC, p.nombre ASC
+       LIMIT $${i} OFFSET $${i+1}`,
+      [...vals, parseInt(limit), offset]
+    ),
+    db.pool.query(`SELECT COUNT(*)::int AS total FROM patients p WHERE ${where}`, vals),
+  ]);
+  res.json({ patients: rows, total: cnt[0].total });
+});
+
+app.get("/patients/search", authMiddleware, async (req, res) => {
   const q = (req.query.q || "").trim();
   if (q.length < 2) return res.json([]);
   res.json(await db.searchPatients(q, consultorioDe(req)));
 });
+
+// Parsea VCF e importa pacientes (una o más veces — idempotente por ON CONFLICT DO NOTHING)
+app.post("/patients/import-vcf", authMiddleware, express.text({ type: "*/*", limit: "5mb" }), async (req, res) => {
+  try {
+    const vcf = req.body || "";
+    if (!vcf.includes("BEGIN:VCARD")) return res.status(400).json({ ok: false, error: "Archivo VCF inválido" });
+
+    const BUSINESS_RE = /\b(lab|laboratorio|dental|clinica|farmacia|seguro|mutual|contable|estudio|empresa|s\.r\.l|s\.a\.|srl|distribu|drogueria|transporte|inmobiliaria|medicina|centro|instituto|consultorio|hospital|sanatorio|escuela|colegio|banco|financiera)\b/i;
+
+    function normalizePhone(raw) {
+      const digits = raw.replace(/\D/g, "");
+      if (!digits || digits.length < 7 || digits.length > 15) return null;
+      if (digits.startsWith("549") && digits.length === 13) return digits;
+      if (digits.startsWith("549") && digits.length >= 11 && digits.length <= 14) return digits;
+      if (digits.startsWith("54") && !digits.startsWith("549") && digits.length >= 12 && digits.length <= 13) return "549" + digits.slice(2);
+      if (digits.length === 10) return "549" + digits;
+      if (digits.length === 11 && digits.startsWith("11")) return "549" + digits;
+      if (digits.length === 11 && !digits.startsWith("54")) return "549" + digits;
+      if (digits.length >= 10) return digits; // internacional no-AR, guardar igual
+      return null;
+    }
+
+    function isValidArPhone(normalized) {
+      if (!normalized) return false;
+      const d = normalized.replace(/\D/g, "");
+      return d.startsWith("549") && d.length === 13;
+    }
+
+    const vcards = vcf.split(/(?=BEGIN:VCARD)/g).filter(v => v.includes("BEGIN:VCARD"));
+    const contacts = [];
+    const seenPhones = new Set();
+
+    for (const vcard of vcards) {
+      const lines = vcard.split(/\r?\n/);
+      let fn = "";
+      const tels = [];
+      for (const line of lines) {
+        if (line.startsWith("FN:")) fn = line.slice(3).trim();
+        else if (line.includes("TEL") && line.includes(":")) {
+          const type = line.includes("CELL") ? 0 : line.includes("HOME") ? 1 : 2;
+          tels.push({ type, val: line.split(":").slice(1).join(":").trim() });
+        }
+      }
+      if (!fn || fn.replace(/;/g, "").trim() === "") continue;
+      if (BUSINESS_RE.test(fn)) continue;
+      if (!tels.length) continue;
+      tels.sort((a, b) => a.type - b.type);
+      let phone = null;
+      let active = false;
+      for (const t of tels) {
+        const norm = normalizePhone(t.val);
+        if (norm) { phone = norm; active = isValidArPhone(norm); break; }
+      }
+      if (!phone) continue;
+      if (seenPhones.has(phone)) continue;
+      seenPhones.add(phone);
+      contacts.push({ nombre: fn, telefono: phone, is_active: active });
+    }
+
+    const { imported, skipped } = await db.bulkImportPatients(contacts, consultorioDe(req));
+    const activos   = contacts.filter(c => c.is_active).length;
+    const inactivos = contacts.filter(c => !c.is_active).length;
+    res.json({ ok: true, total: contacts.length, imported, skipped, activos, inactivos });
+  } catch (err) {
+    console.error("[import-vcf]", err);
+    res.status(500).json({ ok: false, error: err.message });
+  }
+});
+
+app.put("/patients/:telefono", authMiddleware, async (req, res) => {
+  try {
+    const { nombre, telefono: newTel, obra_social, dni, is_active } = req.body;
+    const updated = await db.updatePatientFull(req.params.telefono, { nombre, telefono: newTel, obra_social, dni, is_active });
+    if (!updated) return res.status(404).json({ ok: false, error: "Paciente no encontrado" });
+    res.json({ ok: true, patient: updated });
+  } catch (err) {
+    console.error("[PUT /patients]", err);
+    res.status(500).json({ ok: false, error: err.message });
+  }
+});
+
 app.get("/patients/:telefono/messages", authMiddleware, async (req, res) => { res.json(await db.getMessages(req.params.telefono)); });
 app.post("/admin/pause/:telefono",      authMiddleware, async (req, res) => { await db.setPatientMode(req.params.telefono, "humano"); res.json({ ok: true }); });
 app.post("/admin/resume/:telefono",     authMiddleware, async (req, res) => { await db.setPatientMode(req.params.telefono, "bot"); res.json({ ok: true }); });
