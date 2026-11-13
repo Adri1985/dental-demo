@@ -553,7 +553,7 @@ async function getAllPatients(consultorio_id) {
     SELECT p.*, COUNT(m.id)::int AS total_mensajes
     FROM patients p LEFT JOIN messages m ON m.telefono = p.telefono
     WHERE p.consultorio_id = $1
-    GROUP BY p.telefono ORDER BY p.updated_at DESC
+    GROUP BY p.telefono HAVING COUNT(m.id) > 0 ORDER BY p.updated_at DESC
   `, [consultorio_id || 1]);
   return rows;
 }
