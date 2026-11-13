@@ -503,6 +503,21 @@ async function createBlockEvent({ fecha, hora_inicio, hora_fin, etiqueta, descri
   return { ok: true, event_id: data.id };
 }
 
+/**
+ * Devuelve los primeros N slots disponibles en un rango de fechas.
+ * Usado por el chat admin (modo doctor) para proponer horarios al paciente.
+ */
+async function getAvailableSlotsInRange({ fecha_desde, fecha_hasta, duracion_min = 30, max_slots = 8, horarios, creds }) {
+  const slots = await checkAvailability({
+    fecha_desde,
+    fecha_hasta,
+    duracion_minutos: duracion_min,
+    horarios,
+    creds,
+  });
+  return (slots || []).slice(0, max_slots);
+}
+
 module.exports = {
   checkAvailability,
   createAppointment,
@@ -512,4 +527,5 @@ module.exports = {
   getAppointmentsByDay,
   getRegisteredPatientsInRange,
   createBlockEvent,
+  getAvailableSlotsInRange,
 };

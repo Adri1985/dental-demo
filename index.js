@@ -9,7 +9,7 @@ const Anthropic = require("@anthropic-ai/sdk");
 const {
   checkAvailability, createAppointment, cancelAppointment,
   findPatientByIdentifier, getPatientAppointments, getAppointmentsByDay,
-  getRegisteredPatientsInRange, createBlockEvent,
+  getRegisteredPatientsInRange, createBlockEvent, getAvailableSlotsInRange,
 } = require("./calendar");
 const { google } = require("googleapis");
 const { getSystemPrompt, TOOLS, config } = require("./agent");
@@ -755,6 +755,173 @@ app.post("/admin/send/:telefono", authMiddleware, async (req, res) => {
   } catch (err) {
     console.error("[POST /admin/send]", err.message);
     res.status(500).json({ ok: false, error: "Error interno" });
+  }
+});
+
+// ─────────────────────────────────────────────
+//  CHAT ADMIN → MÍA (modo doctor)
+// ─────────────────────────────────────────────
+const ADMIN_MIA_TOOLS = [
+  {
+    name: "buscar_paciente",
+    description: "Busca pacientes en la base de datos por nombre o apellido.",
+    input_schema: {
+      type: "object",
+      properties: {
+        nombre: { type: "string", description: "Nombre o apellido a buscar" }
+      },
+      required: ["nombre"]
+    }
+  },
+  {
+    name: "ver_disponibilidad_rango",
+    description: "Consulta horarios disponibles en el calendario dentro de un rango de fechas. Devuelve los primeros turnos libres.",
+    input_schema: {
+      type: "object",
+      properties: {
+        fecha_desde: { type: "string", description: "Fecha inicio YYYY-MM-DD" },
+        fecha_hasta: { type: "string", description: "Fecha fin YYYY-MM-DD" },
+        duracion_min: { type: "integer", description: "Duración del turno en minutos (default 30)", default: 30 }
+      },
+      required: ["fecha_desde", "fecha_hasta"]
+    }
+  },
+  {
+    name: "preparar_mensaje_paciente",
+    description: "Guarda el mensaje que se enviaría al paciente como preview visible en el panel de Chats. Usar solo cuando el doctor confirme que quiere proceder.",
+    input_schema: {
+      type: "object",
+      properties: {
+        telefono:        { type: "string", description: "Teléfono del paciente (formato 549XXXXXXXXXX)" },
+        nombre_paciente: { type: "string", description: "Nombre completo del paciente" },
+        motivo:          { type: "string", description: "Motivo del turno" },
+        mensaje:         { type: "string", description: "Texto completo del mensaje para el paciente" }
+      },
+      required: ["telefono", "nombre_paciente", "motivo", "mensaje"]
+    }
+  }
+];
+
+function adminMiaSystemPrompt(doctorNombre, fechaHoy) {
+  return `Sos Mía, la asistente del consultorio dental. Ahora estás hablando con ${doctorNombre || "el doctor"} desde el panel de administración.
+
+Fecha de hoy: ${fechaHoy}
+
+Cuando te pidan coordinar un turno para un paciente:
+1. Buscá al paciente con buscar_paciente
+2. Confirmá al doctor cuál es el paciente encontrado (nombre + teléfono)
+3. Consultá disponibilidad con ver_disponibilidad_rango en el rango solicitado
+4. Presentale las opciones al doctor y esperá su aprobación
+5. Solo cuando el doctor confirme, usá preparar_mensaje_paciente para generar el preview del mensaje
+
+El mensaje para el paciente debe seguir este formato (es el template que se aprobará):
+"Hola [nombre]! El doctor me pidió coordinarte un turno para tu [motivo]. Tengo estas opciones disponibles:
+• [día fecha] a las [hora]
+• ...
+¿Alguna te queda bien? Respondeme acá y lo agendo 😊"
+
+Hablá de forma directa y profesional. No necesitás ser formal con el doctor, podés ser conciso.`;
+}
+
+app.post("/admin/mia-chat", authMiddleware, async (req, res) => {
+  try {
+    const { mensaje, historia = [] } = req.body;
+    if (!mensaje?.trim()) return res.status(400).json({ ok: false, error: "Mensaje vacío" });
+
+    const consultorio_id = consultorioDe(req);
+    const perfil  = await db.getActiveProfile(consultorio_id);
+    const config  = await db.getConfig();
+    const sender  = await db.getUserByEmail(req.user.email);
+    const doctorNombre = sender?.nombre || sender?.email || "el doctor";
+    const fechaHoy = new Date().toLocaleDateString("es-AR", { timeZone: "America/Argentina/Buenos_Aires", weekday: "long", day: "numeric", month: "long", year: "numeric" });
+
+    const mensajes = [
+      ...historia,
+      { role: "user", content: mensaje.trim() }
+    ];
+
+    let respuestaFinal = "";
+    let histActualizada = [...mensajes];
+    let accion = null;
+
+    // Loop de tool use
+    let iteraciones = 0;
+    while (iteraciones < 5) {
+      iteraciones++;
+      const response = await anthropic.messages.create({
+        model: "claude-haiku-4-5",
+        max_tokens: 1024,
+        system: adminMiaSystemPrompt(doctorNombre, fechaHoy),
+        tools: ADMIN_MIA_TOOLS,
+        messages: histActualizada,
+      });
+
+      histActualizada.push({ role: "assistant", content: response.content });
+
+      if (response.stop_reason === "end_turn") {
+        respuestaFinal = response.content.find(b => b.type === "text")?.text || "";
+        break;
+      }
+
+      if (response.stop_reason !== "tool_use") break;
+
+      const toolResults = [];
+      for (const block of response.content) {
+        if (block.type !== "tool_use") continue;
+        const { name, input, id } = block;
+        let result = "";
+
+        try {
+          if (name === "buscar_paciente") {
+            const rows = await db.searchPatients(input.nombre, consultorio_id);
+            if (!rows.length) result = "No encontré ningún paciente con ese nombre.";
+            else result = rows.map(p => `• ${p.nombre} — tel: ${p.telefono}${p.obra_social ? " — " + p.obra_social : ""}`).join("\n");
+          }
+
+          else if (name === "ver_disponibilidad_rango") {
+            const creds = credsCalendar(perfil);
+            const horarios = {
+              manana_desde: config.horario_manana_desde,
+              manana_hasta: config.horario_manana_hasta,
+              tarde_desde:  config.horario_tarde_desde,
+              tarde_hasta:  config.horario_tarde_hasta,
+            };
+            const slots = await getAvailableSlotsInRange({
+              fecha_desde:  input.fecha_desde,
+              fecha_hasta:  input.fecha_hasta,
+              duracion_min: input.duracion_min || 30,
+              max_slots: 8,
+              horarios,
+              creds,
+            });
+            if (!slots.length) result = "No hay turnos disponibles en ese rango.";
+            else result = slots.map(s => `• ${s.label || s.fecha_hora}`).join("\n");
+          }
+
+          else if (name === "preparar_mensaje_paciente") {
+            const { telefono, nombre_paciente, motivo, mensaje: msgPaciente } = input;
+            // Asegurar que el paciente existe en la DB
+            await db.upsertPatient({ telefono, nombre: nombre_paciente, consultorio_id });
+            // Guardar el mensaje como preview (no enviado)
+            const ts = new Date().toISOString();
+            await db.addMessage(telefono, "assistant", msgPaciente, ts, true, "preview_template");
+            accion = { tipo: "preview_guardado", telefono, nombre_paciente, mensaje: msgPaciente };
+            result = `Preview guardado en la conversación de ${nombre_paciente}. El mensaje aparece en el panel de Chats marcado como pendiente de envío por WhatsApp.`;
+          }
+        } catch (err) {
+          result = `Error: ${err.message}`;
+        }
+
+        toolResults.push({ type: "tool_result", tool_use_id: id, content: result });
+      }
+
+      histActualizada.push({ role: "user", content: toolResults });
+    }
+
+    res.json({ ok: true, respuesta: respuestaFinal, historia: histActualizada, accion });
+  } catch (err) {
+    console.error("[admin/mia-chat]", err);
+    res.status(500).json({ ok: false, error: err.message });
   }
 });
 
