@@ -268,6 +268,7 @@
     <div class="live-badge">EN VIVO</div>
     <button class="nav-view-btn active" id="btnViewChats" onclick="setView('chats')">💬 Chats</button>
     <button class="nav-view-btn" id="btnViewTurnos" onclick="setView('turnos')">📅 Turnos</button>
+    <button class="nav-view-btn" id="btnViewPacientes" onclick="setView('pacientes')">👤 Pacientes</button>
     <button class="nav-action-btn" onclick="abrirConfig()">⚙ Config</button>
     <button class="nav-action-btn danger" onclick="logout()">Salir</button>
     <button class="menu-btn" onclick="toggleMenu()">⋮</button>
@@ -275,6 +276,7 @@
   <div class="dropdown-menu" id="dropdownMenu">
     <button class="dropdown-item" onclick="closeMenu();setView('chats')">💬 Chats</button>
     <button class="dropdown-item" onclick="closeMenu();setView('turnos')">📅 Turnos del día</button>
+    <button class="dropdown-item" onclick="closeMenu();setView('pacientes')">👤 Pacientes</button>
     <button class="dropdown-item" onclick="closeMenu();abrirConfig()">⚙ Config</button>
     <button class="dropdown-item danger" onclick="closeMenu();logout()">Salir</button>
   </div>
@@ -304,6 +306,53 @@
     </div>
     <div class="turnos-body" id="turnosBody">
       <div class="turnos-empty">Cargando turnos...</div>
+    </div>
+  </div>
+
+  <!-- Vista Pacientes -->
+  <div class="turnos-panel" id="pacientesPanel" style="padding:20px 24px;overflow-y:auto;gap:14px">
+    <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap">
+      <div style="font-size:16px;font-weight:600;color:#e9edef;flex:1">Pacientes</div>
+      <label class="btn btn-primary" style="cursor:pointer;font-size:12px;padding:6px 12px;position:relative">
+        Importar VCF
+        <input type="file" accept=".vcf,text/vcard" style="position:absolute;inset:0;opacity:0;cursor:pointer" onchange="importarVCF(this)" />
+      </label>
+    </div>
+    <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap">
+      <input class="modal-input" id="pacBusqueda" type="text" placeholder="Buscar por nombre o teléfono…" style="flex:1;min-width:160px" oninput="debouncePacientes()" />
+      <div style="display:flex;gap:4px">
+        <button class="pac-filter active" data-f="all"      onclick="setPacFilter(this,'all')">Todos</button>
+        <button class="pac-filter"        data-f="active"   onclick="setPacFilter(this,'active')">Activos</button>
+        <button class="pac-filter"        data-f="inactive" onclick="setPacFilter(this,'inactive')">Inactivos</button>
+      </div>
+    </div>
+    <div id="pacStats" style="font-size:11px;color:#8696a0;margin-top:-6px"></div>
+    <div id="pacTabla" style="font-size:13px"><div style="color:#8696a0">Cargando…</div></div>
+    <div id="pacPag" style="display:flex;justify-content:center;gap:8px;font-size:12px;margin-top:4px"></div>
+
+    <!-- Modal edición paciente -->
+    <div id="pacEditOverlay" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.6);z-index:200;align-items:center;justify-content:center">
+      <div style="background:#1f2c34;border-radius:10px;padding:20px;width:320px;max-width:90vw;box-shadow:0 4px 24px #0008">
+        <div style="font-size:14px;font-weight:600;color:#e9edef;margin-bottom:14px">Editar paciente</div>
+        <input type="hidden" id="pacEditTelOrig" />
+        <div class="modal-field">
+          <label class="modal-label">Nombre</label>
+          <input class="modal-input" id="pacEditNombre" type="text" />
+        </div>
+        <div class="modal-field">
+          <label class="modal-label">Teléfono <span style="font-size:10px;color:#8696a0">(formato WhatsApp: 549XXXXXXXXXX)</span></label>
+          <input class="modal-input" id="pacEditTel" type="text" oninput="validarTelPacEdit()" />
+          <div id="pacEditTelHint" style="font-size:11px;margin-top:3px"></div>
+        </div>
+        <div class="modal-field">
+          <label class="modal-label">Obra social</label>
+          <input class="modal-input" id="pacEditOS" type="text" />
+        </div>
+        <div class="modal-actions" style="margin-top:4px">
+          <button class="btn btn-cancel" onclick="cerrarEditPac()">Cancelar</button>
+          <button class="btn btn-primary" id="btnGuardarPac" onclick="guardarEditPac()">Guardar</button>
+        </div>
+      </div>
     </div>
   </div>
 </div>
@@ -391,7 +440,6 @@
       <button class="cfg-tab" onclick="switchTab('flujos')">Flujos</button>
       <button class="cfg-tab" onclick="switchTab('equipo')">Equipo</button>
       <button class="cfg-tab" onclick="switchTab('integraciones')">Integraciones</button>
-      <button class="cfg-tab" onclick="switchTab('pacientes')">Pacientes</button>
     </div>
 
     <!-- Tab: Horarios -->
@@ -669,61 +717,6 @@
         <div class="modal-actions" style="margin-top:10px">
           <button class="btn btn-cancel" onclick="cerrarPerfilForm()">Cancelar</button>
           <button class="btn btn-primary" id="btnGuardarPerfil" onclick="guardarPerfil()">Guardar y validar</button>
-        </div>
-      </div>
-    </div>
-
-    <!-- Tab: Pacientes -->
-    <div class="cfg-panel" id="tab-pacientes" style="display:none;overflow-y:auto;flex:1;padding-bottom:4px">
-
-      <!-- Toolbar -->
-      <div style="display:flex;align-items:center;gap:8px;margin-bottom:12px;flex-wrap:wrap">
-        <input class="modal-input" id="pacBusqueda" type="text" placeholder="Buscar por nombre o teléfono…" style="flex:1;min-width:140px" oninput="debouncePacientes()" />
-        <div style="display:flex;gap:4px">
-          <button class="pac-filter active" data-f="all"      onclick="setPacFilter(this,'all')">Todos</button>
-          <button class="pac-filter"        data-f="active"   onclick="setPacFilter(this,'active')">Activos</button>
-          <button class="pac-filter"        data-f="inactive" onclick="setPacFilter(this,'inactive')">Inactivos</button>
-        </div>
-        <label class="btn btn-primary" style="cursor:pointer;font-size:12px;padding:5px 10px;position:relative">
-          Importar VCF
-          <input type="file" accept=".vcf,text/vcard" style="position:absolute;inset:0;opacity:0;cursor:pointer" onchange="importarVCF(this)" />
-        </label>
-      </div>
-
-      <!-- Stats -->
-      <div id="pacStats" style="font-size:11px;color:#8696a0;margin-bottom:10px"></div>
-
-      <!-- Tabla -->
-      <div id="pacTabla" style="font-size:13px">
-        <div style="color:#8696a0">Abrí esta pestaña para cargar los pacientes.</div>
-      </div>
-
-      <!-- Paginación -->
-      <div id="pacPag" style="display:flex;justify-content:center;gap:8px;margin-top:12px;font-size:12px"></div>
-
-    </div>
-
-    <!-- Modal edición paciente (dentro del configOverlay) -->
-    <div id="pacEditOverlay" style="display:none;position:absolute;inset:0;background:rgba(0,0,0,.55);z-index:10;border-radius:12px;align-items:center;justify-content:center">
-      <div style="background:#1f2c34;border-radius:10px;padding:20px;width:320px;max-width:90%;box-shadow:0 4px 24px #0006">
-        <div style="font-size:14px;font-weight:600;color:#e9edef;margin-bottom:14px">Editar paciente</div>
-        <input type="hidden" id="pacEditTelOrig" />
-        <div class="modal-field">
-          <label class="modal-label">Nombre</label>
-          <input class="modal-input" id="pacEditNombre" type="text" />
-        </div>
-        <div class="modal-field">
-          <label class="modal-label">Teléfono <span style="font-size:10px;color:#8696a0">(formato WhatsApp: 549XXXXXXXXXX)</span></label>
-          <input class="modal-input" id="pacEditTel" type="text" oninput="validarTelPacEdit()" />
-          <div id="pacEditTelHint" style="font-size:11px;margin-top:3px"></div>
-        </div>
-        <div class="modal-field">
-          <label class="modal-label">Obra social</label>
-          <input class="modal-input" id="pacEditOS" type="text" />
-        </div>
-        <div class="modal-actions" style="margin-top:4px">
-          <button class="btn btn-cancel" onclick="cerrarEditPac()">Cancelar</button>
-          <button class="btn btn-primary" id="btnGuardarPac" onclick="guardarEditPac()">Guardar</button>
         </div>
       </div>
     </div>
@@ -1190,7 +1183,7 @@
 
   function switchTab(nombre) {
     document.querySelectorAll(".cfg-tab").forEach((t, i) => {
-      const tabs = ["horarios","estilo","practicas","coberturas","flujos","equipo","integraciones","pacientes"];
+      const tabs = ["horarios","estilo","practicas","coberturas","flujos","equipo","integraciones"];
       t.classList.toggle("active", tabs[i] === nombre);
     });
     document.querySelectorAll(".cfg-panel").forEach(p => p.style.display = "none");
@@ -1200,7 +1193,6 @@
     if (nombre === "flujos")     cargarFlujos();
     if (nombre === "equipo")     cargarEquipo();
     if (nombre === "integraciones") cargarPerfiles();
-    if (nombre === "pacientes")     cargarPacientes();
   }
   async function guardarConfig() {
     const num = document.getElementById("cfgBotNumber").value.trim().replace(/\D/g, "");
@@ -1992,13 +1984,18 @@
   }
 
   function setView(vista) {
-    const esTurnos = vista === "turnos";
-    document.getElementById("sidebar").style.display   = esTurnos ? "none" : "";
-    document.getElementById("convoPanel").style.display = esTurnos ? "none" : "";
+    const esTurnos    = vista === "turnos";
+    const esPacientes = vista === "pacientes";
+    const esChats     = !esTurnos && !esPacientes;
+    document.getElementById("sidebar").style.display        = esChats ? "" : "none";
+    document.getElementById("convoPanel").style.display     = esChats ? "" : "none";
     document.getElementById("turnosPanel").classList.toggle("visible", esTurnos);
-    document.getElementById("btnViewChats").classList.toggle("active", !esTurnos);
+    document.getElementById("pacientesPanel").classList.toggle("visible", esPacientes);
+    document.getElementById("btnViewChats").classList.toggle("active", esChats);
     document.getElementById("btnViewTurnos").classList.toggle("active", esTurnos);
-    if (esTurnos) cargarTurnos(turnosFechaActual);
+    document.getElementById("btnViewPacientes").classList.toggle("active", esPacientes);
+    if (esTurnos)    cargarTurnos(turnosFechaActual);
+    if (esPacientes) cargarPacientes(1);
   }
 
   function seleccionarFechaTurnos(cual) {
