@@ -288,6 +288,11 @@
       <span>Conversaciones</span>
       <span id="totalCount">—</span>
     </div>
+    <div style="padding:8px 10px;border-bottom:1px solid #2a3942;flex-shrink:0">
+      <input id="chatSearch" type="text" placeholder="Buscar por nombre o teléfono…"
+        style="width:100%;box-sizing:border-box;background:#2a3942;border:none;border-radius:8px;padding:7px 10px;color:#e9edef;font-size:12px;outline:none"
+        oninput="renderSidebar()" />
+    </div>
     <div class="patient-list" id="patientList"><div class="no-patients">Cargando...</div></div>
   </div>
   <div class="convo-panel" id="convoPanel">
@@ -882,10 +887,14 @@
 
   function renderSidebar() {
     const list = document.getElementById("patientList");
-    document.getElementById("totalCount").textContent = `${patients.length} paciente${patients.length !== 1 ? "s" : ""}`;
-    if (!patients.length) { list.innerHTML = '<div class="no-patients">Sin conversaciones todavía</div>'; return; }
+    const q = (document.getElementById("chatSearch")?.value || "").toLowerCase().trim();
+    const visible = q
+      ? patients.filter(p => (p.nombre || "").toLowerCase().includes(q) || p.telefono.includes(q))
+      : patients;
+    document.getElementById("totalCount").textContent = `${visible.length} paciente${visible.length !== 1 ? "s" : ""}`;
+    if (!visible.length) { list.innerHTML = `<div class="no-patients">${q ? "Sin resultados" : "Sin conversaciones todavía"}</div>`; return; }
     // Alertas primero, luego por updated_at
-    const sorted = [...patients].sort((a, b) => {
+    const sorted = [...visible].sort((a, b) => {
       if (a.en_alerta && !b.en_alerta) return -1;
       if (!a.en_alerta && b.en_alerta) return 1;
       return new Date(b.updated_at) - new Date(a.updated_at);
