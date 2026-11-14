@@ -1195,9 +1195,9 @@ app.get("/practicas",               authMiddleware, async (req, res) => { res.js
 app.get("/practicas/turno-directo", authMiddleware, async (req, res) => { res.json(await db.getPracticas("turno_directo")); });
 app.post("/practicas",              authMiddleware, async (req, res) => {
   try {
-    const { nombre, duracion_min, precio, requiere, para_agente, para_turno_directo } = req.body;
+    const { nombre, duracion_min, precio, moneda, requiere, para_agente, para_turno_directo } = req.body;
     if (!nombre || !duracion_min) return res.status(400).json({ error: "nombre y duracion_min requeridos" });
-    res.json(await db.createPractica({ nombre, duracion_min: parseInt(duracion_min), precio, requiere, para_agente, para_turno_directo }));
+    res.json(await db.createPractica({ nombre, duracion_min: parseInt(duracion_min), precio, moneda, requiere, para_agente, para_turno_directo }));
   } catch(err) { console.error(err); res.status(500).json({ error: "Error interno" }); }
 });
 app.patch("/practicas/:id", authMiddleware, async (req, res) => {
@@ -1211,6 +1211,7 @@ app.patch("/practicas/:id", authMiddleware, async (req, res) => {
     if (b.requiere           !== undefined) campos.requiere           = b.requiere;
     if (b.para_agente        !== undefined) campos.para_agente        = b.para_agente;
     if (b.para_turno_directo !== undefined) campos.para_turno_directo = b.para_turno_directo;
+    if (b.moneda             !== undefined) campos.moneda             = b.moneda;
     console.log("[PATCH /practicas] campos:", JSON.stringify(campos));
     const p = await db.updatePractica(req.params.id, campos);
     if (!p) return res.status(404).json({ error: "Práctica no encontrada" });

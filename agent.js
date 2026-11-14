@@ -22,7 +22,11 @@ function buildPracticasText(practicas, cfg = {}) {
   if (!yaIncluyeControl) lista = [{ nombre: "Control de rutina", duracion_min: duracionControl, precio: 0 }, ...lista];
   return lista.map(p => {
     const precio = parseInt(p.precio) || 50;
-    let texto = `- ${p.nombre}: ${p.duracion_min || p.duracion} min, $${precio.toLocaleString("es-AR")}`;
+    const esUSD = p.moneda === 'USD';
+    const precioStr = esUSD
+      ? `USD ${precio.toLocaleString("es-AR")}`
+      : `$${precio.toLocaleString("es-AR")}`;
+    let texto = `- ${p.nombre}: ${p.duracion_min || p.duracion} min, ${precioStr}`;
     if (p.requiere) texto += `\n  → REQUIERE: ${Array.isArray(p.requiere) ? p.requiere.join(", ") : p.requiere}`;
     return texto;
   }).join("\n");

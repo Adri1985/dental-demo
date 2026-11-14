@@ -214,6 +214,7 @@ async function initDB() {
     ALTER TABLE practicas ADD COLUMN IF NOT EXISTS para_agente        BOOLEAN DEFAULT true;
     ALTER TABLE practicas ADD COLUMN IF NOT EXISTS para_turno_directo BOOLEAN DEFAULT true;
     ALTER TABLE practicas ADD COLUMN IF NOT EXISTS precio             INTEGER DEFAULT 50;
+    ALTER TABLE practicas ADD COLUMN IF NOT EXISTS moneda             TEXT DEFAULT 'ARS';
   `).catch(e => console.log("[db] migracion practicas:", e.message));
 
   await pool.query(`
@@ -734,12 +735,13 @@ async function getPracticas(filtro) {
   return rows;
 }
 
-async function createPractica({ nombre, duracion_min, precio, requiere, para_agente, para_turno_directo }) {
+async function createPractica({ nombre, duracion_min, precio, moneda, requiere, para_agente, para_turno_directo }) {
   if (!USE_DB) return null;
   const { rows } = await pool.query(
-    `INSERT INTO practicas (nombre, duracion_min, precio, requiere, para_agente, para_turno_directo)
-     VALUES ($1, $2, $3, $4, $5, $6) RETURNING *`,
-    [nombre, duracion_min || 30, precio != null ? parseInt(precio) : 50, requiere || null,
+    `INSERT INTO practicas (nombre, duracion_min, precio, moneda, requiere, para_agente, para_turno_directo)
+     VALUES ($1, $2, $3, $4, $5, $6, $7) RETURNING *`,
+    [nombre, duracion_min || 30, precio != null ? parseInt(precio) : 50,
+     moneda === 'USD' ? 'USD' : 'ARS', requiere || null,
      para_agente !== false, para_turno_directo !== false]
   );
   return rows[0];
@@ -756,6 +758,7 @@ async function updatePractica(id, campos) {
   if (campos.requiere           !== undefined) { sets.push(`requiere = $${i++}`);           vals.push(campos.requiere || null); }
   if (campos.para_agente        !== undefined) { sets.push(`para_agente = $${i++}`);       vals.push(campos.para_agente); }
   if (campos.para_turno_directo !== undefined) { sets.push(`para_turno_directo = $${i++}`); vals.push(campos.para_turno_directo); }
+  if (campos.moneda             !== undefined) { sets.push(`moneda = $${i++}`);             vals.push(campos.moneda === 'USD' ? 'USD' : 'ARS'); }
   console.log("[updatePractica] sets:", sets, "vals:", vals, "id:", id);
   if (!sets.length) { console.log("[updatePractica] nada que actualizar"); return null; }
   vals.push(id);
