@@ -802,16 +802,17 @@ const ADMIN_MIA_TOOLS = [
   },
   {
     name: "preparar_mensaje_paciente",
-    description: "Guarda el mensaje que se enviaría al paciente como preview visible en el panel de Chats. Usar solo cuando el doctor confirme que quiere proceder.",
+    description: "Envía el template de WhatsApp al paciente y registra el mensaje en el panel de Chats. Usar solo cuando el doctor confirme que quiere proceder.",
     input_schema: {
       type: "object",
       properties: {
         telefono:        { type: "string", description: "Teléfono del paciente (formato 549XXXXXXXXXX)" },
-        nombre_paciente: { type: "string", description: "Nombre completo del paciente" },
-        motivo:          { type: "string", description: "Motivo del turno" },
-        mensaje:         { type: "string", description: "Texto completo del mensaje para el paciente" }
+        nombre_paciente: { type: "string", description: "Nombre del paciente (para {{1}} del template)" },
+        motivo:          { type: "string", description: "Motivo del turno (para {{2}} del template, ej: 'control de implante')" },
+        opciones:        { type: "string", description: "Lista de opciones de horario (para {{3}} del template, ej: '• Jue 14/8 a las 10:00\n• Vie 15/8 a las 09:30')" },
+        mensaje:         { type: "string", description: "Texto completo del mensaje (para mostrar en el panel)" }
       },
-      required: ["telefono", "nombre_paciente", "motivo", "mensaje"]
+      required: ["telefono", "nombre_paciente", "motivo", "opciones", "mensaje"]
     }
   }
 ];
@@ -826,13 +827,14 @@ Cuando te pidan coordinar un turno para un paciente:
 2. Confirmá al doctor cuál es el paciente encontrado (nombre + teléfono)
 3. Consultá disponibilidad con ver_disponibilidad_rango en el rango solicitado
 4. Presentale las opciones al doctor y esperá su aprobación
-5. Solo cuando el doctor confirme, usá preparar_mensaje_paciente para generar el preview del mensaje
+5. Solo cuando el doctor confirme, usá preparar_mensaje_paciente para ENVIAR el mensaje por WhatsApp
 
-El mensaje para el paciente debe seguir este formato (es el template que se aprobará):
-"Hola [nombre]! El doctor me pidió coordinarte un turno para tu [motivo]. Tengo estas opciones disponibles:
-• [día fecha] a las [hora]
-• ...
-¿Alguna te queda bien? Respondeme acá y lo agendo 😊"
+En preparar_mensaje_paciente usá estos campos:
+- opciones: solo la lista de horarios con bullets (ej: "• Jue 14/8 a las 10:00\n• Vie 15/8 a las 09:30") — es el {{3}} del template
+- mensaje: el texto completo del mensaje tal como lo verá el doctor en el panel
+
+El template que se envía al paciente es exactamente:
+"Hola [nombre]! El doctor me pidió coordinarte un turno para tu [motivo]. Tengo estas opciones disponibles:\n[opciones]\n¿Alguna te queda bien? Respondeme acá y lo agendo 😊"
 
 Hablá de forma directa y profesional. No necesitás ser formal con el doctor, podés ser conciso.`;
 }
@@ -913,20 +915,34 @@ app.post("/admin/mia-chat", authMiddleware, async (req, res) => {
           }
 
           else if (name === "preparar_mensaje_paciente") {
-            const { telefono, nombre_paciente, motivo, mensaje: msgPaciente } = input;
+            const { telefono, nombre_paciente, motivo, opciones, mensaje: msgPaciente } = input;
             await db.upsertPatient({ telefono, nombre: nombre_paciente, consultorio_id });
             const ts = new Date().toISOString();
-            await db.addMessage(telefono, "assistant", msgPaciente, ts, true, "preview_template");
-            // Crear / reemplazar pending_task para este paciente
+
+            // Enviar template real de WhatsApp
+            const perfilEnvio = await db.getActiveProfile(consultorio_id).catch(() => null);
+            await sendWhatsAppTemplate(
+              telefono,
+              "coordinacion_turno",
+              [nombre_paciente, motivo, opciones || msgPaciente],
+              perfilEnvio
+            );
+
+            // Guardar en el panel como mensaje enviado
+            await db.addMessage(telefono, "assistant", msgPaciente, ts, true, "mia_template");
+
+            // Crear pending_task en estado 'sent'
             const sender = await db.getUserByEmail(req.user.email);
-            await db.createPendingTask({
+            const task = await db.createPendingTask({
               telefono,
               motivo,
               fecha_desde: null, fecha_hasta: null, duracion_min: 30,
               created_by: sender?.nombre || sender?.email || "doctor",
             });
-            accion = { tipo: "preview_guardado", telefono, nombre_paciente, mensaje: msgPaciente };
-            result = `Preview guardado en la conversación de ${nombre_paciente}. El mensaje aparece en el panel de Chats marcado como pendiente de envío por WhatsApp.`;
+            if (task?.id) await db.updatePendingTaskStatus(task.id, "sent").catch(() => {});
+
+            accion = { tipo: "template_enviado", telefono, nombre_paciente, mensaje: msgPaciente };
+            result = `✓ Mensaje enviado por WhatsApp a ${nombre_paciente}. Aparece en el panel de Chats. Cuando el paciente responda, Mía coordinará el turno automáticamente.`;
           }
         } catch (err) {
           result = `Error: ${err.message}`;
