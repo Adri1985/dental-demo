@@ -899,7 +899,8 @@ async function runAdminMia({ mensaje, historia = [], senderUser, consultorio_id,
           await db.upsertPatient({ telefono, nombre: nombre_paciente, consultorio_id });
           const ts = new Date().toISOString();
           const perfilEnvio = await db.getActiveProfile(consultorio_id).catch(() => null);
-          await sendWhatsAppTemplate(telefono, "coordinacion_turno", [nombre_paciente, motivo, opciones || msgPaciente], perfilEnvio);
+          const opcionesSanitized = (opciones || msgPaciente).replace(/[\n\r\t]+/g, " | ").replace(/ {5,}/g, "    ").trim();
+          await sendWhatsAppTemplate(telefono, "coordinacion_turno", [nombre_paciente, motivo, opcionesSanitized], perfilEnvio);
           await db.addMessage(telefono, "assistant", msgPaciente, ts, true, "mia_template");
           const task = await db.createPendingTask({ telefono, motivo, fecha_desde: null, fecha_hasta: null, duracion_min: 30, created_by: senderUser?.nombre || senderUser?.email || "doctor" });
           if (task?.id) await db.updatePendingTaskStatus(task.id, "sent").catch(() => {});
