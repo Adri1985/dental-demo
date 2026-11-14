@@ -218,6 +218,10 @@ async function initDB() {
   `).catch(e => console.log("[db] migracion practicas:", e.message));
 
   await pool.query(`
+    ALTER TABLE users ADD COLUMN IF NOT EXISTS telefono TEXT;
+  `).catch(e => console.log("[db] migracion users telefono:", e.message));
+
+  await pool.query(`
     ALTER TABLE patients ADD COLUMN IF NOT EXISTS consultorio_id INTEGER REFERENCES consultorios(id) DEFAULT 1;
     CREATE INDEX IF NOT EXISTS idx_patients_consultorio ON patients(consultorio_id);
   `).catch(e => console.log("[db] migracion patients consultorio_id:", e.message));
@@ -350,10 +354,28 @@ async function updateUserConsultorio(userId, consultorio_id) {
 async function getUsersByConsultorio(consultorio_id) {
   if (!USE_DB) return Object.values(store.users).filter(u => u.consultorio_id === consultorio_id);
   const { rows } = await pool.query(
-    "SELECT id, email, nombre, descripcion, created_at FROM users WHERE consultorio_id = $1 ORDER BY created_at ASC",
+    "SELECT id, email, nombre, descripcion, telefono, created_at FROM users WHERE consultorio_id = $1 ORDER BY created_at ASC",
     [consultorio_id]
   );
   return rows;
+}
+
+async function updateTeamMember(id, { nombre, telefono }) {
+  if (!USE_DB) return null;
+  const { rows } = await pool.query(
+    "UPDATE users SET nombre = $1, telefono = $2 WHERE id = $3 RETURNING id, email, nombre, telefono, descripcion",
+    [nombre || null, telefono || null, id]
+  );
+  return rows[0] || null;
+}
+
+async function getUserByTelefono(telefono, consultorio_id) {
+  if (!USE_DB) return null;
+  const { rows } = await pool.query(
+    "SELECT * FROM users WHERE telefono = $1 AND consultorio_id = $2 LIMIT 1",
+    [telefono, consultorio_id]
+  );
+  return rows[0] || null;
 }
 
 async function createInvitacion({ consultorio_id, email, token }) {
@@ -954,7 +976,7 @@ module.exports = {
   bulkImportPatients, updatePatientFull,
   // auth
   createConsultorio, getConsultorio,
-  createUser, getUserByEmail, updateUserConsultorio, getUsersByConsultorio,
+  createUser, getUserByEmail, updateUserConsultorio, getUsersByConsultorio, updateTeamMember, getUserByTelefono,
   createInvitacion, getInvitacion, usarInvitacion,
   // coberturas
   getCoberturas, createCobertura, updateCobertura, deleteCobertura,

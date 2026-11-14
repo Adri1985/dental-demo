@@ -548,6 +548,20 @@ app.post("/webhook", async (req, res) => {
     const telefono = message.from, texto = message.text.body;
     console.log(`[whatsapp] mensaje de ${telefono}: ${texto}`);
     const perfil = await getPerfilActivo();
+
+    // Detectar si es un miembro del equipo
+    const consultorio_id = DEFAULT_CONSULTORIO_ID;
+    const teamMember = await db.getUserByTelefono(telefono, consultorio_id).catch(() => null);
+    if (teamMember) {
+      console.log(`[whatsapp] mensaje de miembro del equipo: ${teamMember.nombre || teamMember.email}`);
+      const historia = await db.getClaudeHistory(telefono) || [];
+      const config   = await db.getConfig();
+      const { respuestaFinal, histActualizada } = await runAdminMia({ mensaje: texto, historia, senderUser: teamMember, consultorio_id, perfil, config });
+      await db.saveClaudeHistory(telefono, histActualizada);
+      if (respuestaFinal) await sendWhatsAppMessage(telefono, respuestaFinal, perfil);
+      return;
+    }
+
     let patient = await db.getPatient(telefono);
     if (!patient) {
       let datosPrevios = null;
@@ -839,126 +853,92 @@ El template que se envía al paciente es exactamente:
 Hablá de forma directa y profesional. No necesitás ser formal con el doctor, podés ser conciso.`;
 }
 
+// ─── Loop de Mía modo admin (reutilizado por panel y webhook de equipo) ────────
+async function runAdminMia({ mensaje, historia = [], senderUser, consultorio_id, perfil, config }) {
+  const doctorNombre = senderUser?.nombre || senderUser?.email || "el doctor";
+  const fechaHoy = new Date().toLocaleDateString("es-AR", { timeZone: "America/Argentina/Buenos_Aires", weekday: "long", day: "numeric", month: "long", year: "numeric" });
+  const histActualizada = [...historia, { role: "user", content: mensaje.trim() }];
+  let respuestaFinal = "", accion = null;
+
+  for (let i = 0; i < 5; i++) {
+    const response = await anthropic.messages.create({
+      model: "claude-haiku-4-5",
+      max_tokens: 1024,
+      system: adminMiaSystemPrompt(doctorNombre, fechaHoy),
+      tools: ADMIN_MIA_TOOLS,
+      messages: histActualizada,
+    });
+    histActualizada.push({ role: "assistant", content: response.content });
+
+    if (response.stop_reason === "end_turn") {
+      respuestaFinal = response.content.find(b => b.type === "text")?.text || "";
+      break;
+    }
+    if (response.stop_reason !== "tool_use") break;
+
+    const toolResults = [];
+    for (const block of response.content) {
+      if (block.type !== "tool_use") continue;
+      const { name, input, id } = block;
+      let result = "";
+      try {
+        if (name === "buscar_paciente") {
+          const rows = await db.searchPatients(input.nombre, consultorio_id);
+          if (!rows.length) result = "No encontré ningún paciente con ese nombre.";
+          else result = rows.map(p => `• ${p.nombre} — tel: ${p.telefono}${p.obra_social ? " — " + p.obra_social : ""}`).join("\n");
+        }
+        else if (name === "ver_disponibilidad_rango") {
+          const creds = credsCalendar(perfil);
+          const horarios = { manana_desde: config.horario_manana_desde, manana_hasta: config.horario_manana_hasta, tarde_desde: config.horario_tarde_desde, tarde_hasta: config.horario_tarde_hasta };
+          const slots = await getAvailableSlotsInRange({ fecha_desde: input.fecha_desde, fecha_hasta: input.fecha_hasta, duracion_min: input.duracion_min || 30, max_slots: 8, horarios, creds });
+          if (!slots.length) result = "No hay turnos disponibles en ese rango.";
+          else result = slots.map(s => `• ${s.label || s.fecha_hora}`).join("\n");
+        }
+        else if (name === "preparar_mensaje_paciente") {
+          const { telefono, nombre_paciente, motivo, opciones, mensaje: msgPaciente } = input;
+          await db.upsertPatient({ telefono, nombre: nombre_paciente, consultorio_id });
+          const ts = new Date().toISOString();
+          const perfilEnvio = await db.getActiveProfile(consultorio_id).catch(() => null);
+          await sendWhatsAppTemplate(telefono, "coordinacion_turno", [nombre_paciente, motivo, opciones || msgPaciente], perfilEnvio);
+          await db.addMessage(telefono, "assistant", msgPaciente, ts, true, "mia_template");
+          const task = await db.createPendingTask({ telefono, motivo, fecha_desde: null, fecha_hasta: null, duracion_min: 30, created_by: senderUser?.nombre || senderUser?.email || "doctor" });
+          if (task?.id) await db.updatePendingTaskStatus(task.id, "sent").catch(() => {});
+          accion = { tipo: "template_enviado", telefono, nombre_paciente, mensaje: msgPaciente };
+          result = `✓ Mensaje enviado por WhatsApp a ${nombre_paciente}. Cuando el paciente responda, Mía coordinará el turno.`;
+        }
+      } catch (err) { result = `Error: ${err.message}`; }
+      toolResults.push({ type: "tool_result", tool_use_id: id, content: result });
+    }
+    histActualizada.push({ role: "user", content: toolResults });
+  }
+  return { respuestaFinal, histActualizada, accion };
+}
+
 app.post("/admin/mia-chat", authMiddleware, async (req, res) => {
   try {
     const { mensaje, historia = [] } = req.body;
     if (!mensaje?.trim()) return res.status(400).json({ ok: false, error: "Mensaje vacío" });
-
     const consultorio_id = consultorioDe(req);
-    const perfil  = await db.getActiveProfile(consultorio_id);
-    const config  = await db.getConfig();
-    const sender  = await db.getUserByEmail(req.user.email);
-    const doctorNombre = sender?.nombre || sender?.email || "el doctor";
-    const fechaHoy = new Date().toLocaleDateString("es-AR", { timeZone: "America/Argentina/Buenos_Aires", weekday: "long", day: "numeric", month: "long", year: "numeric" });
-
-    const mensajes = [
-      ...historia,
-      { role: "user", content: mensaje.trim() }
-    ];
-
-    let respuestaFinal = "";
-    let histActualizada = [...mensajes];
-    let accion = null;
-
-    // Loop de tool use
-    let iteraciones = 0;
-    while (iteraciones < 5) {
-      iteraciones++;
-      const response = await anthropic.messages.create({
-        model: "claude-haiku-4-5",
-        max_tokens: 1024,
-        system: adminMiaSystemPrompt(doctorNombre, fechaHoy),
-        tools: ADMIN_MIA_TOOLS,
-        messages: histActualizada,
-      });
-
-      histActualizada.push({ role: "assistant", content: response.content });
-
-      if (response.stop_reason === "end_turn") {
-        respuestaFinal = response.content.find(b => b.type === "text")?.text || "";
-        break;
-      }
-
-      if (response.stop_reason !== "tool_use") break;
-
-      const toolResults = [];
-      for (const block of response.content) {
-        if (block.type !== "tool_use") continue;
-        const { name, input, id } = block;
-        let result = "";
-
-        try {
-          if (name === "buscar_paciente") {
-            const rows = await db.searchPatients(input.nombre, consultorio_id);
-            if (!rows.length) result = "No encontré ningún paciente con ese nombre.";
-            else result = rows.map(p => `• ${p.nombre} — tel: ${p.telefono}${p.obra_social ? " — " + p.obra_social : ""}`).join("\n");
-          }
-
-          else if (name === "ver_disponibilidad_rango") {
-            const creds = credsCalendar(perfil);
-            const horarios = {
-              manana_desde: config.horario_manana_desde,
-              manana_hasta: config.horario_manana_hasta,
-              tarde_desde:  config.horario_tarde_desde,
-              tarde_hasta:  config.horario_tarde_hasta,
-            };
-            const slots = await getAvailableSlotsInRange({
-              fecha_desde:  input.fecha_desde,
-              fecha_hasta:  input.fecha_hasta,
-              duracion_min: input.duracion_min || 30,
-              max_slots: 8,
-              horarios,
-              creds,
-            });
-            if (!slots.length) result = "No hay turnos disponibles en ese rango.";
-            else result = slots.map(s => `• ${s.label || s.fecha_hora}`).join("\n");
-          }
-
-          else if (name === "preparar_mensaje_paciente") {
-            const { telefono, nombre_paciente, motivo, opciones, mensaje: msgPaciente } = input;
-            await db.upsertPatient({ telefono, nombre: nombre_paciente, consultorio_id });
-            const ts = new Date().toISOString();
-
-            // Enviar template real de WhatsApp
-            const perfilEnvio = await db.getActiveProfile(consultorio_id).catch(() => null);
-            await sendWhatsAppTemplate(
-              telefono,
-              "coordinacion_turno",
-              [nombre_paciente, motivo, opciones || msgPaciente],
-              perfilEnvio
-            );
-
-            // Guardar en el panel como mensaje enviado
-            await db.addMessage(telefono, "assistant", msgPaciente, ts, true, "mia_template");
-
-            // Crear pending_task en estado 'sent'
-            const sender = await db.getUserByEmail(req.user.email);
-            const task = await db.createPendingTask({
-              telefono,
-              motivo,
-              fecha_desde: null, fecha_hasta: null, duracion_min: 30,
-              created_by: sender?.nombre || sender?.email || "doctor",
-            });
-            if (task?.id) await db.updatePendingTaskStatus(task.id, "sent").catch(() => {});
-
-            accion = { tipo: "template_enviado", telefono, nombre_paciente, mensaje: msgPaciente };
-            result = `✓ Mensaje enviado por WhatsApp a ${nombre_paciente}. Aparece en el panel de Chats. Cuando el paciente responda, Mía coordinará el turno automáticamente.`;
-          }
-        } catch (err) {
-          result = `Error: ${err.message}`;
-        }
-
-        toolResults.push({ type: "tool_result", tool_use_id: id, content: result });
-      }
-
-      histActualizada.push({ role: "user", content: toolResults });
-    }
-
+    const [perfil, config, senderUser] = await Promise.all([
+      db.getActiveProfile(consultorio_id),
+      db.getConfig(),
+      db.getUserByEmail(req.user.email),
+    ]);
+    const { respuestaFinal, histActualizada, accion } = await runAdminMia({ mensaje, historia, senderUser, consultorio_id, perfil, config });
     res.json({ ok: true, respuesta: respuestaFinal, historia: histActualizada, accion });
   } catch (err) {
     console.error("[admin/mia-chat]", err);
     res.status(500).json({ ok: false, error: err.message });
   }
+});
+
+app.patch("/admin/team/:id", authMiddleware, async (req, res) => {
+  try {
+    const { nombre, telefono } = req.body;
+    const updated = await db.updateTeamMember(parseInt(req.params.id), { nombre, telefono: telefono || null });
+    if (!updated) return res.status(404).json({ error: "Usuario no encontrado" });
+    res.json(updated);
+  } catch (err) { console.error(err); res.status(500).json({ error: "Error interno" }); }
 });
 
 app.get("/admin/pending-tasks", authMiddleware, async (req, res) => {

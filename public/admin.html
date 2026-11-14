@@ -1724,10 +1724,45 @@
     document.getElementById("invEmail").value = "";
     try {
       const team = await fetch(`${API}/admin/team`, { headers: authH() }).then(r => r.json());
-      document.getElementById("equipoList").innerHTML = team.length
-        ? team.map(u => `<div style="padding:8px 0;border-bottom:1px solid #2a3942;display:flex;justify-content:space-between"><span>${escHtml(u.nombre || u.email)}</span><span style="color:#8696a0;font-size:11px">${escHtml(u.email)}</span></div>`).join("")
-        : '<div style="color:#8696a0">Sin usuarios en el equipo todavía</div>';
+      const el = document.getElementById("equipoList");
+      if (!team.length) { el.innerHTML = '<div style="color:#8696a0">Sin usuarios en el equipo todavía</div>'; return; }
+      el.innerHTML = team.map(u => `
+        <div id="miembro-row-${u.id}" style="padding:10px 0;border-bottom:1px solid #2a3942">
+          <div style="display:flex;align-items:center;justify-content:space-between">
+            <div>
+              <div style="font-size:14px;font-weight:500">${escHtml(u.nombre || u.email)}</div>
+              <div style="font-size:11px;color:#8696a0;margin-top:1px">${escHtml(u.email)}${u.telefono ? ` · 📱 ${escHtml(u.telefono)}` : ' · <span style="color:#f59e0b">Sin teléfono</span>'}</div>
+            </div>
+            <button class="btn btn-sm" onclick="editarMiembro(${u.id},'${escHtml(u.nombre||'')}','${escHtml(u.telefono||'')}')">Editar</button>
+          </div>
+          <div id="miembro-form-${u.id}" style="display:none;margin-top:8px;background:#2a3942;border-radius:8px;padding:10px">
+            <div class="modal-row" style="margin-bottom:8px">
+              <div class="modal-field" style="flex:1"><label class="modal-label">Nombre</label><input class="modal-input" id="mNombre-${u.id}" value="${escHtml(u.nombre||'')}" /></div>
+              <div class="modal-field" style="flex:1"><label class="modal-label">Teléfono WhatsApp</label><input class="modal-input" id="mTel-${u.id}" placeholder="549XXXXXXXXXX" value="${escHtml(u.telefono||'')}" /></div>
+            </div>
+            <div style="display:flex;gap:8px">
+              <button class="btn btn-primary" onclick="guardarMiembro(${u.id})">Guardar</button>
+              <button class="btn btn-cancel" onclick="document.getElementById('miembro-form-${u.id}').style.display='none'">Cancelar</button>
+            </div>
+          </div>
+        </div>`).join("");
     } catch(e) { document.getElementById("equipoList").textContent = "Error cargando equipo"; }
+  }
+
+  function editarMiembro(id, nombre, tel) {
+    document.getElementById(`miembro-form-${id}`).style.display = "block";
+    document.getElementById(`mNombre-${id}`).focus();
+  }
+
+  async function guardarMiembro(id) {
+    const nombre = document.getElementById(`mNombre-${id}`).value.trim();
+    const telefono = document.getElementById(`mTel-${id}`).value.trim() || null;
+    try {
+      const res = await fetch(`${API}/admin/team/${id}`, { method: "PATCH", headers: authH(), body: JSON.stringify({ nombre, telefono }) });
+      if (!res.ok) { showToast("Error guardando"); return; }
+      showToast("Guardado");
+      await cargarEquipo();
+    } catch(e) { showToast("Error guardando"); }
   }
   async function invitar() {
     const email = document.getElementById("invEmail").value.trim();
