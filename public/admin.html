@@ -248,6 +248,10 @@
 
       /* Botones generales */
       .btn { font-size: 11px; padding: 5px 10px; }
+
+      /* Drawer de Mía: pantalla completa en mobile */
+      #miaChatDrawer { width: 100% !important; max-width: 100% !important; top: 57px !important; right: -100% !important; }
+      #miaChatDrawer.mia-open { right: 0 !important; }
     }
   </style>
 </head>
@@ -280,6 +284,7 @@
     <button class="dropdown-item" onclick="closeMenu();setView('chats')">💬 Chats</button>
     <button class="dropdown-item" onclick="closeMenu();setView('turnos')">📅 Turnos del día</button>
     <button class="dropdown-item" onclick="closeMenu();setView('pacientes')">👤 Pacientes</button>
+    <button class="dropdown-item" onclick="closeMenu();toggleMiaChat()">✦ Consultar a Mía</button>
     <button class="dropdown-item" onclick="closeMenu();abrirConfig()">⚙ Config</button>
     <button class="dropdown-item danger" onclick="closeMenu();logout()">Salir</button>
   </div>
@@ -1888,7 +1893,8 @@
   function toggleMiaChat() {
     _miaAbierto = !_miaAbierto;
     const drawer = document.getElementById("miaChatDrawer");
-    drawer.style.right = _miaAbierto ? "0" : "-380px";
+    drawer.classList.toggle("mia-open", _miaAbierto);
+    if (!isMobile()) drawer.style.right = _miaAbierto ? "0" : "-380px";
     document.getElementById("btnMiaChat").classList.toggle("active", _miaAbierto);
     if (_miaAbierto) {
       mostrarAlertasPendientes();
