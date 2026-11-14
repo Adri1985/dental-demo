@@ -235,7 +235,7 @@ function buildPatientContext(patient) {
 // ─────────────────────────────────────────────
 //  EJECUTOR DE TOOLS
 // ─────────────────────────────────────────────
-async function executeTool(name, input, telefono, cfg = {}, perfil = null) {
+async function executeTool(name, input, telefono, cfg = {}, perfil = null, consultorio_id = DEFAULT_CONSULTORIO_ID) {
   const creds = credsCalendar(perfil);
   console.log(`[tool] ${name}`, JSON.stringify(input, null, 2));
   const patient = await db.getPatient(telefono);
@@ -314,6 +314,20 @@ async function executeTool(name, input, telefono, cfg = {}, perfil = null) {
       const task = await db.getPendingTask(telefono);
       if (task) await db.updatePendingTaskStatus(task.id, "needs_doctor");
       console.log(`[agent] paciente ${telefono} rechazó opciones — pending_task marcado needs_doctor`);
+
+      // Notificar por WhatsApp a todos los miembros del equipo con teléfono
+      const patient = await db.getPatient(telefono);
+      const pacienteNombre = patient?.nombre || telefono;
+      const motivo = task?.motivo || "turno";
+      const msgDoctor = `📌 ${pacienteNombre} no puede en las fechas ofrecidas para su ${motivo}. Podés darle nuevas opciones respondiendo acá.`;
+      const teamMembers = await db.getUsersByConsultorio(consultorio_id).catch(() => []);
+      for (const m of teamMembers) {
+        if (m.telefono) {
+          await sendWhatsAppMessage(m.telefono, msgDoctor, perfil).catch(e =>
+            console.error(`[notif-doctor] error enviando a ${m.telefono}:`, e.message)
+          );
+        }
+      }
       return { ok: true };
     }
     default: return { error: `Tool desconocida: ${name}` };
@@ -395,7 +409,7 @@ Si el paciente confirma una fecha, procedé a agendar el turno normalmente.`
     const toolResults = await Promise.all(
       response.content.filter(b => b.type === "tool_use").map(async block => ({
         type: "tool_result", tool_use_id: block.id,
-        content: JSON.stringify(await executeTool(block.name, block.input, telefono, cfg, perfil)),
+        content: JSON.stringify(await executeTool(block.name, block.input, telefono, cfg, perfil, consultorio_id)),
       }))
     );
     claudeHistory.push({ role: "assistant", content: response.content });
