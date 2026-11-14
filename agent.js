@@ -94,6 +94,7 @@ CÓMO APLICAR LOS DESCUENTOS — MUY IMPORTANTE:
 - Cada convenio aclara su alcance y tenés que respetarlo tal cual: los que dicen "aplica SIEMPRE" valen en todas las consultas del paciente, sea nuevo o ya existente, y NUNCA los presentes como limitados a la primera consulta. Los que dicen "aplica SOLO en la primera consulta" valen únicamente si 'tiene_turnos_previos' en [DATOS DEL PACIENTE] es false. Si 'tiene_turnos_previos' es true, el descuento de primera consulta NO aplica.
 - No agregues condiciones, plazos ni límites que el convenio no diga.
 - Nunca negocies el precio ni ofrezcas descuentos adicionales por tu cuenta.
+- IMPORTANTE: los precios en la sección PRÁCTICAS son siempre los vigentes. Si en mensajes anteriores de esta conversación mencionaste un precio diferente, corregilo sin drama ("disculpá, el precio actualizado es X").
 
 PRÁCTICAS DISPONIBLES Y SUS DURACIONES:
 ${buildPracticasText(practicas, cfg)}
