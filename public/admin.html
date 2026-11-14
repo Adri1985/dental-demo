@@ -512,18 +512,15 @@
       <div style="border-top:1px solid #2a3942;padding-top:14px">
         <div style="font-size:13px;font-weight:600;margin-bottom:10px" id="practicasFormTitle">Nueva práctica</div>
         <input type="hidden" id="practicaEditId" />
-        <div class="modal-row">
-          <div class="modal-field" style="flex:2"><label class="modal-label">Nombre</label><input class="modal-input" id="pNombre" type="text" placeholder="Ej: Limpieza dental" /></div>
-          <div class="modal-field" style="flex:1"><label class="modal-label">Duración (min)</label><input class="modal-input" id="pDuracion" type="number" min="10" step="10" placeholder="30" /></div>
-          <div class="modal-field" style="flex:1">
-            <label class="modal-label">Precio</label>
-            <div style="display:flex;gap:6px">
-              <input class="modal-input" id="pPrecio" type="number" min="0" step="1" placeholder="50" style="flex:1;min-width:0" />
-              <select id="pMoneda" class="modal-input" style="width:80px;flex-shrink:0;padding:8px 6px">
-                <option value="ARS">$ ARS</option>
-                <option value="USD">USD</option>
-              </select>
-            </div>
+        <div class="modal-row" style="flex-wrap:wrap">
+          <div class="modal-field" style="flex:2;min-width:140px"><label class="modal-label">Nombre</label><input class="modal-input" id="pNombre" type="text" placeholder="Ej: Limpieza dental" /></div>
+          <div class="modal-field" style="flex:0 0 100px"><label class="modal-label">Duración (min)</label><input class="modal-input" id="pDuracion" type="number" min="10" step="10" placeholder="30" /></div>
+          <div class="modal-field" style="flex:1;min-width:100px"><label class="modal-label">Precio</label><input class="modal-input" id="pPrecio" type="number" min="0" step="1" placeholder="50" /></div>
+          <div class="modal-field" style="flex:0 0 90px"><label class="modal-label">Moneda</label>
+            <select id="pMoneda" class="modal-input" style="padding:9px 8px;cursor:pointer">
+              <option value="ARS">$ ARS</option>
+              <option value="USD">USD</option>
+            </select>
           </div>
         </div>
         <div class="modal-field"><label class="modal-label">Requiere (opcional)</label><input class="modal-input" id="pRequiere" type="text" placeholder="Ej: Radiografía previa" /></div>
