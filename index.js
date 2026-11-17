@@ -698,14 +698,17 @@ app.get("/patients", authMiddleware, async (req, res) => {
   if (!db.pool) return res.json(patients);
   // Enriquecer con nivel de alerta de coordinación
   const { rows: tasks } = await db.pool.query(
-    `SELECT telefono,
+    `SELECT pt.telefono,
        CASE
-         WHEN notif_principal_sent_at IS NOT NULL THEN 2
-         WHEN followup_sent_at        IS NOT NULL THEN 1
+         WHEN pt.notif_principal_sent_at IS NOT NULL THEN 2
+         WHEN pt.followup_sent_at        IS NOT NULL THEN 1
          ELSE 0
        END AS seguimiento_nivel
-     FROM pending_tasks
-     WHERE status = 'sent'`
+     FROM pending_tasks pt
+     JOIN patients p ON p.telefono = pt.telefono
+     WHERE pt.status = 'sent'
+       AND p.consultorio_id = $1`,
+    [consultorio_id]
   ).catch(() => ({ rows: [] }));
   const nivelPorTel = Object.fromEntries(tasks.map(t => [t.telefono, t.seguimiento_nivel]));
   res.json(patients.map(p => ({ ...p, seguimiento_nivel: nivelPorTel[p.telefono] || 0 })));
