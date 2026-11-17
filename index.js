@@ -992,20 +992,21 @@ async function runAdminMia({ mensaje, historia = [], senderUser, consultorio_id,
           const ts = new Date().toISOString();
           const perfilEnvio = await db.getActiveProfile(consultorio_id).catch(() => null);
           const opcionesSanitized = (opciones || msgPaciente).replace(/[\n\r\t]+/g, " | ").replace(/ {5,}/g, "    ").trim();
-          await sendWhatsAppTemplate(telefono, "coordinacion_turno", [nombre_paciente, motivo, opcionesSanitized], perfilEnvio);
-          // Segundo mensaje de presentación (texto plano, sin tocar el template)
+          // Presentación primero (texto plano): llega antes que el template porque
+          // Meta tarda ~5s en procesar templates. Si no hay sesión activa (<24hs),
+          // falla silenciosamente — el template siempre llega igual.
           const profesionalNombre = require("./agent").config.profesionales?.[0]?.nombre || "el doctor";
-          // Si el nombre ya incluye "Dr." o "Dra.", usarlo directo; si no, agregar "Dr."
           const tieneTitulo = /^Dr[a]?\./i.test(profesionalNombre);
           const nombreCompleto = tieneTitulo ? profesionalNombre : `Dr. ${profesionalNombre}`;
           const msgPresentacion = `Te habla la asistente del ${nombreCompleto}.`;
           await sendWhatsAppMessage(telefono, msgPresentacion, perfilEnvio).catch(e =>
             console.error("[admin-mia] error enviando presentación:", e.message)
           );
+          await sendWhatsAppTemplate(telefono, "coordinacion_turno", [nombre_paciente, motivo, opcionesSanitized], perfilEnvio);
           // Limpiar historia del paciente: cada coordinación nueva arranca sin contexto viejo
           await db.saveClaudeHistory(telefono, []).catch(() => {});
-          await db.addMessage(telefono, "assistant", msgPaciente, ts, true, "mia_template");
           await db.addMessage(telefono, "assistant", msgPresentacion, ts, false, "mia_template");
+          await db.addMessage(telefono, "assistant", msgPaciente, ts, true, "mia_template");
           const task = await db.createPendingTask({ telefono, motivo, fecha_desde, fecha_hasta, duracion_min: 30, created_by: senderUser?.nombre || senderUser?.email || "doctor" });
           if (task?.id) await db.updatePendingTaskStatus(task.id, "sent").catch(() => {});
           accion = { tipo: "template_enviado", telefono, nombre_paciente, mensaje: msgPaciente };
