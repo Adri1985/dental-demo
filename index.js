@@ -401,9 +401,13 @@ async function runAgent(userMessage, telefono, consultorio_id = DEFAULT_CONSULTO
       ? `RANGO FIJO${rangoDesc}: PROHIBIDO ofrecer o buscar turnos fuera de esas fechas. Si el paciente dice que necesita antes, después o en otro momento, respondé EXACTAMENTE: "Las opciones que tengo disponibles son las que te mandé. ¿Alguna te queda bien?" NO llames a check_availability bajo ninguna circunstancia. Si ninguna fecha le sirve, usá notificar_doctor_rechazo.`
       : `Si el paciente pide fechas diferentes, podés usar check_availability para buscar otras opciones y ofrecérselas.`;
 
-    return `\n\nCOORDINACIÓN PENDIENTE (iniciada por el doctor): El doctor pidió coordinar un turno para "${motivo}"${rangoDesc}. Ya le enviaste las opciones de fechas al paciente. NO uses get_patient_appointments — esta es una coordinación nueva, no una consulta de turnos existentes.
+    const opcionesEnviadas = pendingTask.opciones
+      ? `\nOPCIONES QUE YA LE ENVIASTE AL PACIENTE: ${pendingTask.opciones}`
+      : "";
+
+    return `\n\nCOORDINACIÓN PENDIENTE (iniciada por el doctor): El doctor pidió coordinar un turno para "${motivo}"${rangoDesc}. Ya le enviaste las opciones de fechas al paciente. NO uses get_patient_appointments — esta es una coordinación nueva, no una consulta de turnos existentes.${opcionesEnviadas}
 ${instrRango}
-IMPORTANTE: Ignorá cualquier información de disponibilidad que haya en mensajes anteriores de esta conversación — solo son válidas las opciones que ya enviaste al paciente.
+IMPORTANTE: Si el paciente pregunta cuáles eran las opciones, repetíselas exactamente como las ves arriba. Ignorá cualquier otra información de disponibilidad que haya en mensajes anteriores — solo son válidas las opciones listadas arriba.
 Si el paciente confirma una fecha de las ofrecidas, agendá el turno normalmente.
 Si el paciente dice que no puede en ninguna opción y no hay más alternativas dentro del rango, respondele exactamente: "Perfecto, dejame consultarle al doctor si podemos hacerlo en otra fecha. ¡Gracias por avisarme!" y usá la tool notificar_doctor_rechazo.`;
   })();
