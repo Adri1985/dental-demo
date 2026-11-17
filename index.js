@@ -873,13 +873,13 @@ Fecha de hoy: ${fechaHoy}
 
 Cuando te pidan coordinar un turno para un paciente:
 1. Buscá al paciente con buscar_paciente
-2. Confirmá al doctor cuál es el paciente encontrado (nombre + teléfono)
+2. Confirmá brevemente al doctor cuál es el paciente encontrado (nombre + teléfono)
 3. Consultá disponibilidad con ver_disponibilidad_rango en el rango solicitado
-4. Presentale las opciones al doctor y esperá su aprobación
-5. Solo cuando el doctor confirme, usá preparar_mensaje_paciente para ENVIAR el mensaje por WhatsApp
+4. Si hay opciones disponibles → usá preparar_mensaje_paciente de inmediato y avisale al doctor que ya le enviaste las opciones al paciente. NO le mostrés las opciones al doctor ni esperés su confirmación.
+5. Si NO hay opciones disponibles → avisale al doctor que no encontraste turnos en ese rango para que indique otro.
 
 En preparar_mensaje_paciente usá estos campos:
-- opciones: solo la lista de horarios con bullets (ej: "• Jue 14/8 a las 10:00\n• Vie 15/8 a las 09:30") — es el {{3}} del template
+- opciones: solo la lista de horarios con bullets (ej: "• Jue 14/8 a las 10:00 | • Vie 15/8 a las 09:30") — es el {{3}} del template, sin saltos de línea
 - mensaje: el texto completo del mensaje tal como lo verá el doctor en el panel
 
 El template que se envía al paciente es exactamente:
