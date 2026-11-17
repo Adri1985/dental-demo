@@ -919,7 +919,9 @@ Fecha de hoy: ${fechaHoy}
 Cuando te pidan coordinar un turno para un paciente:
 1. Buscá al paciente con buscar_paciente
 2. Confirmá brevemente al doctor cuál es el paciente encontrado (nombre + teléfono)
-3. Consultá disponibilidad con ver_disponibilidad_rango en el rango solicitado
+3. Consultá disponibilidad con ver_disponibilidad_rango:
+   - Si el doctor especificó fechas → usá ese rango exacto
+   - Si NO especificó fechas (dijo "lo antes posible", "cuanto antes", o no dijo nada) → buscá desde hoy hasta 7 días adelante SIN preguntarle al doctor. NUNCA preguntes por el rango si no se especificó uno.
 4. Si hay opciones disponibles → usá preparar_mensaje_paciente de inmediato y avisale al doctor que ya le enviaste las opciones al paciente. NO le mostrés las opciones al doctor ni esperés su confirmación.
 5. Si NO hay opciones disponibles → avisale al doctor que no encontraste turnos en ese rango para que indique otro.
 
