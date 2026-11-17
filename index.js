@@ -389,11 +389,23 @@ async function runAgent(userMessage, telefono, consultorio_id = DEFAULT_CONSULTO
 
   // Verificar si hay una coordinación pendiente iniciada por el doctor
   const pendingTask = await db.getPendingTask(telefono).catch(() => null);
-  const pendingCtx = pendingTask
-    ? `\n\nCOORDINACIÓN PENDIENTE (iniciada por el doctor): El doctor pidió coordinar un turno para "${pendingTask.motivo || "práctica pendiente"}". Ya le enviaste opciones de fechas al paciente.
-Si el paciente dice que no puede en ninguna de esas fechas o pide otras opciones, respondele exactamente: "Perfecto, dejame consultarle al doctor si podemos hacerlo en otra fecha. ¡Gracias por avisarme!" y usá la tool notificar_doctor_rechazo.
-Si el paciente confirma una fecha, procedé a agendar el turno normalmente.`
-    : "";
+  const pendingCtx = (() => {
+    if (!pendingTask) return "";
+    const motivo = pendingTask.motivo || "práctica pendiente";
+    const tieneRango = pendingTask.fecha_desde || pendingTask.fecha_hasta;
+    const rangoDesc = tieneRango
+      ? ` dentro del rango ${pendingTask.fecha_desde || ""}–${pendingTask.fecha_hasta || ""}`
+      : "";
+
+    const instrRango = tieneRango
+      ? `IMPORTANTE — el doctor especificó un rango de fechas fijo${rangoDesc}. Las únicas opciones válidas son las que ya le enviaste al paciente dentro de ese rango. NO uses check_availability para buscar fechas fuera de ese rango. Si el paciente pide algo antes, después u otro momento, respondele: "Las opciones que tengo disponibles para coordinarte son las que te mandé. ¿Alguna te queda bien?"`
+      : `Si el paciente pide fechas diferentes, podés usar check_availability para buscar otras opciones y ofrecérselas.`;
+
+    return `\n\nCOORDINACIÓN PENDIENTE (iniciada por el doctor): El doctor pidió coordinar un turno para "${motivo}"${rangoDesc}. Ya le enviaste las opciones de fechas al paciente. NO uses get_patient_appointments — esta es una coordinación nueva, no una consulta de turnos existentes.
+${instrRango}
+Si el paciente confirma una fecha de las ofrecidas, agendá el turno normalmente.
+Si el paciente dice que no puede en ninguna opción y no hay más alternativas dentro del rango, respondele exactamente: "Perfecto, dejame consultarle al doctor si podemos hacerlo en otra fecha. ¡Gracias por avisarme!" y usá la tool notificar_doctor_rechazo.`;
+  })();
 
   const claudeModel = perfil?.claude_model || "claude-haiku-4-5";
   console.log(`[agent] modelo: ${claudeModel}${pendingTask ? " | pending_task: " + pendingTask.id : ""}`);
@@ -859,7 +871,9 @@ const ADMIN_MIA_TOOLS = [
         nombre_paciente: { type: "string", description: "Nombre del paciente (para {{1}} del template)" },
         motivo:          { type: "string", description: "Motivo del turno (para {{2}} del template, ej: 'control de implante')" },
         opciones:        { type: "string", description: "Lista de opciones de horario (para {{3}} del template, ej: '• Jue 14/8 a las 10:00\n• Vie 15/8 a las 09:30')" },
-        mensaje:         { type: "string", description: "Texto completo del mensaje (para mostrar en el panel)" }
+        mensaje:         { type: "string", description: "Texto completo del mensaje (para mostrar en el panel)" },
+        fecha_desde:     { type: "string", description: "Fecha inicio del rango ofrecido (YYYY-MM-DD), si el doctor especificó un rango" },
+        fecha_hasta:     { type: "string", description: "Fecha fin del rango ofrecido (YYYY-MM-DD), si el doctor especificó un rango" }
       },
       required: ["telefono", "nombre_paciente", "motivo", "opciones", "mensaje"]
     }
@@ -881,6 +895,7 @@ Cuando te pidan coordinar un turno para un paciente:
 En preparar_mensaje_paciente usá estos campos:
 - opciones: solo la lista de horarios con bullets (ej: "• Jue 14/8 a las 10:00 | • Vie 15/8 a las 09:30") — es el {{3}} del template, sin saltos de línea
 - mensaje: el texto completo del mensaje tal como lo verá el doctor en el panel
+- fecha_desde / fecha_hasta: las fechas del rango consultado en ver_disponibilidad_rango (YYYY-MM-DD), si el doctor especificó un rango fijo. Esto restringe al agente a no salir de esas fechas cuando el paciente responda.
 
 El template que se envía al paciente es exactamente:
 "Hola [nombre]! El doctor me pidió coordinarte un turno para tu [motivo]. Tengo estas opciones disponibles:\n[opciones]\n¿Alguna te queda bien? Respondeme acá y lo agendo 😊"
@@ -930,14 +945,14 @@ async function runAdminMia({ mensaje, historia = [], senderUser, consultorio_id,
           else result = slots.map(s => `• ${s.label || s.fecha_hora}`).join("\n");
         }
         else if (name === "preparar_mensaje_paciente") {
-          const { telefono, nombre_paciente, motivo, opciones, mensaje: msgPaciente } = input;
+          const { telefono, nombre_paciente, motivo, opciones, mensaje: msgPaciente, fecha_desde, fecha_hasta } = input;
           await db.upsertPatient({ telefono, nombre: nombre_paciente, consultorio_id });
           const ts = new Date().toISOString();
           const perfilEnvio = await db.getActiveProfile(consultorio_id).catch(() => null);
           const opcionesSanitized = (opciones || msgPaciente).replace(/[\n\r\t]+/g, " | ").replace(/ {5,}/g, "    ").trim();
           await sendWhatsAppTemplate(telefono, "coordinacion_turno", [nombre_paciente, motivo, opcionesSanitized], perfilEnvio);
           await db.addMessage(telefono, "assistant", msgPaciente, ts, true, "mia_template");
-          const task = await db.createPendingTask({ telefono, motivo, fecha_desde: null, fecha_hasta: null, duracion_min: 30, created_by: senderUser?.nombre || senderUser?.email || "doctor" });
+          const task = await db.createPendingTask({ telefono, motivo, fecha_desde: fecha_desde || null, fecha_hasta: fecha_hasta || null, duracion_min: 30, created_by: senderUser?.nombre || senderUser?.email || "doctor" });
           if (task?.id) await db.updatePendingTaskStatus(task.id, "sent").catch(() => {});
           accion = { tipo: "template_enviado", telefono, nombre_paciente, mensaje: msgPaciente };
           result = `✓ Mensaje enviado por WhatsApp a ${nombre_paciente}. Cuando el paciente responda, Mía coordinará el turno.`;
