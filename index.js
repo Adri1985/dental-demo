@@ -847,6 +847,16 @@ app.post("/admin/send/:telefono", authMiddleware, async (req, res) => {
     const sent_by = sender?.nombre || sender?.email || req.user.email;
     const ts = new Date().toISOString();
     await db.addMessage(telefono, "assistant", mensaje.trim(), ts, true, sent_by);
+    // Inyectar en claude_history para que Mía tenga contexto de intervenciones manuales
+    let hist = await db.getClaudeHistory(telefono);
+    const ultimoRol = hist.length ? hist[hist.length - 1].role : null;
+    if (ultimoRol === "assistant" || !ultimoRol) {
+      hist.push({ role: "user",      content: `[${sent_by} envió un mensaje manual al paciente]` });
+      hist.push({ role: "assistant", content: mensaje.trim() });
+    } else {
+      hist.push({ role: "assistant", content: mensaje.trim() });
+    }
+    await db.saveClaudeHistory(telefono, hist);
     res.json({ ok: true, ts });
   } catch (err) {
     console.error("[POST /admin/send]", err.message);
