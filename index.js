@@ -398,11 +398,12 @@ async function runAgent(userMessage, telefono, consultorio_id = DEFAULT_CONSULTO
       : "";
 
     const instrRango = tieneRango
-      ? `IMPORTANTE — el doctor fijó un rango${rangoDesc}. No podés buscar ni ofrecer turnos fuera de esas fechas. Si el paciente dice que necesita antes, después o en otro momento, decile: "Las opciones que tengo disponibles son las que te mandé. ¿Alguna te queda bien?" Si ninguna le sirve, usá notificar_doctor_rechazo.`
+      ? `RANGO FIJO${rangoDesc}: PROHIBIDO ofrecer o buscar turnos fuera de esas fechas. Si el paciente dice que necesita antes, después o en otro momento, respondé EXACTAMENTE: "Las opciones que tengo disponibles son las que te mandé. ¿Alguna te queda bien?" NO llames a check_availability bajo ninguna circunstancia. Si ninguna fecha le sirve, usá notificar_doctor_rechazo.`
       : `Si el paciente pide fechas diferentes, podés usar check_availability para buscar otras opciones y ofrecérselas.`;
 
     return `\n\nCOORDINACIÓN PENDIENTE (iniciada por el doctor): El doctor pidió coordinar un turno para "${motivo}"${rangoDesc}. Ya le enviaste las opciones de fechas al paciente. NO uses get_patient_appointments — esta es una coordinación nueva, no una consulta de turnos existentes.
 ${instrRango}
+IMPORTANTE: Ignorá cualquier información de disponibilidad que haya en mensajes anteriores de esta conversación — solo son válidas las opciones que ya enviaste al paciente.
 Si el paciente confirma una fecha de las ofrecidas, agendá el turno normalmente.
 Si el paciente dice que no puede en ninguna opción y no hay más alternativas dentro del rango, respondele exactamente: "Perfecto, dejame consultarle al doctor si podemos hacerlo en otra fecha. ¡Gracias por avisarme!" y usá la tool notificar_doctor_rechazo.`;
   })();
@@ -980,6 +981,8 @@ async function runAdminMia({ mensaje, historia = [], senderUser, consultorio_id,
           const perfilEnvio = await db.getActiveProfile(consultorio_id).catch(() => null);
           const opcionesSanitized = (opciones || msgPaciente).replace(/[\n\r\t]+/g, " | ").replace(/ {5,}/g, "    ").trim();
           await sendWhatsAppTemplate(telefono, "coordinacion_turno", [nombre_paciente, motivo, opcionesSanitized], perfilEnvio);
+          // Limpiar historia del paciente: cada coordinación nueva arranca sin contexto viejo
+          await db.saveClaudeHistory(telefono, []).catch(() => {});
           await db.addMessage(telefono, "assistant", msgPaciente, ts, true, "mia_template");
           const task = await db.createPendingTask({ telefono, motivo, fecha_desde, fecha_hasta, duracion_min: 30, created_by: senderUser?.nombre || senderUser?.email || "doctor" });
           if (task?.id) await db.updatePendingTaskStatus(task.id, "sent").catch(() => {});
