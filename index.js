@@ -398,7 +398,7 @@ async function runAgent(userMessage, telefono, consultorio_id = DEFAULT_CONSULTO
       : "";
 
     const instrRango = tieneRango
-      ? `IMPORTANTE — el doctor especificó un rango de fechas fijo${rangoDesc}. Las únicas opciones válidas son las que ya le enviaste al paciente dentro de ese rango. NO uses check_availability para buscar fechas fuera de ese rango. Si el paciente pide algo antes, después u otro momento, respondele: "Las opciones que tengo disponibles para coordinarte son las que te mandé. ¿Alguna te queda bien?"`
+      ? `IMPORTANTE — el doctor fijó un rango${rangoDesc}. No podés buscar ni ofrecer turnos fuera de esas fechas. Si el paciente dice que necesita antes, después o en otro momento, decile: "Las opciones que tengo disponibles son las que te mandé. ¿Alguna te queda bien?" Si ninguna le sirve, usá notificar_doctor_rechazo.`
       : `Si el paciente pide fechas diferentes, podés usar check_availability para buscar otras opciones y ofrecérselas.`;
 
     return `\n\nCOORDINACIÓN PENDIENTE (iniciada por el doctor): El doctor pidió coordinar un turno para "${motivo}"${rangoDesc}. Ya le enviaste las opciones de fechas al paciente. NO uses get_patient_appointments — esta es una coordinación nueva, no una consulta de turnos existentes.
@@ -419,10 +419,26 @@ Si el paciente dice que no puede en ninguna opción y no hay más alternativas d
 
   while (response.stop_reason === "tool_use") {
     const toolResults = await Promise.all(
-      response.content.filter(b => b.type === "tool_use").map(async block => ({
-        type: "tool_result", tool_use_id: block.id,
-        content: JSON.stringify(await executeTool(block.name, block.input, telefono, cfg, perfil, consultorio_id)),
-      }))
+      response.content.filter(b => b.type === "tool_use").map(async block => {
+        // Si hay rango fijo en el pending_task, bloquear check_availability fuera del rango
+        if (block.name === "check_availability" && pendingTask?.fecha_desde && pendingTask?.fecha_hasta) {
+          const rangoDesde = pendingTask.fecha_desde; // YYYY-MM-DD
+          const rangoHasta = pendingTask.fecha_hasta;
+          const reqDesde = block.input.fecha_desde?.slice(0, 10);
+          const reqHasta = block.input.fecha_hasta?.slice(0, 10);
+          const fueraDeRango = (reqDesde && reqDesde < rangoDesde) || (reqHasta && reqHasta > rangoHasta);
+          if (fueraDeRango) {
+            return {
+              type: "tool_result", tool_use_id: block.id,
+              content: JSON.stringify({ error: `Búsqueda bloqueada. El doctor fijó el rango ${rangoDesde} a ${rangoHasta}. No podés buscar fuera de esas fechas. Decile al paciente que las únicas opciones disponibles son las que ya le enviaste.` }),
+            };
+          }
+        }
+        return {
+          type: "tool_result", tool_use_id: block.id,
+          content: JSON.stringify(await executeTool(block.name, block.input, telefono, cfg, perfil, consultorio_id)),
+        };
+      })
     );
     claudeHistory.push({ role: "assistant", content: response.content });
     claudeHistory.push({ role: "user", content: toolResults });
