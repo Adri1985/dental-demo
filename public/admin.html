@@ -662,6 +662,41 @@
           <div style="font-size:11px;color:#8696a0;margin-top:4px">Cuando el paciente dice alguna de estas palabras, Mía escala inmediatamente al doctor</div>
         </div>
       </div>
+      <div style="border-top:1px solid #2a3942;padding-top:14px;margin-top:4px">
+        <div style="font-size:13px;font-weight:600;margin-bottom:10px">Coordinación de turnos — seguimiento automático</div>
+        <div class="modal-row" style="margin-bottom:10px">
+          <div class="modal-field" style="flex:0 0 auto">
+            <label class="modal-label">Follow-up al paciente</label>
+            <label style="display:flex;align-items:center;gap:8px;cursor:pointer;font-size:13px;color:#e9edef;margin-top:4px">
+              <input type="checkbox" id="cfgFollowupHabilitado" style="width:16px;height:16px" />
+              Activado
+            </label>
+          </div>
+          <div class="modal-field">
+            <label class="modal-label">Minutos hasta el follow-up</label>
+            <input class="modal-input" id="cfgFollowupMinutos" type="number" min="10" max="1440" placeholder="60" style="max-width:100px" />
+          </div>
+        </div>
+        <div class="modal-field" style="margin-bottom:12px">
+          <label class="modal-label">Mensaje del follow-up (lo que se le envía al paciente)</label>
+          <input class="modal-input" id="cfgFollowupMensaje" placeholder="Por favor confirmame si tomamos el turno." />
+          <div style="font-size:11px;color:#8696a0;margin-top:4px">Si no respondió en X minutos, Mía le envía este mensaje. Requiere sesión activa (&lt;24hs) o template de Meta.</div>
+        </div>
+        <div class="modal-row">
+          <div class="modal-field" style="flex:0 0 auto">
+            <label class="modal-label">Notificación al principal</label>
+            <label style="display:flex;align-items:center;gap:8px;cursor:pointer;font-size:13px;color:#e9edef;margin-top:4px">
+              <input type="checkbox" id="cfgNotifPrincipalHabilitado" style="width:16px;height:16px" />
+              Activado
+            </label>
+          </div>
+          <div class="modal-field">
+            <label class="modal-label">Minutos hasta la notificación</label>
+            <input class="modal-input" id="cfgNotifPrincipalMinutos" type="number" min="10" max="2880" placeholder="120" style="max-width:100px" />
+          </div>
+        </div>
+        <div style="font-size:11px;color:#8696a0;margin-top:4px">Si el paciente aún no concretó, se avisa al miembro marcado como Principal en la sección Equipo.</div>
+      </div>
       <div class="modal-actions" style="margin-top:8px">
         <button class="btn btn-cancel" onclick="cerrarConfig()">Cancelar</button>
         <button class="btn btn-primary" onclick="guardarFlujos()">Guardar</button>
@@ -1426,20 +1461,30 @@
       document.getElementById("cfgCancelacionHs").value    = cfg.cancelacion_anticipacion_hs || "24";
       document.getElementById("cfgToleranciaMin").value    = cfg.tolerancia_llegada_min   || "15";
       document.getElementById("cfgAnticipaciónMin").value  = cfg.anticipacion_nuevo_min   || "10";
-      document.getElementById("cfgPalabrasAlarma").value   = cfg.palabras_alarma          || "";
+      document.getElementById("cfgPalabrasAlarma").value          = cfg.palabras_alarma          || "";
+      document.getElementById("cfgFollowupHabilitado").checked      = cfg.followup_habilitado !== "false";
+      document.getElementById("cfgFollowupMinutos").value           = cfg.followup_minutos          || "60";
+      document.getElementById("cfgFollowupMensaje").value           = cfg.followup_mensaje          || "Por favor confirmame si tomamos el turno.";
+      document.getElementById("cfgNotifPrincipalHabilitado").checked = cfg.notif_principal_habilitado !== "false";
+      document.getElementById("cfgNotifPrincipalMinutos").value     = cfg.notif_principal_minutos   || "120";
     } catch(e) { console.error("Error cargando flujos:", e); }
   }
 
   async function guardarFlujos() {
     try {
       await fetch(`${API}/config`, { method: "PATCH", headers: authH(), body: JSON.stringify({
-        flujo_paciente_nuevo:        document.getElementById("cfgFlujoNuevo").value.trim(),
-        flujo_paciente_existente:    document.getElementById("cfgFlujoExistente").value.trim(),
-        mensaje_bienvenida:          document.getElementById("cfgBienvenida").value.trim(),
-        cancelacion_anticipacion_hs: document.getElementById("cfgCancelacionHs").value,
-        tolerancia_llegada_min:      document.getElementById("cfgToleranciaMin").value,
-        anticipacion_nuevo_min:      document.getElementById("cfgAnticipaciónMin").value,
-        palabras_alarma:             document.getElementById("cfgPalabrasAlarma").value.trim(),
+        flujo_paciente_nuevo:          document.getElementById("cfgFlujoNuevo").value.trim(),
+        flujo_paciente_existente:      document.getElementById("cfgFlujoExistente").value.trim(),
+        mensaje_bienvenida:            document.getElementById("cfgBienvenida").value.trim(),
+        cancelacion_anticipacion_hs:   document.getElementById("cfgCancelacionHs").value,
+        tolerancia_llegada_min:        document.getElementById("cfgToleranciaMin").value,
+        anticipacion_nuevo_min:        document.getElementById("cfgAnticipaciónMin").value,
+        palabras_alarma:               document.getElementById("cfgPalabrasAlarma").value.trim(),
+        followup_habilitado:           document.getElementById("cfgFollowupHabilitado").checked ? "true" : "false",
+        followup_minutos:              document.getElementById("cfgFollowupMinutos").value || "60",
+        followup_mensaje:              document.getElementById("cfgFollowupMensaje").value.trim(),
+        notif_principal_habilitado:    document.getElementById("cfgNotifPrincipalHabilitado").checked ? "true" : "false",
+        notif_principal_minutos:       document.getElementById("cfgNotifPrincipalMinutos").value || "120",
       })});
       cerrarConfig();
       showToast("Flujos guardados. Efectivos en el próximo mensaje.");
@@ -1770,15 +1815,25 @@
         <div id="miembro-row-${u.id}" style="padding:10px 0;border-bottom:1px solid #2a3942">
           <div style="display:flex;align-items:center;justify-content:space-between">
             <div>
-              <div style="font-size:14px;font-weight:500">${escHtml(u.nombre || u.email)}</div>
+              <div style="display:flex;align-items:center;gap:8px">
+                <span style="font-size:14px;font-weight:500">${escHtml(u.nombre || u.email)}</span>
+                ${u.es_principal ? '<span style="font-size:10px;background:#00a884;color:#fff;border-radius:4px;padding:1px 6px">Principal</span>' : ''}
+              </div>
               <div style="font-size:11px;color:#8696a0;margin-top:1px">${escHtml(u.email)}${u.telefono ? ` · 📱 ${escHtml(u.telefono)}` : ' · <span style="color:#f59e0b">Sin teléfono</span>'}</div>
             </div>
-            <button class="btn btn-sm" onclick="editarMiembro(${u.id},'${escHtml(u.nombre||'')}','${escHtml(u.telefono||'')}')">Editar</button>
+            <button class="btn btn-sm" onclick="editarMiembro(${u.id})">Editar</button>
           </div>
           <div id="miembro-form-${u.id}" style="display:none;margin-top:8px;background:#2a3942;border-radius:8px;padding:10px">
             <div class="modal-row" style="margin-bottom:8px">
               <div class="modal-field" style="flex:1"><label class="modal-label">Nombre</label><input class="modal-input" id="mNombre-${u.id}" value="${escHtml(u.nombre||'')}" /></div>
               <div class="modal-field" style="flex:1"><label class="modal-label">Teléfono WhatsApp</label><input class="modal-input" id="mTel-${u.id}" placeholder="549XXXXXXXXXX" value="${escHtml(u.telefono||'')}" /></div>
+            </div>
+            <div style="margin-bottom:10px">
+              <label style="display:flex;align-items:center;gap:8px;cursor:pointer;font-size:13px;color:#e9edef">
+                <input type="checkbox" id="mPrincipal-${u.id}" ${u.es_principal ? 'checked' : ''} ${!u.telefono ? 'disabled' : ''} style="width:16px;height:16px;cursor:pointer" />
+                Miembro principal — recibe notificación cuando el paciente no concreta el turno
+                ${!u.telefono ? '<span style="color:#f59e0b;font-size:11px">(requiere teléfono)</span>' : ''}
+              </label>
             </div>
             <div style="display:flex;gap:8px">
               <button class="btn btn-primary" onclick="guardarMiembro(${u.id})">Guardar</button>
@@ -1789,17 +1844,30 @@
     } catch(e) { document.getElementById("equipoList").textContent = "Error cargando equipo"; }
   }
 
-  function editarMiembro(id, nombre, tel) {
+  function editarMiembro(id) {
     document.getElementById(`miembro-form-${id}`).style.display = "block";
     document.getElementById(`mNombre-${id}`).focus();
+    // Habilitar/deshabilitar checkbox principal según si hay teléfono
+    const telInput = document.getElementById(`mTel-${id}`);
+    const chk = document.getElementById(`mPrincipal-${id}`);
+    if (telInput && chk) {
+      telInput.addEventListener("input", () => {
+        chk.disabled = !telInput.value.trim();
+        if (!telInput.value.trim()) chk.checked = false;
+      });
+    }
   }
 
   async function guardarMiembro(id) {
-    const nombre = document.getElementById(`mNombre-${id}`).value.trim();
-    const telefono = document.getElementById(`mTel-${id}`).value.trim() || null;
+    const nombre     = document.getElementById(`mNombre-${id}`).value.trim();
+    const telefono   = document.getElementById(`mTel-${id}`).value.trim() || null;
+    const esPrincipal = document.getElementById(`mPrincipal-${id}`)?.checked;
+    if (esPrincipal && !telefono) { showToast("Asigná un teléfono antes de marcar como principal"); return; }
     try {
-      const res = await fetch(`${API}/admin/team/${id}`, { method: "PATCH", headers: authH(), body: JSON.stringify({ nombre, telefono }) });
-      if (!res.ok) { showToast("Error guardando"); return; }
+      const body = { nombre, telefono, es_principal: esPrincipal };
+      const res = await fetch(`${API}/admin/team/${id}`, { method: "PATCH", headers: authH(), body: JSON.stringify(body) });
+      const data = await res.json();
+      if (!res.ok) { showToast(data.error || "Error guardando"); return; }
       showToast("Guardado");
       await cargarEquipo();
     } catch(e) { showToast("Error guardando"); }

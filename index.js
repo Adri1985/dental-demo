@@ -1029,11 +1029,19 @@ app.post("/admin/mia-chat", authMiddleware, async (req, res) => {
 
 app.patch("/admin/team/:id", authMiddleware, async (req, res) => {
   try {
-    const { nombre, telefono } = req.body;
-    const updated = await db.updateTeamMember(parseInt(req.params.id), { nombre, telefono: telefono || null });
+    const { nombre, telefono, es_principal } = req.body;
+    const updated = await db.updateTeamMember(parseInt(req.params.id), {
+      nombre,
+      telefono: telefono || null,
+      es_principal: es_principal !== undefined ? es_principal : undefined,
+    });
     if (!updated) return res.status(404).json({ error: "Usuario no encontrado" });
     res.json(updated);
-  } catch (err) { console.error(err); res.status(500).json({ error: "Error interno" }); }
+  } catch (err) {
+    console.error(err);
+    const status = err.message?.includes("sin un teléfono") ? 400 : 500;
+    res.status(status).json({ error: err.message || "Error interno" });
+  }
 });
 
 app.get("/admin/pending-tasks", authMiddleware, async (req, res) => {
@@ -1590,10 +1598,67 @@ async function logStartupState() {
   }
 }
 
+// ─────────────────────────────────────────────
+//  CRON: FOLLOW-UP Y NOTIFICACIÓN PRINCIPAL
+// ─────────────────────────────────────────────
+async function runFollowupCron() {
+  try {
+    const cfg = await db.getConfig().catch(() => ({}));
+    const consultorio_id = DEFAULT_CONSULTORIO_ID;
+
+    // ── Follow-up al paciente ──────────────────
+    const followupHabilitado = cfg.followup_habilitado !== "false";
+    const followupMinutos    = parseInt(cfg.followup_minutos) || 60;
+    const followupMensaje    = cfg.followup_mensaje || "Por favor confirmame si tomamos el turno.";
+
+    if (followupHabilitado) {
+      const tareas = await db.getPendingTasksForFollowup(consultorio_id, followupMinutos);
+      for (const t of tareas) {
+        const perfil = await db.getActiveProfile(consultorio_id).catch(() => null);
+        await sendWhatsAppMessage(t.telefono, followupMensaje, perfil).catch(e =>
+          console.error(`[cron-followup] error enviando a ${t.telefono}:`, e.message)
+        );
+        await db.addMessage(t.telefono, "assistant", followupMensaje, new Date().toISOString(), true, "mia_followup").catch(() => {});
+        await db.markFollowupSent(t.id);
+        console.log(`[cron-followup] follow-up enviado a ${t.nombre_paciente} (task ${t.id})`);
+      }
+    }
+
+    // ── Notificación al miembro principal ──────
+    const notifHabilitado = cfg.notif_principal_habilitado !== "false";
+    const notifMinutos    = parseInt(cfg.notif_principal_minutos) || 120;
+
+    if (notifHabilitado) {
+      const tareas = await db.getPendingTasksForNotifPrincipal(consultorio_id, notifMinutos);
+      if (tareas.length) {
+        const principal = await db.getUserPrincipal(consultorio_id).catch(() => null);
+        if (principal?.telefono) {
+          const perfil = await db.getActiveProfile(consultorio_id).catch(() => null);
+          for (const t of tareas) {
+            const msg = `El paciente ${t.nombre_paciente} no concretó el turno para su ${t.motivo || "consulta"}.`;
+            await sendWhatsAppMessage(principal.telefono, msg, perfil).catch(e =>
+              console.error(`[cron-notif] error enviando a principal ${principal.telefono}:`, e.message)
+            );
+            await db.markNotifPrincipalSent(t.id);
+            console.log(`[cron-notif] notificación enviada a ${principal.nombre || principal.email} por task ${t.id}`);
+          }
+        } else {
+          console.log("[cron-notif] no hay miembro principal con teléfono asignado");
+        }
+      }
+    }
+  } catch (err) {
+    console.error("[cron-followup]", err.message);
+  }
+}
+
 db.initDB()
   .then(async () => {
     const PORT = process.env.PORT || 3000;
     app.listen(PORT, () => console.log(`Backend corriendo en http://localhost:${PORT}`));
     await logStartupState();
+    // Cron cada 2 minutos
+    setInterval(runFollowupCron, 2 * 60 * 1000);
+    console.log("[cron] follow-up y notificación principal activos (cada 2 min)");
   })
   .catch((err) => { console.error("[db] Error al inicializar:", err); process.exit(1); });
