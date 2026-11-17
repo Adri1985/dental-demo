@@ -328,7 +328,8 @@
   <div class="turnos-panel" id="pacientesPanel" style="padding:20px 24px;overflow-y:auto;gap:14px">
     <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap">
       <div style="font-size:16px;font-weight:600;color:#e9edef;flex:1">Pacientes</div>
-      <label class="btn btn-primary" style="cursor:pointer;font-size:12px;padding:6px 12px;position:relative">
+      <button class="btn btn-primary" style="font-size:12px;padding:6px 12px" onclick="abrirNuevoPaciente()">+ Nuevo paciente</button>
+      <label class="btn" style="cursor:pointer;font-size:12px;padding:6px 12px;position:relative;border:1px solid #3a4952;color:#8696a0">
         Importar VCF
         <input type="file" accept=".vcf,text/vcard" style="position:absolute;inset:0;opacity:0;cursor:pointer" onchange="importarVCF(this)" />
       </label>
@@ -345,8 +346,47 @@
     <div id="pacTabla" style="font-size:13px"><div style="color:#8696a0">Cargando…</div></div>
     <div id="pacPag" style="display:flex;justify-content:center;gap:8px;font-size:12px;margin-top:4px"></div>
 
+    <!-- Modal nuevo paciente -->
+    <div id="pacNuevoOverlay" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.6);z-index:200;align-items:center;justify-content:center" onclick="if(event.target===this)cerrarNuevoPaciente()">
+      <div style="background:#1f2c34;border-radius:10px;padding:20px;width:380px;max-width:94vw;box-shadow:0 4px 24px #0008">
+        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px">
+          <div style="font-size:14px;font-weight:600;color:#e9edef">Nuevo paciente</div>
+          <button onclick="cerrarNuevoPaciente()" style="background:none;border:none;color:#8696a0;font-size:20px;cursor:pointer;line-height:1">×</button>
+        </div>
+        <div class="modal-row" style="margin-bottom:0">
+          <div class="modal-field" style="flex:1">
+            <label class="modal-label">Nombre <span style="color:#ef4444">*</span></label>
+            <input class="modal-input" id="pnNombre" type="text" placeholder="Ej: María" />
+          </div>
+          <div class="modal-field" style="flex:1">
+            <label class="modal-label">Apellido <span style="color:#ef4444">*</span></label>
+            <input class="modal-input" id="pnApellido" type="text" placeholder="Ej: González" />
+          </div>
+        </div>
+        <div class="modal-field">
+          <label class="modal-label">Teléfono WhatsApp <span style="color:#ef4444">*</span></label>
+          <input class="modal-input" id="pnTel" type="text" placeholder="549XXXXXXXXXX" oninput="validarTelNuevoPac()" />
+          <div id="pnTelHint" style="font-size:11px;margin-top:3px;color:#8696a0">Formato: 549 + código de área + número (ej: 5491155556666)</div>
+        </div>
+        <div class="modal-row" style="margin-bottom:0">
+          <div class="modal-field" style="flex:1">
+            <label class="modal-label">DNI <span style="color:#8696a0;font-weight:400">(opcional)</span></label>
+            <input class="modal-input" id="pnDNI" type="text" placeholder="Ej: 30123456" />
+          </div>
+          <div class="modal-field" style="flex:1">
+            <label class="modal-label">Obra social <span style="color:#8696a0;font-weight:400">(opcional)</span></label>
+            <input class="modal-input" id="pnOS" type="text" placeholder="Ej: OSDE" />
+          </div>
+        </div>
+        <div class="modal-actions" style="margin-top:8px">
+          <button class="btn btn-cancel" onclick="cerrarNuevoPaciente()">Cancelar</button>
+          <button class="btn btn-primary" id="btnGuardarNuevoPac" onclick="guardarNuevoPaciente()">Crear paciente</button>
+        </div>
+      </div>
+    </div>
+
     <!-- Modal edición paciente -->
-    <div id="pacEditOverlay" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.6);z-index:200;align-items:center;justify-content:center">
+    <div id="pacEditOverlay" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.6);z-index:200;align-items:center;justify-content:center" onclick="if(event.target===this)cerrarEditPac()">
       <div style="background:#1f2c34;border-radius:10px;padding:20px;width:320px;max-width:90vw;box-shadow:0 4px 24px #0008">
         <div style="font-size:14px;font-weight:600;color:#e9edef;margin-bottom:14px">Editar paciente</div>
         <input type="hidden" id="pacEditTelOrig" />
@@ -1831,6 +1871,62 @@
     btn.classList.add("active");
     cargarPacientes(1);
   }
+
+  // ── Nuevo paciente ────────────────────────────────────────────────────────
+  function abrirNuevoPaciente() {
+    ["pnNombre","pnApellido","pnTel","pnDNI","pnOS"].forEach(id => document.getElementById(id).value = "");
+    document.getElementById("pnTelHint").textContent = "Formato: 549 + código de área + número (ej: 5491155556666)";
+    document.getElementById("pnTelHint").style.color = "#8696a0";
+    document.getElementById("pacNuevoOverlay").style.display = "flex";
+    setTimeout(() => document.getElementById("pnNombre").focus(), 50);
+  }
+
+  function cerrarNuevoPaciente() {
+    document.getElementById("pacNuevoOverlay").style.display = "none";
+  }
+
+  function validarTelNuevoPac() {
+    const val = document.getElementById("pnTel").value.replace(/\D/g, "");
+    const hint = document.getElementById("pnTelHint");
+    if (!val) { hint.textContent = "Formato: 549 + código de área + número (ej: 5491155556666)"; hint.style.color = "#8696a0"; return; }
+    if (val.startsWith("549") && val.length === 13) { hint.textContent = "✓ Formato correcto"; hint.style.color = "#00a884"; }
+    else if (val.length < 10) { hint.textContent = "Número muy corto"; hint.style.color = "#ef4444"; }
+    else { hint.textContent = `Se guardará como: 549${val.slice(-10)} — verificá que sea correcto`; hint.style.color = "#f59e0b"; }
+  }
+
+  async function guardarNuevoPaciente() {
+    const nombre   = document.getElementById("pnNombre").value.trim();
+    const apellido = document.getElementById("pnApellido").value.trim();
+    const telRaw   = document.getElementById("pnTel").value.replace(/\D/g, "");
+    const dni      = document.getElementById("pnDNI").value.trim();
+    const os       = document.getElementById("pnOS").value.trim();
+
+    if (!nombre)   { showToast("El nombre es requerido"); return; }
+    if (!apellido) { showToast("El apellido es requerido"); return; }
+    if (!telRaw || telRaw.length < 10) { showToast("Ingresá un teléfono válido"); return; }
+
+    const nombreCompleto = `${nombre} ${apellido}`;
+    let telefono = telRaw;
+    if (!telefono.startsWith("549") || telefono.length !== 13) {
+      telefono = "549" + telefono.slice(-10);
+    }
+
+    const btn = document.getElementById("btnGuardarNuevoPac");
+    btn.disabled = true; btn.textContent = "Guardando…";
+    try {
+      const res = await fetch(`${API}/patients`, {
+        method: "POST", headers: authH(),
+        body: JSON.stringify({ nombre: nombreCompleto, telefono, dni: dni || null, obra_social: os || null }),
+      });
+      const data = await res.json();
+      if (!res.ok) { showToast(data.error || "Error al crear paciente"); return; }
+      showToast(`✓ Paciente ${nombreCompleto} creado`);
+      cerrarNuevoPaciente();
+      await cargarPacientes(1);
+    } catch(e) { showToast("Error al crear paciente"); }
+    finally { btn.disabled = false; btn.textContent = "Crear paciente"; }
+  }
+  // ── Fin Nuevo paciente ────────────────────────────────────────────────────
 
   function abrirEditPac(p) {
     document.getElementById("pacEditTelOrig").value = p.telefono;

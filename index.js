@@ -762,6 +762,27 @@ app.post("/patients/import-vcf", authMiddleware, express.text({ type: "*/*", lim
   }
 });
 
+app.post("/patients", authMiddleware, async (req, res) => {
+  try {
+    const { nombre, telefono, dni, obra_social } = req.body;
+    if (!nombre?.trim()) return res.status(400).json({ ok: false, error: "El nombre es requerido" });
+    if (!telefono?.trim()) return res.status(400).json({ ok: false, error: "El teléfono es requerido" });
+    const existing = await db.getPatient(telefono.trim());
+    if (existing) return res.status(409).json({ ok: false, error: "Ya existe un paciente con ese teléfono" });
+    const patient = await db.upsertPatient({
+      telefono: telefono.trim(),
+      nombre: nombre.trim(),
+      dni: dni?.trim() || null,
+      obra_social: obra_social?.trim() || null,
+      consultorio_id: consultorioDe(req),
+    });
+    res.json({ ok: true, patient });
+  } catch (err) {
+    console.error("[POST /patients]", err);
+    res.status(500).json({ ok: false, error: err.message });
+  }
+});
+
 app.put("/patients/:telefono", authMiddleware, async (req, res) => {
   try {
     const { nombre, telefono: newTel, obra_social, dni, is_active } = req.body;
