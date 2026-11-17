@@ -74,6 +74,8 @@ async function initDB() {
     return;
   }
 
+  await pool.query(`CREATE EXTENSION IF NOT EXISTS unaccent`).catch(() => {});
+
   await pool.query(`
     CREATE TABLE IF NOT EXISTS consultorios (
       id         SERIAL PRIMARY KEY,
@@ -508,9 +510,11 @@ async function searchPatients(q, consultorio_id) {
         (p.nombre || "").toLowerCase().includes(term))
       .slice(0, 8);
   }
+  // unaccent normaliza tildes en ambos lados: "Adrian" encuentra "Adrián" y viceversa
   const { rows } = await pool.query(`
     SELECT telefono, nombre, dni, obra_social FROM patients
-    WHERE consultorio_id = $1 AND nombre ILIKE $2
+    WHERE consultorio_id = $1
+      AND unaccent(lower(nombre)) LIKE unaccent(lower($2))
     ORDER BY nombre LIMIT 8
   `, [consultorio_id || 1, `%${q}%`]);
   return rows;
