@@ -269,15 +269,6 @@ async function initDB() {
     CREATE INDEX IF NOT EXISTS idx_pending_tasks_status   ON pending_tasks(status);
   `).catch(e => console.log("[db] migracion pending_tasks:", e.message));
 
-  await pool.query(`
-    ALTER TABLE users ADD COLUMN IF NOT EXISTS es_principal BOOLEAN DEFAULT FALSE;
-  `).catch(e => console.log("[db] migracion users es_principal:", e.message));
-
-  await pool.query(`
-    ALTER TABLE pending_tasks ADD COLUMN IF NOT EXISTS followup_sent_at       TIMESTAMPTZ;
-    ALTER TABLE pending_tasks ADD COLUMN IF NOT EXISTS notif_principal_sent_at TIMESTAMPTZ;
-  `).catch(e => console.log("[db] migracion pending_tasks followup/notif:", e.message));
-
   await migrarEnvAPerfil().catch(e => console.log("[migration] error:", e.message));
 
   console.log("[db] tablas listas (PostgreSQL)");
@@ -363,77 +354,19 @@ async function updateUserConsultorio(userId, consultorio_id) {
 async function getUsersByConsultorio(consultorio_id) {
   if (!USE_DB) return Object.values(store.users).filter(u => u.consultorio_id === consultorio_id);
   const { rows } = await pool.query(
-    "SELECT id, email, nombre, descripcion, telefono, es_principal, created_at FROM users WHERE consultorio_id = $1 ORDER BY created_at ASC",
+    "SELECT id, email, nombre, descripcion, telefono, created_at FROM users WHERE consultorio_id = $1 ORDER BY created_at ASC",
     [consultorio_id]
   );
   return rows;
 }
 
-async function updateTeamMember(id, { nombre, telefono, es_principal }) {
-  if (!USE_DB) return null;
-  // Si se quiere marcar como principal, verificar que tenga teléfono
-  if (es_principal === true) {
-    const { rows: check } = await pool.query("SELECT telefono FROM users WHERE id = $1", [id]);
-    const tel = telefono || check[0]?.telefono;
-    if (!tel) throw new Error("No se puede marcar como principal sin un teléfono asignado");
-    // Solo un principal por consultorio: desmarcar el anterior
-    await pool.query(
-      "UPDATE users SET es_principal = FALSE WHERE consultorio_id = (SELECT consultorio_id FROM users WHERE id = $1)",
-      [id]
-    );
-  }
-  const { rows } = await pool.query(
-    "UPDATE users SET nombre = $1, telefono = $2, es_principal = $3 WHERE id = $4 RETURNING id, email, nombre, telefono, descripcion, es_principal",
-    [nombre || null, telefono || null, es_principal === true ? true : es_principal === false ? false : null, id]
-  );
-  return rows[0] || null;
-}
-
-async function getUserPrincipal(consultorio_id) {
+async function updateTeamMember(id, { nombre, telefono }) {
   if (!USE_DB) return null;
   const { rows } = await pool.query(
-    "SELECT * FROM users WHERE consultorio_id = $1 AND es_principal = TRUE AND telefono IS NOT NULL LIMIT 1",
-    [consultorio_id]
+    "UPDATE users SET nombre = $1, telefono = $2 WHERE id = $3 RETURNING id, email, nombre, telefono, descripcion",
+    [nombre || null, telefono || null, id]
   );
   return rows[0] || null;
-}
-
-async function getPendingTasksForFollowup(consultorio_id, minutos) {
-  if (!USE_DB) return [];
-  const { rows } = await pool.query(`
-    SELECT pt.*, p.nombre AS nombre_paciente
-    FROM pending_tasks pt
-    JOIN patients p ON p.telefono = pt.telefono
-    WHERE p.consultorio_id = $1
-      AND pt.status = 'sent'
-      AND pt.followup_sent_at IS NULL
-      AND pt.created_at <= NOW() - ($2 || ' minutes')::INTERVAL
-  `, [consultorio_id, minutos]);
-  return rows;
-}
-
-async function getPendingTasksForNotifPrincipal(consultorio_id, minutos) {
-  if (!USE_DB) return [];
-  const { rows } = await pool.query(`
-    SELECT pt.*, p.nombre AS nombre_paciente
-    FROM pending_tasks pt
-    JOIN patients p ON p.telefono = pt.telefono
-    WHERE p.consultorio_id = $1
-      AND pt.status = 'sent'
-      AND pt.notif_principal_sent_at IS NULL
-      AND pt.created_at <= NOW() - ($2 || ' minutes')::INTERVAL
-  `, [consultorio_id, minutos]);
-  return rows;
-}
-
-async function markFollowupSent(id) {
-  if (!USE_DB) return;
-  await pool.query("UPDATE pending_tasks SET followup_sent_at = NOW() WHERE id = $1", [id]);
-}
-
-async function markNotifPrincipalSent(id) {
-  if (!USE_DB) return;
-  await pool.query("UPDATE pending_tasks SET notif_principal_sent_at = NOW() WHERE id = $1", [id]);
 }
 
 async function getUserByTelefono(telefono, consultorio_id) {
@@ -1042,12 +975,11 @@ module.exports = {
   initDB,
   // pending tasks
   createPendingTask, getPendingTask, updatePendingTaskStatus, getPendingTasksNeedingReview,
-  getPendingTasksForFollowup, getPendingTasksForNotifPrincipal, markFollowupSent, markNotifPrincipalSent,
   // vcf import + patient update
   bulkImportPatients, updatePatientFull,
   // auth
   createConsultorio, getConsultorio,
-  createUser, getUserByEmail, updateUserConsultorio, getUsersByConsultorio, updateTeamMember, getUserByTelefono, getUserPrincipal,
+  createUser, getUserByEmail, updateUserConsultorio, getUsersByConsultorio, updateTeamMember, getUserByTelefono,
   createInvitacion, getInvitacion, usarInvitacion,
   // coberturas
   getCoberturas, createCobertura, updateCobertura, deleteCobertura,

@@ -662,47 +662,6 @@
           <div style="font-size:11px;color:#8696a0;margin-top:4px">Cuando el paciente dice alguna de estas palabras, Mía escala inmediatamente al doctor</div>
         </div>
       </div>
-      <div style="border-top:1px solid #2a3942;padding-top:14px;margin-top:4px">
-        <div style="font-size:13px;font-weight:600;margin-bottom:10px">Coordinación de turnos — seguimiento automático</div>
-        <div class="modal-row" style="margin-bottom:10px">
-          <div class="modal-field" style="flex:0 0 auto">
-            <label class="modal-label">Follow-up al paciente</label>
-            <label style="display:flex;align-items:center;gap:8px;cursor:pointer;font-size:13px;color:#e9edef;margin-top:4px">
-              <input type="checkbox" id="cfgFollowupHabilitado" style="width:16px;height:16px" />
-              Activado
-            </label>
-          </div>
-          <div class="modal-field">
-            <label class="modal-label">Minutos hasta el follow-up</label>
-            <input class="modal-input" id="cfgFollowupMinutos" type="number" min="10" max="1440" placeholder="60" style="max-width:100px" />
-          </div>
-        </div>
-        <div class="modal-field" style="margin-bottom:12px">
-          <label class="modal-label">Mensaje del follow-up (lo que se le envía al paciente)</label>
-          <input class="modal-input" id="cfgFollowupMensaje" placeholder="Por favor confirmame si tomamos el turno." />
-          <div style="font-size:11px;color:#8696a0;margin-top:4px">Si no respondió en X minutos, Mía le envía este mensaje. Requiere sesión activa (&lt;24hs) o template de Meta.</div>
-        </div>
-        <div class="modal-row">
-          <div class="modal-field" style="flex:0 0 auto">
-            <label class="modal-label">Notificación al principal</label>
-            <label style="display:flex;align-items:center;gap:8px;cursor:pointer;font-size:13px;color:#e9edef;margin-top:4px">
-              <input type="checkbox" id="cfgNotifPrincipalHabilitado" style="width:16px;height:16px" />
-              Activado
-            </label>
-          </div>
-          <div class="modal-field">
-            <label class="modal-label">Minutos hasta la notificación</label>
-            <input class="modal-input" id="cfgNotifPrincipalMinutos" type="number" min="10" max="2880" placeholder="120" style="max-width:100px" />
-          </div>
-        </div>
-        <div style="font-size:11px;color:#8696a0;margin-top:4px">Si el paciente aún no concretó, se avisa al miembro marcado como Principal en la sección Equipo.</div>
-      </div>
-      <div style="border-top:1px solid #2a3942;padding-top:12px;margin-top:4px">
-        <div style="font-size:13px;font-weight:600;margin-bottom:6px">Probar seguimiento ahora</div>
-        <div style="font-size:12px;color:#8696a0;margin-bottom:10px">Dispara el cron inmediatamente para todas las coordinaciones pendientes, ignorando los tiempos configurados. Útil para probar antes de que pasen los 60/120 minutos.</div>
-        <button class="btn btn-sm" id="btnCronRun" onclick="probarCron()">Disparar cron ahora</button>
-        <div id="cronResult" style="margin-top:10px;font-size:12px;color:#8696a0"></div>
-      </div>
       <div class="modal-actions" style="margin-top:8px">
         <button class="btn btn-cancel" onclick="cerrarConfig()">Cancelar</button>
         <button class="btn btn-primary" onclick="guardarFlujos()">Guardar</button>
@@ -1026,22 +985,13 @@
     const sorted = [...visible].sort((a, b) => {
       if (a.en_alerta && !b.en_alerta) return -1;
       if (!a.en_alerta && b.en_alerta) return 1;
-      const sa = a.seguimiento_nivel || 0, sb = b.seguimiento_nivel || 0;
-      if (sb !== sa) return sb - sa; // alerta 2 > alerta 1 > sin alerta
       return new Date(b.updated_at) - new Date(a.updated_at);
     });
-    list.innerHTML = sorted.map(p => {
-      const seg = p.seguimiento_nivel || 0;
-      const segBadge = seg === 2
-        ? '<span style="font-size:10px;background:#ef4444;color:#fff;border-radius:4px;padding:1px 5px;margin-left:4px">Alerta 2</span>'
-        : seg === 1
-        ? '<span style="font-size:10px;background:#f59e0b;color:#fff;border-radius:4px;padding:1px 5px;margin-left:4px">Alerta 1</span>'
-        : "";
-      return `
+    list.innerHTML = sorted.map(p => `
       <div class="patient-item ${p.telefono === selectedTel ? "active" : ""} ${p.en_alerta ? "alerta" : ""}" onclick="selectPatient('${p.telefono}')">
         <div class="patient-avatar">👤<div class="modo-badge ${p.modo}"></div></div>
         <div class="patient-info">
-          <div class="patient-name">${escHtml(p.nombre)}${p.en_alerta ? ' <span style="color:#f59e0b;font-size:11px;font-weight:700">⚠ Alerta</span>' : ""}${segBadge}</div>
+          <div class="patient-name">${escHtml(p.nombre)}${p.en_alerta ? ' <span style="color:#f59e0b;font-size:11px;font-weight:700">⚠ Alerta</span>' : ""}</div>
           <div class="patient-preview">${escHtml(p.telefono)}</div>
           ${p.modo === "humano" ? '<span class="pausado-tag">Esperando intervención</span>' : ""}
         </div>
@@ -1050,8 +1000,7 @@
           <div class="patient-time">${fmtDate(p.updated_at)}</div>
           <div class="patient-msgs">${p.total_mensajes} msg</div>
         </div>
-      </div>`;
-    }).join("");
+      </div>`).join("");
   }
 
   async function selectPatient(telefono) {
@@ -1477,51 +1426,20 @@
       document.getElementById("cfgCancelacionHs").value    = cfg.cancelacion_anticipacion_hs || "24";
       document.getElementById("cfgToleranciaMin").value    = cfg.tolerancia_llegada_min   || "15";
       document.getElementById("cfgAnticipaciónMin").value  = cfg.anticipacion_nuevo_min   || "10";
-      document.getElementById("cfgPalabrasAlarma").value          = cfg.palabras_alarma          || "";
-      document.getElementById("cfgFollowupHabilitado").checked      = cfg.followup_habilitado !== "false";
-      document.getElementById("cfgFollowupMinutos").value           = cfg.followup_minutos          || "60";
-      document.getElementById("cfgFollowupMensaje").value           = cfg.followup_mensaje          || "Por favor confirmame si tomamos el turno.";
-      document.getElementById("cfgNotifPrincipalHabilitado").checked = cfg.notif_principal_habilitado !== "false";
-      document.getElementById("cfgNotifPrincipalMinutos").value     = cfg.notif_principal_minutos   || "120";
+      document.getElementById("cfgPalabrasAlarma").value   = cfg.palabras_alarma          || "";
     } catch(e) { console.error("Error cargando flujos:", e); }
-  }
-
-  async function probarCron() {
-    const btn = document.getElementById("btnCronRun");
-    const res = document.getElementById("cronResult");
-    btn.disabled = true; btn.textContent = "Enviando...";
-    res.textContent = "";
-    try {
-      const data = await fetch(`${API}/admin/cron/run`, { method: "POST", headers: authH() }).then(r => r.json());
-      if (data.ok) {
-        res.style.color = "#00a884";
-        res.innerHTML = data.resumen.map(l => `✓ ${l}`).join("<br>");
-      } else {
-        res.style.color = "#ef4444";
-        res.textContent = `Error: ${data.error}`;
-      }
-    } catch(e) {
-      res.style.color = "#ef4444";
-      res.textContent = "Error de conexión";
-    }
-    btn.disabled = false; btn.textContent = "Disparar cron ahora";
   }
 
   async function guardarFlujos() {
     try {
       await fetch(`${API}/config`, { method: "PATCH", headers: authH(), body: JSON.stringify({
-        flujo_paciente_nuevo:          document.getElementById("cfgFlujoNuevo").value.trim(),
-        flujo_paciente_existente:      document.getElementById("cfgFlujoExistente").value.trim(),
-        mensaje_bienvenida:            document.getElementById("cfgBienvenida").value.trim(),
-        cancelacion_anticipacion_hs:   document.getElementById("cfgCancelacionHs").value,
-        tolerancia_llegada_min:        document.getElementById("cfgToleranciaMin").value,
-        anticipacion_nuevo_min:        document.getElementById("cfgAnticipaciónMin").value,
-        palabras_alarma:               document.getElementById("cfgPalabrasAlarma").value.trim(),
-        followup_habilitado:           document.getElementById("cfgFollowupHabilitado").checked ? "true" : "false",
-        followup_minutos:              document.getElementById("cfgFollowupMinutos").value || "60",
-        followup_mensaje:              document.getElementById("cfgFollowupMensaje").value.trim(),
-        notif_principal_habilitado:    document.getElementById("cfgNotifPrincipalHabilitado").checked ? "true" : "false",
-        notif_principal_minutos:       document.getElementById("cfgNotifPrincipalMinutos").value || "120",
+        flujo_paciente_nuevo:        document.getElementById("cfgFlujoNuevo").value.trim(),
+        flujo_paciente_existente:    document.getElementById("cfgFlujoExistente").value.trim(),
+        mensaje_bienvenida:          document.getElementById("cfgBienvenida").value.trim(),
+        cancelacion_anticipacion_hs: document.getElementById("cfgCancelacionHs").value,
+        tolerancia_llegada_min:      document.getElementById("cfgToleranciaMin").value,
+        anticipacion_nuevo_min:      document.getElementById("cfgAnticipaciónMin").value,
+        palabras_alarma:             document.getElementById("cfgPalabrasAlarma").value.trim(),
       })});
       cerrarConfig();
       showToast("Flujos guardados. Efectivos en el próximo mensaje.");
@@ -1852,25 +1770,15 @@
         <div id="miembro-row-${u.id}" style="padding:10px 0;border-bottom:1px solid #2a3942">
           <div style="display:flex;align-items:center;justify-content:space-between">
             <div>
-              <div style="display:flex;align-items:center;gap:8px">
-                <span style="font-size:14px;font-weight:500">${escHtml(u.nombre || u.email)}</span>
-                ${u.es_principal ? '<span style="font-size:10px;background:#00a884;color:#fff;border-radius:4px;padding:1px 6px">Principal</span>' : ''}
-              </div>
+              <div style="font-size:14px;font-weight:500">${escHtml(u.nombre || u.email)}</div>
               <div style="font-size:11px;color:#8696a0;margin-top:1px">${escHtml(u.email)}${u.telefono ? ` · 📱 ${escHtml(u.telefono)}` : ' · <span style="color:#f59e0b">Sin teléfono</span>'}</div>
             </div>
-            <button class="btn btn-sm" onclick="editarMiembro(${u.id})">Editar</button>
+            <button class="btn btn-sm" onclick="editarMiembro(${u.id},'${escHtml(u.nombre||'')}','${escHtml(u.telefono||'')}')">Editar</button>
           </div>
           <div id="miembro-form-${u.id}" style="display:none;margin-top:8px;background:#2a3942;border-radius:8px;padding:10px">
             <div class="modal-row" style="margin-bottom:8px">
               <div class="modal-field" style="flex:1"><label class="modal-label">Nombre</label><input class="modal-input" id="mNombre-${u.id}" value="${escHtml(u.nombre||'')}" /></div>
               <div class="modal-field" style="flex:1"><label class="modal-label">Teléfono WhatsApp</label><input class="modal-input" id="mTel-${u.id}" placeholder="549XXXXXXXXXX" value="${escHtml(u.telefono||'')}" /></div>
-            </div>
-            <div style="margin-bottom:10px">
-              <label style="display:flex;align-items:center;gap:8px;cursor:pointer;font-size:13px;color:#e9edef">
-                <input type="checkbox" id="mPrincipal-${u.id}" ${u.es_principal ? 'checked' : ''} ${!u.telefono ? 'disabled' : ''} style="width:16px;height:16px;cursor:pointer" />
-                Miembro principal — recibe notificación cuando el paciente no concreta el turno
-                ${!u.telefono ? '<span style="color:#f59e0b;font-size:11px">(requiere teléfono)</span>' : ''}
-              </label>
             </div>
             <div style="display:flex;gap:8px">
               <button class="btn btn-primary" onclick="guardarMiembro(${u.id})">Guardar</button>
@@ -1881,30 +1789,17 @@
     } catch(e) { document.getElementById("equipoList").textContent = "Error cargando equipo"; }
   }
 
-  function editarMiembro(id) {
+  function editarMiembro(id, nombre, tel) {
     document.getElementById(`miembro-form-${id}`).style.display = "block";
     document.getElementById(`mNombre-${id}`).focus();
-    // Habilitar/deshabilitar checkbox principal según si hay teléfono
-    const telInput = document.getElementById(`mTel-${id}`);
-    const chk = document.getElementById(`mPrincipal-${id}`);
-    if (telInput && chk) {
-      telInput.addEventListener("input", () => {
-        chk.disabled = !telInput.value.trim();
-        if (!telInput.value.trim()) chk.checked = false;
-      });
-    }
   }
 
   async function guardarMiembro(id) {
-    const nombre     = document.getElementById(`mNombre-${id}`).value.trim();
-    const telefono   = document.getElementById(`mTel-${id}`).value.trim() || null;
-    const esPrincipal = document.getElementById(`mPrincipal-${id}`)?.checked;
-    if (esPrincipal && !telefono) { showToast("Asigná un teléfono antes de marcar como principal"); return; }
+    const nombre = document.getElementById(`mNombre-${id}`).value.trim();
+    const telefono = document.getElementById(`mTel-${id}`).value.trim() || null;
     try {
-      const body = { nombre, telefono, es_principal: esPrincipal };
-      const res = await fetch(`${API}/admin/team/${id}`, { method: "PATCH", headers: authH(), body: JSON.stringify(body) });
-      const data = await res.json();
-      if (!res.ok) { showToast(data.error || "Error guardando"); return; }
+      const res = await fetch(`${API}/admin/team/${id}`, { method: "PATCH", headers: authH(), body: JSON.stringify({ nombre, telefono }) });
+      if (!res.ok) { showToast("Error guardando"); return; }
       showToast("Guardado");
       await cargarEquipo();
     } catch(e) { showToast("Error guardando"); }

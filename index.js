@@ -692,27 +692,7 @@ app.delete("/session/:telefono", async (req, res) => {
   res.json({ ok: true });
 });
 
-app.get("/patients", authMiddleware, async (req, res) => {
-  const consultorio_id = consultorioDe(req);
-  const patients = await db.getAllPatients(consultorio_id);
-  if (!db.pool) return res.json(patients);
-  // Enriquecer con nivel de alerta de coordinación
-  const { rows: tasks } = await db.pool.query(
-    `SELECT pt.telefono,
-       CASE
-         WHEN pt.notif_principal_sent_at IS NOT NULL THEN 2
-         WHEN pt.followup_sent_at        IS NOT NULL THEN 1
-         ELSE 0
-       END AS seguimiento_nivel
-     FROM pending_tasks pt
-     JOIN patients p ON p.telefono = pt.telefono
-     WHERE pt.status = 'sent'
-       AND p.consultorio_id = $1`,
-    [consultorio_id]
-  ).catch(() => ({ rows: [] }));
-  const nivelPorTel = Object.fromEntries(tasks.map(t => [t.telefono, t.seguimiento_nivel]));
-  res.json(patients.map(p => ({ ...p, seguimiento_nivel: nivelPorTel[p.telefono] || 0 })));
-});
+app.get("/patients", authMiddleware, async (req, res) => { res.json(await db.getAllPatients(consultorioDe(req))); });
 
 app.get("/patients/list", authMiddleware, async (req, res) => {
   const { status, q, page = 1, limit = 50 } = req.query;
@@ -1049,19 +1029,11 @@ app.post("/admin/mia-chat", authMiddleware, async (req, res) => {
 
 app.patch("/admin/team/:id", authMiddleware, async (req, res) => {
   try {
-    const { nombre, telefono, es_principal } = req.body;
-    const updated = await db.updateTeamMember(parseInt(req.params.id), {
-      nombre,
-      telefono: telefono || null,
-      es_principal: es_principal !== undefined ? es_principal : undefined,
-    });
+    const { nombre, telefono } = req.body;
+    const updated = await db.updateTeamMember(parseInt(req.params.id), { nombre, telefono: telefono || null });
     if (!updated) return res.status(404).json({ error: "Usuario no encontrado" });
     res.json(updated);
-  } catch (err) {
-    console.error(err);
-    const status = err.message?.includes("sin un teléfono") ? 400 : 500;
-    res.status(status).json({ error: err.message || "Error interno" });
-  }
+  } catch (err) { console.error(err); res.status(500).json({ error: "Error interno" }); }
 });
 
 app.get("/admin/pending-tasks", authMiddleware, async (req, res) => {
@@ -1618,71 +1590,10 @@ async function logStartupState() {
   }
 }
 
-// ─────────────────────────────────────────────
-//  CRON: FOLLOW-UP Y NOTIFICACIÓN PRINCIPAL
-// ─────────────────────────────────────────────
-async function runFollowupCron({ force = false } = {}) {
-  try {
-    const cfg = await db.getConfig().catch(() => ({}));
-    const consultorio_id = DEFAULT_CONSULTORIO_ID;
-
-    // ── Follow-up al paciente ──────────────────
-    const followupHabilitado = force || cfg.followup_habilitado !== "false";
-    const followupMinutos    = force ? 0 : (parseInt(cfg.followup_minutos) || 60);
-    const followupMensaje    = cfg.followup_mensaje || "Por favor confirmame si tomamos el turno.";
-
-    // ── Alerta 1: follow-up al paciente ──────────
-    const alertas1 = [];
-    if (followupHabilitado) {
-      const tareas = await db.getPendingTasksForFollowup(consultorio_id, followupMinutos);
-      for (const t of tareas) {
-        await db.markFollowupSent(t.id);
-        alertas1.push(t.nombre_paciente);
-        console.log(`[cron] alerta 1 marcada — ${t.nombre_paciente} (task ${t.id})`);
-      }
-    }
-
-    // ── Alerta 2: notificación al miembro principal ──
-    const notifHabilitado = force || cfg.notif_principal_habilitado !== "false";
-    const notifMinutos    = force ? 0 : (parseInt(cfg.notif_principal_minutos) || 120);
-    const alertas2 = [];
-    if (notifHabilitado) {
-      const tareas = await db.getPendingTasksForNotifPrincipal(consultorio_id, notifMinutos);
-      for (const t of tareas) {
-        await db.markNotifPrincipalSent(t.id);
-        alertas2.push(t.nombre_paciente);
-        console.log(`[cron] alerta 2 marcada — ${t.nombre_paciente} (task ${t.id})`);
-      }
-    }
-    return { alertas1, alertas2 };
-  } catch (err) {
-    console.error("[cron-followup]", err.message);
-    return { error: err.message };
-  }
-}
-
-app.post("/admin/cron/run", authMiddleware, async (req, res) => {
-  try {
-    const result = await runFollowupCron({ force: true });
-    const { alertas1 = [], alertas2 = [], error } = result;
-    if (error) return res.status(500).json({ ok: false, error });
-    const resumen = [];
-    if (alertas1.length) resumen.push(`Alerta 1 marcada: ${alertas1.join(", ")}`);
-    if (alertas2.length) resumen.push(`Alerta 2 marcada: ${alertas2.join(", ")}`);
-    if (!resumen.length) resumen.push("No hay coordinaciones pendientes sin seguimiento.");
-    res.json({ ok: true, resumen });
-  } catch (err) {
-    res.status(500).json({ ok: false, error: err.message });
-  }
-});
-
 db.initDB()
   .then(async () => {
     const PORT = process.env.PORT || 3000;
     app.listen(PORT, () => console.log(`Backend corriendo en http://localhost:${PORT}`));
     await logStartupState();
-    // Cron cada 2 minutos
-    setInterval(runFollowupCron, 2 * 60 * 1000);
-    console.log("[cron] follow-up y notificación principal activos (cada 2 min)");
   })
   .catch((err) => { console.error("[db] Error al inicializar:", err); process.exit(1); });
