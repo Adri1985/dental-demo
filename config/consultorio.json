@@ -9,7 +9,7 @@
   "profesionales": [
     {
       "id": "dr_diego",
-      "nombre": "Dr. Diego",
+      "nombre": "Dr. Grinspon",
       "horarios": {
         "dias": "Lunes a Viernes",
         "manana": { "desde": "09:30", "hasta": "13:00" },
