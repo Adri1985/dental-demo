@@ -269,6 +269,9 @@ async function initDB() {
     CREATE INDEX IF NOT EXISTS idx_pending_tasks_status   ON pending_tasks(status);
   `).catch(e => console.log("[db] migracion pending_tasks:", e.message));
 
+  await pool.query(`ALTER TABLE pending_tasks ADD COLUMN IF NOT EXISTS opciones TEXT`)
+    .catch(e => console.log("[db] migracion opciones:", e.message));
+
   await migrarEnvAPerfil().catch(e => console.log("[migration] error:", e.message));
 
   console.log("[db] tablas listas (PostgreSQL)");
@@ -523,7 +526,7 @@ async function searchPatients(q, consultorio_id) {
 //  PENDING TASKS
 // ─────────────────────────────────────────────
 
-async function createPendingTask({ telefono, motivo, fecha_desde, fecha_hasta, duracion_min = 30, created_by }) {
+async function createPendingTask({ telefono, motivo, fecha_desde, fecha_hasta, duracion_min = 30, created_by, opciones }) {
   if (!USE_DB) return null;
   // Cancela cualquier tarea activa previa para este paciente antes de crear la nueva
   await pool.query(
@@ -531,9 +534,9 @@ async function createPendingTask({ telefono, motivo, fecha_desde, fecha_hasta, d
     [telefono]
   );
   const { rows } = await pool.query(
-    `INSERT INTO pending_tasks (telefono, motivo, fecha_desde, fecha_hasta, duracion_min, created_by)
-     VALUES ($1, $2, $3, $4, $5, $6) RETURNING *`,
-    [telefono, motivo || null, fecha_desde || null, fecha_hasta || null, duracion_min, created_by || null]
+    `INSERT INTO pending_tasks (telefono, motivo, fecha_desde, fecha_hasta, duracion_min, created_by, opciones)
+     VALUES ($1, $2, $3, $4, $5, $6, $7) RETURNING *`,
+    [telefono, motivo || null, fecha_desde || null, fecha_hasta || null, duracion_min, created_by || null, opciones || null]
   );
   return rows[0];
 }

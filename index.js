@@ -1000,7 +1000,7 @@ async function runAdminMia({ mensaje, historia = [], senderUser, consultorio_id,
           // Limpiar historia del paciente: cada coordinación nueva arranca sin contexto viejo
           await db.saveClaudeHistory(telefono, []).catch(() => {});
           await db.addMessage(telefono, "assistant", msgPaciente, ts, true, "mia_template");
-          const task = await db.createPendingTask({ telefono, motivo, fecha_desde, fecha_hasta, duracion_min: 30, created_by: senderUser?.nombre || senderUser?.email || "doctor" });
+          const task = await db.createPendingTask({ telefono, motivo, fecha_desde, fecha_hasta, duracion_min: 30, created_by: senderUser?.nombre || senderUser?.email || "doctor", opciones: opcionesSanitized });
           if (task?.id) await db.updatePendingTaskStatus(task.id, "sent").catch(() => {});
           accion = { tipo: "template_enviado", telefono, nombre_paciente, mensaje: msgPaciente };
           result = `✓ Mensaje enviado por WhatsApp a ${nombre_paciente}. Cuando el paciente responda, Mía coordinará el turno.`;
