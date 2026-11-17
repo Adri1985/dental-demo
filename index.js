@@ -946,7 +946,6 @@ async function runAdminMia({ mensaje, historia = [], senderUser, consultorio_id,
         }
         else if (name === "preparar_mensaje_paciente") {
           const { telefono, nombre_paciente, motivo, opciones, mensaje: msgPaciente, fecha_desde, fecha_hasta } = input;
-          await db.upsertPatient({ telefono, nombre: nombre_paciente, consultorio_id });
           const ts = new Date().toISOString();
           const perfilEnvio = await db.getActiveProfile(consultorio_id).catch(() => null);
           const opcionesSanitized = (opciones || msgPaciente).replace(/[\n\r\t]+/g, " | ").replace(/ {5,}/g, "    ").trim();

@@ -476,7 +476,7 @@ async function updatePatientData(telefono, { nombre, dni, obra_social }) {
   }
   const { rows } = await pool.query(`
     UPDATE patients SET
-      nombre      = COALESCE($1, nombre),
+      nombre      = CASE WHEN nombre IS NULL OR nombre = '' THEN COALESCE($1, nombre) ELSE nombre END,
       dni         = COALESCE($2, dni),
       obra_social = COALESCE($3, obra_social),
       updated_at  = NOW()
