@@ -421,12 +421,16 @@ Si el paciente dice que no puede en ninguna opción y no hay más alternativas d
     const toolResults = await Promise.all(
       response.content.filter(b => b.type === "tool_use").map(async block => {
         // Si hay rango fijo en el pending_task, bloquear check_availability fuera del rango
+        if (block.name === "check_availability") {
+          console.log(`[agent] check_availability interceptor — pendingTask: ${pendingTask?.id || "null"} | fecha_desde: ${pendingTask?.fecha_desde || "null"} | fecha_hasta: ${pendingTask?.fecha_hasta || "null"} | req_desde: ${block.input.fecha_desde?.slice(0,10)} | req_hasta: ${block.input.fecha_hasta?.slice(0,10)}`);
+        }
         if (block.name === "check_availability" && pendingTask?.fecha_desde && pendingTask?.fecha_hasta) {
           const rangoDesde = pendingTask.fecha_desde; // YYYY-MM-DD
           const rangoHasta = pendingTask.fecha_hasta;
           const reqDesde = block.input.fecha_desde?.slice(0, 10);
           const reqHasta = block.input.fecha_hasta?.slice(0, 10);
           const fueraDeRango = (reqDesde && reqDesde < rangoDesde) || (reqHasta && reqHasta > rangoHasta);
+          console.log(`[agent] check_availability range check — rangoDesde: ${rangoDesde} | rangoHasta: ${rangoHasta} | fueraDeRango: ${fueraDeRango}`);
           if (fueraDeRango) {
             return {
               type: "tool_result", tool_use_id: block.id,
@@ -925,6 +929,9 @@ async function runAdminMia({ mensaje, historia = [], senderUser, consultorio_id,
   const fechaHoy = new Date().toLocaleDateString("es-AR", { timeZone: "America/Argentina/Buenos_Aires", weekday: "long", day: "numeric", month: "long", year: "numeric" });
   const histActualizada = [...historia, { role: "user", content: mensaje.trim() }];
   let respuestaFinal = "", accion = null;
+  // Captura automática del rango consultado — para que no se pierda si el modelo
+  // olvida pasar fecha_desde/fecha_hasta a preparar_mensaje_paciente
+  let rangoConsultado = { fecha_desde: null, fecha_hasta: null };
 
   for (let i = 0; i < 5; i++) {
     const response = await anthropic.messages.create({
@@ -954,6 +961,9 @@ async function runAdminMia({ mensaje, historia = [], senderUser, consultorio_id,
           else result = rows.map(p => `• ${p.nombre} — tel: ${p.telefono}${p.obra_social ? " — " + p.obra_social : ""}`).join("\n");
         }
         else if (name === "ver_disponibilidad_rango") {
+          // Guardar el rango consultado para inyectarlo en preparar_mensaje_paciente
+          rangoConsultado = { fecha_desde: input.fecha_desde || null, fecha_hasta: input.fecha_hasta || null };
+          console.log(`[admin-mia] ver_disponibilidad_rango — rango: ${rangoConsultado.fecha_desde} → ${rangoConsultado.fecha_hasta}`);
           const creds = credsCalendar(perfil);
           const horarios = { manana_desde: config.horario_manana_desde, manana_hasta: config.horario_manana_hasta, tarde_desde: config.horario_tarde_desde, tarde_hasta: config.horario_tarde_hasta };
           const slots = await getAvailableSlotsInRange({ fecha_desde: input.fecha_desde, fecha_hasta: input.fecha_hasta, duracion_min: input.duracion_min || 30, max_slots: 8, horarios, creds });
@@ -961,13 +971,17 @@ async function runAdminMia({ mensaje, historia = [], senderUser, consultorio_id,
           else result = slots.map(s => `• ${s.label || s.fecha_hora}`).join("\n");
         }
         else if (name === "preparar_mensaje_paciente") {
-          const { telefono, nombre_paciente, motivo, opciones, mensaje: msgPaciente, fecha_desde, fecha_hasta } = input;
+          const { telefono, nombre_paciente, motivo, opciones, mensaje: msgPaciente } = input;
+          // Usar el rango del modelo si lo pasó, o el capturado de ver_disponibilidad_rango
+          const fecha_desde = input.fecha_desde || rangoConsultado.fecha_desde || null;
+          const fecha_hasta = input.fecha_hasta || rangoConsultado.fecha_hasta || null;
+          console.log(`[admin-mia] preparar_mensaje_paciente — rango guardado: ${fecha_desde} → ${fecha_hasta}`);
           const ts = new Date().toISOString();
           const perfilEnvio = await db.getActiveProfile(consultorio_id).catch(() => null);
           const opcionesSanitized = (opciones || msgPaciente).replace(/[\n\r\t]+/g, " | ").replace(/ {5,}/g, "    ").trim();
           await sendWhatsAppTemplate(telefono, "coordinacion_turno", [nombre_paciente, motivo, opcionesSanitized], perfilEnvio);
           await db.addMessage(telefono, "assistant", msgPaciente, ts, true, "mia_template");
-          const task = await db.createPendingTask({ telefono, motivo, fecha_desde: fecha_desde || null, fecha_hasta: fecha_hasta || null, duracion_min: 30, created_by: senderUser?.nombre || senderUser?.email || "doctor" });
+          const task = await db.createPendingTask({ telefono, motivo, fecha_desde, fecha_hasta, duracion_min: 30, created_by: senderUser?.nombre || senderUser?.email || "doctor" });
           if (task?.id) await db.updatePendingTaskStatus(task.id, "sent").catch(() => {});
           accion = { tipo: "template_enviado", telefono, nombre_paciente, mensaje: msgPaciente };
           result = `✓ Mensaje enviado por WhatsApp a ${nombre_paciente}. Cuando el paciente responda, Mía coordinará el turno.`;
