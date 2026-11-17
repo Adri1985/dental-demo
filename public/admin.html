@@ -697,6 +697,12 @@
         </div>
         <div style="font-size:11px;color:#8696a0;margin-top:4px">Si el paciente aún no concretó, se avisa al miembro marcado como Principal en la sección Equipo.</div>
       </div>
+      <div style="border-top:1px solid #2a3942;padding-top:12px;margin-top:4px">
+        <div style="font-size:13px;font-weight:600;margin-bottom:6px">Probar seguimiento ahora</div>
+        <div style="font-size:12px;color:#8696a0;margin-bottom:10px">Dispara el cron inmediatamente para todas las coordinaciones pendientes, ignorando los tiempos configurados. Útil para probar antes de que pasen los 60/120 minutos.</div>
+        <button class="btn btn-sm" id="btnCronRun" onclick="probarCron()">Disparar cron ahora</button>
+        <div id="cronResult" style="margin-top:10px;font-size:12px;color:#8696a0"></div>
+      </div>
       <div class="modal-actions" style="margin-top:8px">
         <button class="btn btn-cancel" onclick="cerrarConfig()">Cancelar</button>
         <button class="btn btn-primary" onclick="guardarFlujos()">Guardar</button>
@@ -1020,13 +1026,22 @@
     const sorted = [...visible].sort((a, b) => {
       if (a.en_alerta && !b.en_alerta) return -1;
       if (!a.en_alerta && b.en_alerta) return 1;
+      const sa = a.seguimiento_nivel || 0, sb = b.seguimiento_nivel || 0;
+      if (sb !== sa) return sb - sa; // alerta 2 > alerta 1 > sin alerta
       return new Date(b.updated_at) - new Date(a.updated_at);
     });
-    list.innerHTML = sorted.map(p => `
+    list.innerHTML = sorted.map(p => {
+      const seg = p.seguimiento_nivel || 0;
+      const segBadge = seg === 2
+        ? '<span style="font-size:10px;background:#ef4444;color:#fff;border-radius:4px;padding:1px 5px;margin-left:4px">Alerta 2</span>'
+        : seg === 1
+        ? '<span style="font-size:10px;background:#f59e0b;color:#fff;border-radius:4px;padding:1px 5px;margin-left:4px">Alerta 1</span>'
+        : "";
+      return `
       <div class="patient-item ${p.telefono === selectedTel ? "active" : ""} ${p.en_alerta ? "alerta" : ""}" onclick="selectPatient('${p.telefono}')">
         <div class="patient-avatar">👤<div class="modo-badge ${p.modo}"></div></div>
         <div class="patient-info">
-          <div class="patient-name">${escHtml(p.nombre)}${p.en_alerta ? ' <span style="color:#f59e0b;font-size:11px;font-weight:700">⚠ Alerta</span>' : ""}</div>
+          <div class="patient-name">${escHtml(p.nombre)}${p.en_alerta ? ' <span style="color:#f59e0b;font-size:11px;font-weight:700">⚠ Alerta</span>' : ""}${segBadge}</div>
           <div class="patient-preview">${escHtml(p.telefono)}</div>
           ${p.modo === "humano" ? '<span class="pausado-tag">Esperando intervención</span>' : ""}
         </div>
@@ -1035,7 +1050,8 @@
           <div class="patient-time">${fmtDate(p.updated_at)}</div>
           <div class="patient-msgs">${p.total_mensajes} msg</div>
         </div>
-      </div>`).join("");
+      </div>`;
+    }).join("");
   }
 
   async function selectPatient(telefono) {
@@ -1468,6 +1484,27 @@
       document.getElementById("cfgNotifPrincipalHabilitado").checked = cfg.notif_principal_habilitado !== "false";
       document.getElementById("cfgNotifPrincipalMinutos").value     = cfg.notif_principal_minutos   || "120";
     } catch(e) { console.error("Error cargando flujos:", e); }
+  }
+
+  async function probarCron() {
+    const btn = document.getElementById("btnCronRun");
+    const res = document.getElementById("cronResult");
+    btn.disabled = true; btn.textContent = "Enviando...";
+    res.textContent = "";
+    try {
+      const data = await fetch(`${API}/admin/cron/run`, { method: "POST", headers: authH() }).then(r => r.json());
+      if (data.ok) {
+        res.style.color = "#00a884";
+        res.innerHTML = data.resumen.map(l => `✓ ${l}`).join("<br>");
+      } else {
+        res.style.color = "#ef4444";
+        res.textContent = `Error: ${data.error}`;
+      }
+    } catch(e) {
+      res.style.color = "#ef4444";
+      res.textContent = "Error de conexión";
+    }
+    btn.disabled = false; btn.textContent = "Disparar cron ahora";
   }
 
   async function guardarFlujos() {
