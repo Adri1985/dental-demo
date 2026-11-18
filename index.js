@@ -405,11 +405,13 @@ async function runAgent(userMessage, telefono, consultorio_id = DEFAULT_CONSULTO
       ? `\nOPCIONES QUE YA LE ENVIASTE AL PACIENTE: ${pendingTask.opciones}`
       : "";
 
+    const importanteCtx = tieneRango
+      ? `IMPORTANTE: Si el paciente pregunta cuáles eran las opciones, repetíselas exactamente como las ves arriba. Solo son válidas esas opciones — no ofrezcas ni busques otras. Si el paciente no puede en ninguna, usá notificar_doctor_rechazo y decile: "Perfecto, dejame consultarle al doctor si podemos hacerlo en otra fecha. ¡Gracias por avisarme!"`
+      : `IMPORTANTE: Si el paciente pregunta cuáles eran las opciones iniciales, repetíselas exactamente como las ves arriba. Si el paciente pide otra fecha u horario diferente, buscá con check_availability y ofrece nuevas opciones (igual que en el flujo normal). Si el paciente confirma una fecha, agendá el turno normalmente.`;
+
     return `\n\nCOORDINACIÓN PENDIENTE (iniciada por el doctor): El doctor pidió coordinar un turno para "${motivo}"${rangoDesc}. Ya le enviaste las opciones de fechas al paciente. NO uses get_patient_appointments — esta es una coordinación nueva, no una consulta de turnos existentes.${opcionesEnviadas}
 ${instrRango}
-IMPORTANTE: Si el paciente pregunta cuáles eran las opciones, repetíselas exactamente como las ves arriba. Ignorá cualquier otra información de disponibilidad que haya en mensajes anteriores — solo son válidas las opciones listadas arriba.
-Si el paciente confirma una fecha de las ofrecidas, agendá el turno normalmente.
-Si el paciente dice que no puede en ninguna opción y no hay más alternativas dentro del rango, respondele exactamente: "Perfecto, dejame consultarle al doctor si podemos hacerlo en otra fecha. ¡Gracias por avisarme!" y usá la tool notificar_doctor_rechazo.`;
+${importanteCtx}`;
   })();
 
   const claudeModel = perfil?.claude_model || "claude-haiku-4-5";
