@@ -934,7 +934,7 @@ Cuando te pidan coordinar un turno para un paciente:
 En preparar_mensaje_paciente usá estos campos:
 - opciones: solo la lista de horarios con bullets (ej: "• Jue 14/8 a las 10:00 | • Vie 15/8 a las 09:30") — es el {{3}} del template, sin saltos de línea
 - mensaje: el texto completo del mensaje tal como lo verá el doctor en el panel
-- fecha_desde / fecha_hasta: las fechas del rango consultado en ver_disponibilidad_rango (YYYY-MM-DD), si el doctor especificó un rango fijo. Esto restringe al agente a no salir de esas fechas cuando el paciente responda.
+- fecha_desde / fecha_hasta: SOLO si el doctor explícitamente indicó un rango de fechas como restricción (ej: "entre el 20 y el 30 de noviembre"). NO los pases si el doctor dijo "lo antes posible" o no especificó fechas — en ese caso dejá esos campos vacíos para que el paciente pueda pedir otras fechas libremente.
 
 El template que se envía al paciente es exactamente:
 "Hola [nombre]! El doctor me pidió coordinarte un turno para tu [motivo]. Tengo estas opciones disponibles:\n[opciones]\n¿Alguna te queda bien? Respondeme acá y lo agendo 😊"
@@ -991,9 +991,10 @@ async function runAdminMia({ mensaje, historia = [], senderUser, consultorio_id,
         }
         else if (name === "preparar_mensaje_paciente") {
           const { telefono, nombre_paciente, motivo, opciones, mensaje: msgPaciente } = input;
-          // Usar el rango del modelo si lo pasó, o el capturado de ver_disponibilidad_rango
-          const fecha_desde = input.fecha_desde || rangoConsultado.fecha_desde || null;
-          const fecha_hasta = input.fecha_hasta || rangoConsultado.fecha_hasta || null;
+          // Solo usar el rango si el modelo lo pasó explícitamente (doctor especificó fechas).
+          // rangoConsultado NO se inyecta aquí: es el rango de búsqueda interna, no una restricción del doctor.
+          const fecha_desde = input.fecha_desde || null;
+          const fecha_hasta = input.fecha_hasta || null;
           console.log(`[admin-mia] preparar_mensaje_paciente — rango guardado: ${fecha_desde} → ${fecha_hasta}`);
           const ts = new Date().toISOString();
           const perfilEnvio = await db.getActiveProfile(consultorio_id).catch(() => null);
