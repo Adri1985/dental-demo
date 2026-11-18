@@ -398,7 +398,7 @@ async function runAgent(userMessage, telefono, consultorio_id = DEFAULT_CONSULTO
       : "";
 
     const instrRango = tieneRango
-      ? `RANGO FIJO${rangoDesc}: PROHIBIDO ofrecer o buscar turnos fuera de esas fechas. Si el paciente dice que necesita antes, después o en otro momento, respondé EXACTAMENTE: "Las opciones que tengo disponibles son las que te mandé. ¿Alguna te queda bien?" NO llames a check_availability bajo ninguna circunstancia. Si ninguna fecha le sirve, usá notificar_doctor_rechazo.`
+      ? `RANGO FIJO ESPECIFICADO POR EL DOCTOR: el doctor indicó explícitamente que el turno debe ser entre el ${pendingTask.fecha_desde || ""} y el ${pendingTask.fecha_hasta || ""}. PROHIBIDO ofrecer o buscar turnos fuera de esas fechas. Si el paciente dice que necesita antes, después o en otro momento, respondé EXACTAMENTE: "Las opciones que tengo disponibles son las que te mandé. ¿Alguna te queda bien?" NO llames a check_availability bajo ninguna circunstancia. Si ninguna fecha le sirve, usá notificar_doctor_rechazo.`
       : `Si el paciente pide fechas diferentes, podés usar check_availability para buscar otras opciones y ofrecérselas. Si check_availability devuelve vacío, avanzá el rango 7 días más y volvé a llamar — repetí hasta encontrar disponibilidad o hasta cubrir 365 días desde hoy.`;
 
     const opcionesEnviadas = pendingTask.opciones
