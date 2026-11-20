@@ -668,6 +668,7 @@ async function addMessage(telefono, role, text, ts, es_manual = false, sent_by =
     "INSERT INTO messages (telefono, role, text, ts, es_manual, sent_by) VALUES ($1, $2, $3, $4, $5, $6)",
     [telefono, role, text, ts || new Date().toISOString(), es_manual, sent_by]
   );
+  await pool.query("UPDATE patients SET updated_at = NOW() WHERE telefono = $1", [telefono]).catch(() => {});
 }
 
 async function getMessages(telefono) {
