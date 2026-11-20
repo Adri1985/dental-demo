@@ -2287,7 +2287,14 @@
   });
 
   // Arranque
-  // Cargar nombre del consultorio
+  // Cargar nombre del consultorio + usuario logueado
+  const _me = (() => { try { return JSON.parse(localStorage.getItem("auth_user")); } catch { return null; } })();
+  if (_me?.nombre || _me?.email) {
+    const userSpan = document.createElement("span");
+    userSpan.style.cssText = "margin-left:8px;color:#8696a0";
+    userSpan.textContent = `· ${_me.nombre || _me.email}`;
+    document.getElementById("consultorioNombre").insertAdjacentElement("afterend", userSpan);
+  }
   fetch(`${API}/auth/me`, { headers: authH() })
     .then(r => r.json())
     .then(data => {
