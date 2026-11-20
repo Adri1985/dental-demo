@@ -2289,10 +2289,10 @@
   // Arranque
   // Cargar nombre del consultorio + usuario logueado
   const _me = (() => { try { return JSON.parse(localStorage.getItem("auth_user")); } catch { return null; } })();
-  if (_me?.nombre || _me?.email) {
+  if (_me?.email) {
     const userSpan = document.createElement("span");
-    userSpan.style.cssText = "margin-left:8px;color:#8696a0";
-    userSpan.textContent = `· ${_me.nombre || _me.email}`;
+    userSpan.style.cssText = "margin-left:10px;color:#e9edef;font-size:12px;font-weight:500;background:#2a3942;padding:2px 8px;border-radius:12px;white-space:nowrap";
+    userSpan.textContent = _me.email;
     document.getElementById("consultorioNombre").insertAdjacentElement("afterend", userSpan);
   }
   fetch(`${API}/auth/me`, { headers: authH() })
