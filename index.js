@@ -222,14 +222,14 @@ async function sendWhatsAppTemplate(to, templateName, params, perfil = null) {
 // ─────────────────────────────────────────────
 function buildPatientContext(patient) {
   const { nombre, dni, obra_social, telefono, primer_turno_realizado } = patient;
-  const completo = nombre && dni && obra_social;
+  const completo = nombre && obra_social;
   const tieneTurnosPrevios = !!primer_turno_realizado;
 
   if (completo) {
-    return `[DATOS DEL PACIENTE]\nNombre: ${nombre}\nDNI: ${dni}\nObra social: ${obra_social}\nTeléfono: ${telefono}\nEstado: paciente registrado — NO volver a pedir nombre, DNI ni obra social. Ya están guardados.\nes_nuevo: false — NO decirle que llegue antes para completar ficha. Ya tiene datos registrados.\ntiene_turnos_previos: ${tieneTurnosPrevios} — ${tieneTurnosPrevios ? "ya tuvo consultas anteriores, NO aplicar descuentos que digan 'solo primera consulta'." : "nunca tuvo un turno confirmado, puede aplicar descuentos de primera consulta si corresponde."}`;
+    return `[DATOS DEL PACIENTE]\nNombre: ${nombre}\nDNI: ${dni || "no registrado"}\nObra social: ${obra_social}\nTeléfono: ${telefono}\nEstado: paciente registrado — NO volver a pedir datos que ya están guardados.\nes_nuevo: false — NO decirle que llegue antes para completar ficha. Ya tiene datos registrados.\ntiene_turnos_previos: ${tieneTurnosPrevios} — ${tieneTurnosPrevios ? "ya tuvo consultas anteriores, NO aplicar descuentos que digan 'solo primera consulta'." : "nunca tuvo un turno confirmado, puede aplicar descuentos de primera consulta si corresponde."}`;
   }
-  const faltantes = [!nombre && "nombre", !dni && "DNI", !obra_social && "obra social"].filter(Boolean).join(", ");
-  return `[DATOS DEL PACIENTE]\nNombre: ${nombre || "pendiente"}\nDNI: ${dni || "pendiente"}\nObra social: ${obra_social || "pendiente"}\nTeléfono: ${telefono}\nEstado: paciente registrado con datos incompletos — SOLO pedir los campos que faltan (${faltantes}), de a uno. NO pedir datos que ya están cargados.\nes_nuevo: true — al confirmar el turno, avisarle que llegue unos minutos antes para completar la ficha (ver política del consultorio).\ntiene_turnos_previos: ${tieneTurnosPrevios} — ${tieneTurnosPrevios ? "ya tuvo consultas anteriores, NO aplicar descuentos que digan 'solo primera consulta'." : "nunca tuvo un turno confirmado, puede aplicar descuentos de primera consulta si corresponde."}`;
+  const faltantes = [!nombre && "nombre", !obra_social && "obra social"].filter(Boolean).join(", ");
+  return `[DATOS DEL PACIENTE]\nNombre: ${nombre || "pendiente"}\nDNI: ${dni || "no registrado"}\nObra social: ${obra_social || "pendiente"}\nTeléfono: ${telefono}\nEstado: paciente registrado con datos incompletos — seguí el flujo configurado para saber qué datos pedir. Los únicos que faltan según el flujo son: ${faltantes || "ninguno"}. No pedir datos que ya están cargados.\nes_nuevo: true — al confirmar el turno, avisarle que llegue unos minutos antes para completar la ficha (ver política del consultorio).\ntiene_turnos_previos: ${tieneTurnosPrevios} — ${tieneTurnosPrevios ? "ya tuvo consultas anteriores, NO aplicar descuentos que digan 'solo primera consulta'." : "nunca tuvo un turno confirmado, puede aplicar descuentos de primera consulta si corresponde."}`;
 }
 
 // ─────────────────────────────────────────────
