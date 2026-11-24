@@ -615,12 +615,41 @@ app.get("/webhook", async (req, res) => {
   res.sendStatus(403);
 });
 
+// Variantes argentinas del mismo celular: "15" agendado en lugar del área 11, y presencia/ausencia del 9 móvil
+function variantesTelefono(tel) {
+  const d = String(tel || "").replace(/\D/g, "");
+  const v = [d];
+  if (/^54911\d{8}$/.test(d)) v.push("54915" + d.slice(5));
+  if (/^54915\d{8}$/.test(d)) v.push("54911" + d.slice(5));
+  if (/^549\d{10}$/.test(d))  v.push("54" + d.slice(3));
+  if (/^54[^9]\d{9}$/.test(d)) v.push("549" + d.slice(2));
+  return [...new Set(v)];
+}
+
+// Devuelve el teléfono con el que el paciente está guardado. Si existen varias variantes,
+// gana la que tiene una coordinación activa; si no, el número exacto que llegó.
+async function resolverTelefonoPaciente(from) {
+  const existentes = [];
+  for (const tel of variantesTelefono(from)) {
+    const p = await db.getPatient(tel).catch(() => null);
+    if (p) existentes.push(tel);
+  }
+  if (existentes.length === 0) return from;
+  if (existentes.length === 1) return existentes[0];
+  for (const tel of existentes) {
+    const task = await db.getPendingTask(tel).catch(() => null);
+    if (task) return tel;
+  }
+  return existentes.includes(from) ? from : existentes[0];
+}
+
 app.post("/webhook", async (req, res) => {
   res.sendStatus(200);
   try {
     const message = req.body?.entry?.[0]?.changes?.[0]?.value?.messages?.[0];
     if (!message || message.type !== "text") return;
-    const telefono = message.from, texto = message.text.body;
+    let telefono = message.from;
+    const texto = message.text.body;
     console.log(`[whatsapp] mensaje de ${telefono}: ${texto}`);
     const perfil = await getPerfilActivo();
 
@@ -635,6 +664,13 @@ app.post("/webhook", async (req, res) => {
       await db.saveClaudeHistory(telefono, histActualizada);
       if (respuestaFinal) await sendWhatsAppMessage(telefono, respuestaFinal, perfil);
       return;
+    }
+
+    // El paciente puede estar guardado con otra variante del número (54915 vs 54911, con/sin 9)
+    const telefonoResuelto = await resolverTelefonoPaciente(telefono);
+    if (telefonoResuelto !== telefono) {
+      console.log(`[whatsapp] ${telefono} resuelto como ${telefonoResuelto} (variante guardada)`);
+      telefono = telefonoResuelto;
     }
 
     let patient = await db.getPatient(telefono);
