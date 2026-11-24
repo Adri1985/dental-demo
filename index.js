@@ -235,7 +235,7 @@ function buildPatientContext(patient) {
 // ─────────────────────────────────────────────
 //  EJECUTOR DE TOOLS
 // ─────────────────────────────────────────────
-async function executeTool(name, input, telefono, cfg = {}, perfil = null, consultorio_id = DEFAULT_CONSULTORIO_ID) {
+async function executeTool(name, input, telefono, cfg = {}, perfil = null, consultorio_id = DEFAULT_CONSULTORIO_ID, opts = {}) {
   const creds = credsCalendar(perfil);
   console.log(`[tool] ${name}`, JSON.stringify(input, null, 2));
   const patient = await db.getPatient(telefono);
@@ -270,7 +270,27 @@ async function executeTool(name, input, telefono, cfg = {}, perfil = null, consu
       }
 
       // Respuesta plana para búsquedas sin hora preferida
-      const slots = Array.isArray(resultado) ? resultado : [];
+      let slots = Array.isArray(resultado) ? resultado : [];
+      // Sin rango fijo del doctor: avanzar de a 7 días hasta encontrar o cubrir 365 días
+      if (slots.length === 0 && opts.expandir && input.fecha_desde && input.fecha_hasta) {
+        const DIA = 24 * 60 * 60 * 1000;
+        const limite = new Date(input.fecha_desde).getTime() + 365 * DIA;
+        let desde = new Date(input.fecha_hasta).getTime();
+        while (slots.length === 0 && desde < limite) {
+          const hasta = desde + 7 * DIA;
+          const r = await checkAvailability({
+            ...input,
+            fecha_desde: new Date(desde).toISOString(),
+            fecha_hasta: new Date(hasta).toISOString(),
+            creds,
+            horarios: { manana_desde: cfg.horario_manana_desde, manana_hasta: cfg.horario_manana_hasta, tarde_desde: cfg.horario_tarde_desde, tarde_hasta: cfg.horario_tarde_hasta },
+          });
+          slots = Array.isArray(r) ? r : [];
+          console.log(`[tool] check_availability expansión ${new Date(desde).toISOString().slice(0,10)} → ${new Date(hasta).toISOString().slice(0,10)}: ${slots.length} slots`);
+          desde = hasta;
+        }
+        if (slots.length === 0) return { disponible: false, mensaje: "No encontré turnos libres en los próximos 365 días." };
+      }
       if (slots.length === 0) {
         return { disponible: false, mensaje: "No encontré turnos libres en ese período." };
       }
@@ -399,7 +419,7 @@ async function runAgent(userMessage, telefono, consultorio_id = DEFAULT_CONSULTO
 
     const instrRango = tieneRango
       ? `RANGO FIJO ESPECIFICADO POR EL DOCTOR: el doctor indicó explícitamente que el turno debe ser entre el ${pendingTask.fecha_desde || ""} y el ${pendingTask.fecha_hasta || ""}. PROHIBIDO ofrecer o buscar turnos fuera de esas fechas. Si el paciente dice que necesita antes, después o en otro momento, respondé EXACTAMENTE: "Las opciones que tengo disponibles son las que te mandé. ¿Alguna te queda bien?" NO llames a check_availability bajo ninguna circunstancia. Si ninguna fecha le sirve, usá notificar_doctor_rechazo.`
-      : `Si el paciente pide fechas diferentes, podés usar check_availability para buscar otras opciones y ofrecérselas. Si check_availability devuelve vacío, avanzá el rango 7 días más y volvé a llamar — repetí hasta encontrar disponibilidad o hasta cubrir 365 días desde hoy.`;
+      : `Si el paciente pide fechas diferentes, podés usar check_availability para buscar otras opciones y ofrecérselas. Si no hay lugar en el rango pedido, el sistema sigue buscando solo hasta 365 días.`;
 
     const opcionesEnviadas = pendingTask.opciones
       ? `\nOPCIONES QUE YA LE ENVIASTE AL PACIENTE: ${pendingTask.opciones}`
@@ -447,7 +467,9 @@ ${importanteCtx}`;
         }
         return {
           type: "tool_result", tool_use_id: block.id,
-          content: JSON.stringify(await executeTool(block.name, block.input, telefono, cfg, perfil, consultorio_id)),
+          content: JSON.stringify(await executeTool(block.name, block.input, telefono, cfg, perfil, consultorio_id, {
+            expandir: !(pendingTask?.fecha_desde && pendingTask?.fecha_hasta),
+          })),
         };
       })
     );
