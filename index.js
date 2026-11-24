@@ -893,7 +893,8 @@ const ADMIN_MIA_TOOLS = [
       properties: {
         fecha_desde: { type: "string", description: "Fecha inicio YYYY-MM-DD" },
         fecha_hasta: { type: "string", description: "Fecha fin YYYY-MM-DD" },
-        duracion_min: { type: "integer", description: "Duración del turno en minutos (default 30)", default: 30 }
+        duracion_min: { type: "integer", description: "Duración del turno en minutos (default 30)", default: 30 },
+        sin_rango_explicito: { type: "boolean", description: "true si el doctor NO especificó fechas (dijo 'lo antes posible' o nada). El sistema sigue buscando de a 7 días hasta encontrar disponibilidad, hasta 365 días." }
       },
       required: ["fecha_desde", "fecha_hasta"]
     }
@@ -927,9 +928,9 @@ Cuando te pidan coordinar un turno para un paciente:
 2. Confirmá brevemente al doctor cuál es el paciente encontrado (nombre + teléfono)
 3. Consultá disponibilidad con ver_disponibilidad_rango:
    - Si el doctor especificó fechas → usá ese rango exacto
-   - Si NO especificó fechas (dijo "lo antes posible", "cuanto antes", o no dijo nada) → buscá desde hoy hasta 7 días adelante SIN preguntarle al doctor. NUNCA preguntes por el rango si no se especificó uno.
+   - Si NO especificó fechas (dijo "lo antes posible", "cuanto antes", o no dijo nada) → buscá desde hoy hasta 7 días adelante con sin_rango_explicito=true, SIN preguntarle al doctor. El sistema sigue buscando solo hasta encontrar turnos. NUNCA preguntes por el rango si no se especificó uno.
 4. Si hay opciones disponibles → usá preparar_mensaje_paciente de inmediato y avisale al doctor que ya le enviaste las opciones al paciente. NO le mostrés las opciones al doctor ni esperés su confirmación.
-5. Si NO hay opciones disponibles → avisale al doctor que no encontraste turnos en ese rango para que indique otro.
+5. Si NO hay opciones disponibles → avisale al doctor que no encontraste turnos (en el rango que pidió, o en los próximos 365 días si no especificó rango) para que indique otro.
 
 En preparar_mensaje_paciente usá estos campos:
 - opciones: solo la lista de horarios con bullets (ej: "• Jue 14/8 a las 10:00 | • Vie 15/8 a las 09:30") — es el {{3}} del template, sin saltos de línea
@@ -985,8 +986,20 @@ async function runAdminMia({ mensaje, historia = [], senderUser, consultorio_id,
           console.log(`[admin-mia] ver_disponibilidad_rango — rango: ${rangoConsultado.fecha_desde} → ${rangoConsultado.fecha_hasta}`);
           const creds = credsCalendar(perfil);
           const horarios = { manana_desde: config.horario_manana_desde, manana_hasta: config.horario_manana_hasta, tarde_desde: config.horario_tarde_desde, tarde_hasta: config.horario_tarde_hasta };
-          const slots = await getAvailableSlotsInRange({ fecha_desde: input.fecha_desde, fecha_hasta: input.fecha_hasta, duracion_min: input.duracion_min || 30, max_slots: 8, horarios, creds });
-          if (!slots.length) result = "No hay turnos disponibles en ese rango.";
+          let slots = await getAvailableSlotsInRange({ fecha_desde: input.fecha_desde, fecha_hasta: input.fecha_hasta, duracion_min: input.duracion_min || 30, max_slots: 8, horarios, creds });
+          // Sin rango del doctor: avanzar de a 7 días hasta encontrar o cubrir 365 días
+          if (!slots.length && input.sin_rango_explicito) {
+            const sumarDias = (ymd, n) => { const d = new Date(ymd + "T12:00:00Z"); d.setUTCDate(d.getUTCDate() + n); return d.toISOString().slice(0, 10); };
+            const limite = sumarDias(input.fecha_desde, 365);
+            let desde = sumarDias(input.fecha_hasta, 1);
+            while (!slots.length && desde <= limite) {
+              const hasta = sumarDias(desde, 6);
+              slots = await getAvailableSlotsInRange({ fecha_desde: desde, fecha_hasta: hasta, duracion_min: input.duracion_min || 30, max_slots: 8, horarios, creds });
+              console.log(`[admin-mia] expansión ${desde} → ${hasta}: ${slots.length} slots`);
+              desde = sumarDias(hasta, 1);
+            }
+          }
+          if (!slots.length) result = input.sin_rango_explicito ? "No hay turnos disponibles en los próximos 365 días." : "No hay turnos disponibles en ese rango.";
           else result = slots.map(s => `• ${s.label || s.fecha_hora}`).join("\n");
         }
         else if (name === "preparar_mensaje_paciente") {
