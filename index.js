@@ -188,11 +188,15 @@ async function sendWhatsAppMessage(to, text, perfil = null) {
   else console.log(`[wa-send] OK (${resp.status}):`, body.slice(0, 200));
 }
 
+function nombreProfesional() {
+  return config.profesionales?.[0]?.nombre || config.consultorio?.nombre || "consultorio";
+}
+
 async function sendWhatsAppTemplate(to, templateName, params, perfil = null) {
   const p       = perfil || await getPerfilActivo();
   const token   = p?.whatsapp_token           || process.env.WHATSAPP_TOKEN;
   const phoneId = p?.whatsapp_phone_number_id || process.env.WHATSAPP_PHONE_NUMBER_ID;
-  if (!token || !phoneId) { console.error("[wa-template] sin credenciales"); return; }
+  if (!token || !phoneId) { console.error("[wa-template] sin credenciales"); return false; }
   const destinatario = normalizarParaEnvioAR(to);
   const body = {
     messaging_product: "whatsapp",
@@ -215,6 +219,7 @@ async function sendWhatsAppTemplate(to, templateName, params, perfil = null) {
   const respText = await resp.text();
   if (!resp.ok) console.error(`[wa-template] Meta respondió ${resp.status}:`, respText);
   else console.log(`[wa-template] OK (${resp.status}) template=${templateName} → ${destinatario}`);
+  return resp.ok;
 }
 
 // ─────────────────────────────────────────────
@@ -1070,10 +1075,19 @@ async function runAdminMia({ mensaje, historia = [], senderUser, consultorio_id,
           const ts = new Date().toISOString();
           const perfilEnvio = await db.getActiveProfile(consultorio_id).catch(() => null);
           const opcionesSanitized = (opciones || msgPaciente).replace(/[\n\r\t]+/g, " | ").replace(/ {5,}/g, "    ").trim();
-          await sendWhatsAppTemplate(telefono, "coordinacion_turno", [nombre_paciente, motivo, opcionesSanitized], perfilEnvio);
+          // v2 incluye el nombre del consultorio; mientras Meta no lo apruebe, cae al template original
+          const nombreConsultorio = nombreProfesional();
+          let textoEnviado;
+          if (await sendWhatsAppTemplate(telefono, "coordinacion_turno_v2", [nombre_paciente, nombreConsultorio, motivo, opcionesSanitized], perfilEnvio)) {
+            textoEnviado = `Hola ${nombre_paciente}! Te escribe Mía, la asistente del ${nombreConsultorio}. El doctor me pidió coordinarte un turno para tu ${motivo}. Tengo estas opciones disponibles:\n\n${opcionesSanitized}\n\n¿Alguna te queda bien? Respondeme acá y lo agendo 😊`;
+          } else {
+            console.log("[admin-mia] coordinacion_turno_v2 no disponible, usando coordinacion_turno");
+            await sendWhatsAppTemplate(telefono, "coordinacion_turno", [nombre_paciente, motivo, opcionesSanitized], perfilEnvio);
+            textoEnviado = msgPaciente;
+          }
           // Limpiar historia del paciente: cada coordinación nueva arranca sin contexto viejo
           await db.saveClaudeHistory(telefono, []).catch(() => {});
-          await db.addMessage(telefono, "assistant", msgPaciente, ts, true, "mia_template");
+          await db.addMessage(telefono, "assistant", textoEnviado, ts, true, "mia_template");
           const task = await db.createPendingTask({ telefono, motivo, fecha_desde, fecha_hasta, duracion_min: 30, created_by: senderUser?.nombre || senderUser?.email || "doctor", opciones: opcionesSanitized });
           if (task?.id) await db.updatePendingTaskStatus(task.id, "sent").catch(() => {});
           accion = { tipo: "template_enviado", telefono, nombre_paciente, mensaje: msgPaciente };
