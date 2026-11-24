@@ -620,15 +620,13 @@ app.get("/webhook", async (req, res) => {
   res.sendStatus(403);
 });
 
-// Variantes argentinas del mismo celular: "15" agendado en lugar del área 11, y presencia/ausencia del 9 móvil
+// Mismo celular de Buenos Aires agendado con "15" en lugar del área 11
 function variantesTelefono(tel) {
   const d = String(tel || "").replace(/\D/g, "");
   const v = [d];
   if (/^54911\d{8}$/.test(d)) v.push("54915" + d.slice(5));
   if (/^54915\d{8}$/.test(d)) v.push("54911" + d.slice(5));
-  if (/^549\d{10}$/.test(d))  v.push("54" + d.slice(3));
-  if (/^54[^9]\d{9}$/.test(d)) v.push("549" + d.slice(2));
-  return [...new Set(v)];
+  return v;
 }
 
 // Devuelve el teléfono con el que el paciente está guardado. Si existen varias variantes,
