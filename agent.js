@@ -171,8 +171,9 @@ ESTILO DE ESCRITURA — MUY IMPORTANTE:
 
 CÓMO USÁS LOS DATOS DEL PACIENTE:
 - El perfil del paciente está al final de este prompt y se recalcula en CADA mensaje: refleja siempre el estado actual, no el del inicio de la conversación.
+- SOLO podés agendar turnos para la persona que te está escribiendo. Si te pide un turno para otra persona (un familiar, un amigo, otro paciente), decile amablemente que esa persona tiene que escribir desde su propio WhatsApp o comunicarse con el consultorio. No pidas ni guardes datos de terceros.
 - Si el paciente ya tiene datos guardados, NO los volvás a pedir. Nunca. Ni para "confirmar".
-- Al llamar a create_appointment, tomá nombre, teléfono y obra social directamente de [DATOS DEL PACIENTE]. Si hay DNI guardado, usalo también. No preguntes datos que ya están cargados.
+- Al llamar a create_appointment, el sistema usa automáticamente los datos de [DATOS DEL PACIENTE]. No preguntes datos que ya están cargados.
 - Si faltan datos según el flujo configurado, pedís uno por vez, no todos juntos.
 - REGLA CRÍTICA DE GUARDADO: Cada vez que el paciente te diga su nombre, obra social u otro dato personal, llamá a save_patient_data EN ESE MISMO MOMENTO. No esperes a tener todos los datos juntos. Guardá cada dato en cuanto lo recibís.
 
@@ -233,20 +234,16 @@ const TOOLS = [
   },
   {
     name: "create_appointment",
-    description: "Crea un turno en el calendario. Solo llamar cuando el paciente confirmó el horario. IMPORTANTE: completá paciente_nombre, paciente_telefono, paciente_dni y paciente_obra_social con los datos que ya están en [DATOS DEL PACIENTE] del system prompt. NUNCA pidas esos datos al paciente si ya están guardados.",
+    description: "Crea un turno en el calendario para el paciente que está escribiendo. Solo llamar cuando el paciente confirmó el horario. Los datos del paciente (nombre, teléfono, DNI, obra social) los completa el sistema desde su ficha: no hace falta pasarlos ni pedirlos si ya están guardados.",
     input_schema: {
       type: "object",
       properties: {
         profesional_id:       { type: "string", enum: buildProfesionalesEnum() },
-        paciente_nombre:      { type: "string", description: "Usar el nombre de [DATOS DEL PACIENTE]. No preguntar al paciente." },
-        paciente_telefono:    { type: "string", description: "Usar el teléfono de [DATOS DEL PACIENTE]. No preguntar al paciente." },
-        paciente_dni:         { type: "string", description: "Usar el DNI de [DATOS DEL PACIENTE] si está disponible." },
-        paciente_obra_social: { type: "string", description: "Usar la obra social de [DATOS DEL PACIENTE] si está disponible." },
         fecha_hora:           { type: "string", description: "Usar el campo 'inicio' exacto del slot devuelto por check_availability (ISO 8601 UTC). No reformatear ni reconstruir la fecha." },
         tipo_practica:        { type: "string" },
         duracion_minutos:     { type: "number" },
       },
-      required: ["paciente_nombre", "paciente_telefono", "fecha_hora", "tipo_practica", "duracion_minutos"],
+      required: ["fecha_hora", "tipo_practica", "duracion_minutos"],
     },
   },
   {

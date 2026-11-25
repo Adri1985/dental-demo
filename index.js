@@ -302,13 +302,20 @@ async function executeTool(name, input, telefono, cfg = {}, perfil = null, consu
       return { disponible: true, slots };
     }
     case "create_appointment": {
+      // El turno siempre es para quien escribe: los datos salen de su ficha, nunca del modelo
+      if (!patient?.nombre || patient.nombre === "Paciente") {
+        return { error: "Falta el nombre del paciente que está escribiendo. Pedíselo y guardalo con save_patient_data antes de agendar. Solo podés agendar turnos para la persona que te escribe." };
+      }
       const resultado = await createAppointment({
-        ...input,
+        fecha_hora:           input.fecha_hora,
+        tipo_practica:        input.tipo_practica,
+        duracion_minutos:     input.duracion_minutos,
+        profesional_id:       input.profesional_id,
         creds,
-        paciente_dni:         input.paciente_dni        || patient?.dni,
-        paciente_obra_social: input.paciente_obra_social || patient?.obra_social,
-        paciente_nombre:      input.paciente_nombre      || patient?.nombre,
-        paciente_telefono:    input.paciente_telefono    || telefono,
+        paciente_nombre:      patient.nombre,
+        paciente_telefono:    telefono,
+        paciente_dni:         patient.dni,
+        paciente_obra_social: patient.obra_social,
       });
       // Marcar que el paciente ya realizó al menos un turno (desactiva descuento de primera consulta)
       if (resultado?.event_id && !patient?.primer_turno_realizado) {
