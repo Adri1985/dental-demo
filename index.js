@@ -225,13 +225,14 @@ async function sendWhatsAppTemplate(to, templateName, params, perfil = null) {
 // ─────────────────────────────────────────────
 //  CONTEXTO DEL PACIENTE PARA CLAUDE
 // ─────────────────────────────────────────────
-function buildPatientContext(patient) {
+function buildPatientContext(patient, { coordinacionDoctor = false } = {}) {
   const { nombre, obra_social, telefono, primer_turno_realizado } = patient;
-  const completo = nombre && obra_social;
+  // En la coordinación iniciada por el doctor el paciente ya está registrado: no se le pide ningún dato
+  const completo = coordinacionDoctor || (nombre && obra_social);
   const tieneTurnosPrevios = !!primer_turno_realizado;
 
   if (completo) {
-    return `[DATOS DEL PACIENTE]\nNombre: ${nombre}\nObra social: ${obra_social}\nTeléfono: ${telefono}\nEstado: paciente registrado — NO volver a pedir datos que ya están guardados.\nes_nuevo: false — NO decirle que llegue antes para completar ficha. Ya tiene datos registrados.\ntiene_turnos_previos: ${tieneTurnosPrevios} — ${tieneTurnosPrevios ? "ya tuvo consultas anteriores, NO aplicar descuentos que digan 'solo primera consulta'." : "nunca tuvo un turno confirmado, puede aplicar descuentos de primera consulta si corresponde."}`;
+    return `[DATOS DEL PACIENTE]\nNombre: ${nombre}\nObra social: ${obra_social || "no registrada"}\nTeléfono: ${telefono}\nEstado: paciente registrado — NO pedir ningún dato al paciente.\nes_nuevo: false — NO decirle que llegue antes para completar ficha. Ya tiene datos registrados.\ntiene_turnos_previos: ${tieneTurnosPrevios} — ${tieneTurnosPrevios ? "ya tuvo consultas anteriores, NO aplicar descuentos que digan 'solo primera consulta'." : "nunca tuvo un turno confirmado, puede aplicar descuentos de primera consulta si corresponde."}`;
   }
   const faltantes = [!nombre && "nombre", !obra_social && "obra social"].filter(Boolean).join(", ");
   return `[DATOS DEL PACIENTE]\nNombre: ${nombre || "pendiente"}\nObra social: ${obra_social || "pendiente"}\nTeléfono: ${telefono}\nEstado: paciente registrado con datos incompletos — seguí el flujo configurado para saber qué datos pedir. Los únicos que faltan según el flujo son: ${faltantes || "ninguno"}. No pedir datos que ya están cargados.\nes_nuevo: true — al confirmar el turno, avisarle que llegue unos minutos antes para completar la ficha (ver política del consultorio).\ntiene_turnos_previos: ${tieneTurnosPrevios} — ${tieneTurnosPrevios ? "ya tuvo consultas anteriores, NO aplicar descuentos que digan 'solo primera consulta'." : "nunca tuvo un turno confirmado, puede aplicar descuentos de primera consulta si corresponde."}`;
@@ -441,7 +442,8 @@ async function runAgent(userMessage, telefono, consultorio_id = DEFAULT_CONSULTO
       ? `IMPORTANTE: Si el paciente pregunta cuáles eran las opciones, repetíselas exactamente como las ves arriba. Solo son válidas esas opciones — no ofrezcas ni busques otras. Si el paciente no puede en ninguna, usá notificar_doctor_rechazo y decile: "Perfecto, dejame consultarle al doctor si podemos hacerlo en otra fecha. ¡Gracias por avisarme!"`
       : `IMPORTANTE: Si el paciente pregunta cuáles eran las opciones iniciales, repetíselas exactamente como las ves arriba. Si el paciente pide otra fecha u horario diferente, buscá con check_availability y ofrece nuevas opciones (igual que en el flujo normal). Si el paciente confirma una fecha, agendá el turno normalmente.`;
 
-    return `\n\nCOORDINACIÓN PENDIENTE (iniciada por el doctor): El doctor pidió coordinar un turno para "${motivo}"${rangoDesc}. Ya le enviaste las opciones de fechas al paciente. NO uses get_patient_appointments — esta es una coordinación nueva, no una consulta de turnos existentes.${opcionesEnviadas}
+    return `\n\nCOORDINACIÓN PENDIENTE (iniciada por el doctor): El doctor pidió coordinar un turno para "${motivo}"${rangoDesc}. Ya le enviaste las opciones de fechas al paciente. NO uses get_patient_appointments — esta es una coordinación nueva, no una consulta de turnos existentes.
+El paciente ya está registrado por el consultorio: NO le pidas ningún dato (ni nombre, ni obra social, ni ningún otro), aunque el flujo para pacientes nuevos diga lo contrario. Cuando elija una fecha, agendá directamente.${opcionesEnviadas}
 ${instrRango}
 ${importanteCtx}`;
   })();
@@ -450,7 +452,7 @@ ${importanteCtx}`;
   console.log(`[agent] modelo: ${claudeModel}${pendingTask ? " | pending_task: " + pendingTask.id : ""}`);
   let response = await anthropic.messages.create({
     model: claudeModel, max_tokens: 1024,
-    system: getSystemPrompt(cfg, practicas, coberturas, buildPatientContext(patient)) + pendingCtx,
+    system: getSystemPrompt(cfg, practicas, coberturas, buildPatientContext(patient, { coordinacionDoctor: !!pendingTask })) + pendingCtx,
     tools: TOOLS, tool_choice, messages: claudeHistory,
   });
 
@@ -491,7 +493,7 @@ ${importanteCtx}`;
       model: claudeModel, max_tokens: 1024,
       // Se relee el paciente: si el agente acaba de guardar datos con
       // save_patient_data, el perfil ya refleja el estado nuevo.
-      system: getSystemPrompt(cfg, practicas, coberturas, buildPatientContext(await db.getPatient(telefono) || patient)) + pendingCtx,
+      system: getSystemPrompt(cfg, practicas, coberturas, buildPatientContext(await db.getPatient(telefono) || patient, { coordinacionDoctor: !!pendingTask })) + pendingCtx,
       tools: TOOLS, messages: claudeHistory,
     });
     console.log(`[agent] (loop) stop_reason=${response.stop_reason} | tools_called=${response.content.filter(b=>b.type==="tool_use").map(b=>b.name).join(",") || "ninguno"}`);
