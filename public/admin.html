@@ -403,6 +403,10 @@
           <label class="modal-label">Obra social</label>
           <input class="modal-input" id="pacEditOS" type="text" />
         </div>
+        <div class="modal-field">
+          <label class="modal-label">DNI <span style="color:#8696a0;font-weight:400">(opcional)</span></label>
+          <input class="modal-input" id="pacEditDNI" type="text" placeholder="Ej: 30123456" />
+        </div>
         <div class="modal-actions" style="margin-top:4px">
           <button class="btn btn-cancel" onclick="cerrarEditPac()">Cancelar</button>
           <button class="btn btn-primary" id="btnGuardarPac" onclick="guardarEditPac()">Guardar</button>
@@ -1933,6 +1937,7 @@
     document.getElementById("pacEditNombre").value  = p.nombre || "";
     document.getElementById("pacEditTel").value     = p.telefono;
     document.getElementById("pacEditOS").value      = p.obra_social || "";
+    document.getElementById("pacEditDNI").value     = p.dni || "";
     document.getElementById("pacEditTelHint").textContent = "";
     document.getElementById("pacEditTelHint").style.color = "";
     document.getElementById("pacEditOverlay").style.display = "flex";
@@ -1966,6 +1971,7 @@
     const nombre  = document.getElementById("pacEditNombre").value.trim();
     const tel     = document.getElementById("pacEditTel").value.replace(/\D/g, "");
     const os      = document.getElementById("pacEditOS").value.trim();
+    const dni     = document.getElementById("pacEditDNI").value.trim();
     if (!nombre) { showToast("El nombre no puede estar vacío"); return; }
     if (!tel || tel.length < 7) { showToast("Teléfono inválido"); return; }
     const digits = tel;
@@ -1974,7 +1980,7 @@
       const res = await fetch(`${API}/patients/${encodeURIComponent(telOrig)}`, {
         method: "PUT",
         headers: authH(),
-        body: JSON.stringify({ nombre, telefono: tel, obra_social: os, is_active }),
+        body: JSON.stringify({ nombre, telefono: tel, obra_social: os, dni, is_active }),
       });
       const data = await res.json();
       if (!res.ok) { showToast(data.error || "Error al guardar"); return; }

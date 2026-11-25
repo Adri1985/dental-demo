@@ -191,7 +191,7 @@ async function initDB() {
       ('tolerancia_llegada_min',      '15'),
       ('anticipacion_nuevo_min',      '10'),
       ('palabras_alarma',             'dolor fuerte, hinchazón, sangrado, fiebre, accidente, golpe, urgencia, emergencia'),
-      ('flujo_paciente_nuevo',        '1. Saludar de forma breve\n2. Pedir nombre completo, DNI y obra social (de a uno, nunca todos juntos)\n3. Informar el valor de la consulta\n4. Si acepta, buscar disponibilidad y asignar turno\n5. Confirmar el turno con todos los datos'),
+      ('flujo_paciente_nuevo',        '1. Saludar de forma breve\n2. Pedir nombre completo y obra social (de a uno, nunca todos juntos)\n3. Informar el valor de la consulta\n4. Si acepta, buscar disponibilidad y asignar turno\n5. Confirmar el turno con todos los datos'),
       ('flujo_paciente_existente',    '1. Saludar por su nombre\n2. Preguntar qué necesita\n3. Buscar disponibilidad y asignar turno\n4. Confirmar'),
       ('mensaje_bienvenida',          '')
     ON CONFLICT (clave) DO NOTHING;

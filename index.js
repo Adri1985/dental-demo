@@ -226,15 +226,15 @@ async function sendWhatsAppTemplate(to, templateName, params, perfil = null) {
 //  CONTEXTO DEL PACIENTE PARA CLAUDE
 // ─────────────────────────────────────────────
 function buildPatientContext(patient) {
-  const { nombre, dni, obra_social, telefono, primer_turno_realizado } = patient;
+  const { nombre, obra_social, telefono, primer_turno_realizado } = patient;
   const completo = nombre && obra_social;
   const tieneTurnosPrevios = !!primer_turno_realizado;
 
   if (completo) {
-    return `[DATOS DEL PACIENTE]\nNombre: ${nombre}\nDNI: ${dni || "no registrado"}\nObra social: ${obra_social}\nTeléfono: ${telefono}\nEstado: paciente registrado — NO volver a pedir datos que ya están guardados.\nes_nuevo: false — NO decirle que llegue antes para completar ficha. Ya tiene datos registrados.\ntiene_turnos_previos: ${tieneTurnosPrevios} — ${tieneTurnosPrevios ? "ya tuvo consultas anteriores, NO aplicar descuentos que digan 'solo primera consulta'." : "nunca tuvo un turno confirmado, puede aplicar descuentos de primera consulta si corresponde."}`;
+    return `[DATOS DEL PACIENTE]\nNombre: ${nombre}\nObra social: ${obra_social}\nTeléfono: ${telefono}\nEstado: paciente registrado — NO volver a pedir datos que ya están guardados.\nes_nuevo: false — NO decirle que llegue antes para completar ficha. Ya tiene datos registrados.\ntiene_turnos_previos: ${tieneTurnosPrevios} — ${tieneTurnosPrevios ? "ya tuvo consultas anteriores, NO aplicar descuentos que digan 'solo primera consulta'." : "nunca tuvo un turno confirmado, puede aplicar descuentos de primera consulta si corresponde."}`;
   }
   const faltantes = [!nombre && "nombre", !obra_social && "obra social"].filter(Boolean).join(", ");
-  return `[DATOS DEL PACIENTE]\nNombre: ${nombre || "pendiente"}\nDNI: ${dni || "no registrado"}\nObra social: ${obra_social || "pendiente"}\nTeléfono: ${telefono}\nEstado: paciente registrado con datos incompletos — seguí el flujo configurado para saber qué datos pedir. Los únicos que faltan según el flujo son: ${faltantes || "ninguno"}. No pedir datos que ya están cargados.\nes_nuevo: true — al confirmar el turno, avisarle que llegue unos minutos antes para completar la ficha (ver política del consultorio).\ntiene_turnos_previos: ${tieneTurnosPrevios} — ${tieneTurnosPrevios ? "ya tuvo consultas anteriores, NO aplicar descuentos que digan 'solo primera consulta'." : "nunca tuvo un turno confirmado, puede aplicar descuentos de primera consulta si corresponde."}`;
+  return `[DATOS DEL PACIENTE]\nNombre: ${nombre || "pendiente"}\nObra social: ${obra_social || "pendiente"}\nTeléfono: ${telefono}\nEstado: paciente registrado con datos incompletos — seguí el flujo configurado para saber qué datos pedir. Los únicos que faltan según el flujo son: ${faltantes || "ninguno"}. No pedir datos que ya están cargados.\nes_nuevo: true — al confirmar el turno, avisarle que llegue unos minutos antes para completar la ficha (ver política del consultorio).\ntiene_turnos_previos: ${tieneTurnosPrevios} — ${tieneTurnosPrevios ? "ya tuvo consultas anteriores, NO aplicar descuentos que digan 'solo primera consulta'." : "nunca tuvo un turno confirmado, puede aplicar descuentos de primera consulta si corresponde."}`;
 }
 
 // ─────────────────────────────────────────────
@@ -331,7 +331,7 @@ async function executeTool(name, input, telefono, cfg = {}, perfil = null, consu
     }
     case "save_patient_data": {
       const updated = await db.updatePatientData(telefono, {
-        nombre: input.nombre || null, dni: input.dni || null, obra_social: input.obra_social || null,
+        nombre: input.nombre || null, obra_social: input.obra_social || null,
       });
       console.log(`[paciente actualizado]`, updated);
       return { ok: true, guardado: updated };
@@ -692,7 +692,7 @@ app.post("/webhook", async (req, res) => {
           new Promise((_, reject) => setTimeout(() => reject(new Error("timeout Google Calendar (8s)")), 8000)),
         ]);
       } catch(e) { console.error("[wh] error/timeout Calendar:", e.message); }
-      patient = await db.upsertPatient({ telefono, nombre: datosPrevios?.nombre || "Paciente", dni: datosPrevios?.dni || null, obra_social: datosPrevios?.obra_social || null, consultorio_id: DEFAULT_CONSULTORIO_ID });
+      patient = await db.upsertPatient({ telefono, nombre: datosPrevios?.nombre || "Paciente", obra_social: datosPrevios?.obra_social || null, consultorio_id: DEFAULT_CONSULTORIO_ID });
     }
     await db.addMessage(telefono, "user", texto, new Date().toISOString());
 
@@ -740,7 +740,7 @@ app.post("/session", async (req, res) => {
   }
   let datosPrevios = null;
   try { datosPrevios = await findPatientByIdentifier(telefono, null, credsCalendar(await getPerfilActivo())); } catch(err) {}
-  patient = await db.upsertPatient({ telefono, nombre: datosPrevios?.nombre || nombre || "Paciente", dni: datosPrevios?.dni || null, obra_social: datosPrevios?.obra_social || null, consultorio_id: DEFAULT_CONSULTORIO_ID });
+  patient = await db.upsertPatient({ telefono, nombre: datosPrevios?.nombre || nombre || "Paciente", obra_social: datosPrevios?.obra_social || null, consultorio_id: DEFAULT_CONSULTORIO_ID });
   res.json({ nueva: !datosPrevios, recuperado: !!datosPrevios, nombre: patient.nombre, dni: patient.dni, obra_social: patient.obra_social, displayHistory: [] });
 });
 

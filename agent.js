@@ -56,7 +56,7 @@ function buildKnowledgeBase(cfg = {}, practicas = [], coberturas = []) {
 
   // Flujos desde DB o fallback hardcoded
   const flujoNuevo = cfg.flujo_paciente_nuevo ||
-    `1. Saludar de forma breve\n2. Pedir: nombre completo, DNI y obra social (de a uno, nunca todos juntos)\n3. Informar el valor de la práctica que necesita\n4. Si acepta, buscar disponibilidad y asignar turno\n5. Confirmar el turno con todos los datos`;
+    `1. Saludar de forma breve\n2. Pedir: nombre completo y obra social (de a uno, nunca todos juntos)\n3. Informar el valor de la práctica que necesita\n4. Si acepta, buscar disponibilidad y asignar turno\n5. Confirmar el turno con todos los datos`;
 
   const flujoExistente = cfg.flujo_paciente_existente ||
     `1. Saludar por su nombre (ya lo tenés guardado)\n2. Preguntar qué necesita\n3. Llamar check_availability para buscar slots libres y ofrecerle opciones\n4. Confirmar el turno elegido con create_appointment`;
@@ -234,7 +234,7 @@ const TOOLS = [
   },
   {
     name: "create_appointment",
-    description: "Crea un turno en el calendario para el paciente que está escribiendo. Solo llamar cuando el paciente confirmó el horario. Los datos del paciente (nombre, teléfono, DNI, obra social) los completa el sistema desde su ficha: no hace falta pasarlos ni pedirlos si ya están guardados.",
+    description: "Crea un turno en el calendario para el paciente que está escribiendo. Solo llamar cuando el paciente confirmó el horario. Los datos del paciente los completa el sistema desde su ficha: no hace falta pasarlos.",
     input_schema: {
       type: "object",
       properties: {
@@ -258,12 +258,11 @@ const TOOLS = [
   },
   {
     name: "save_patient_data",
-    description: "Guarda o actualiza datos del paciente.",
+    description: "Guarda el nombre y la obra social del paciente que está escribiendo.",
     input_schema: {
       type: "object",
       properties: {
         nombre:      { type: "string" },
-        dni:         { type: "string" },
         obra_social: { type: "string" },
       },
     },
