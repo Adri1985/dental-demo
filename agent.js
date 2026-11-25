@@ -223,13 +223,14 @@ const TOOLS = [
       type: "object",
       properties: {
         profesional_id:   { type: "string", enum: buildProfesionalesEnum() },
+        para_quien:       { type: "string", description: "Nombre de la persona para la que es el turno, según la conversación. Si es para quien escribe, su nombre." },
         fecha_desde:      { type: "string", description: "ISO 8601 con timezone" },
         fecha_hasta:      { type: "string", description: "ISO 8601 con timezone" },
         duracion_minutos: { type: "number" },
         excluir_event_id: { type: "string" },
         hora_preferida:   { type: "string", description: "Hora exacta en formato HH:MM (AR). Usar cuando el paciente pide un horario específico. El sistema expande la búsqueda hasta 365 días y devuelve slots_en_horario (exactos) y slots_alternativos (otros horarios) por separado." },
       },
-      required: ["fecha_desde", "fecha_hasta", "duracion_minutos"],
+      required: ["para_quien", "fecha_desde", "fecha_hasta", "duracion_minutos"],
     },
   },
   {
@@ -239,11 +240,12 @@ const TOOLS = [
       type: "object",
       properties: {
         profesional_id:       { type: "string", enum: buildProfesionalesEnum() },
-        fecha_hora:           { type: "string", description: "Usar el campo 'inicio' exacto del slot devuelto por check_availability (ISO 8601 UTC). No reformatear ni reconstruir la fecha." },
+        para_quien:           { type: "string", description: "Nombre de la persona para la que es el turno, según la conversación. Si es para quien escribe, su nombre." },
+        fecha_hora:          { type: "string", description: "Usar el campo 'inicio' exacto del slot devuelto por check_availability (ISO 8601 UTC). No reformatear ni reconstruir la fecha." },
         tipo_practica:        { type: "string" },
         duracion_minutos:     { type: "number" },
       },
-      required: ["fecha_hora", "tipo_practica", "duracion_minutos"],
+      required: ["para_quien", "fecha_hora", "tipo_practica", "duracion_minutos"],
     },
   },
   {

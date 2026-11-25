@@ -241,10 +241,25 @@ function buildPatientContext(patient, { coordinacionDoctor = false } = {}) {
 // ─────────────────────────────────────────────
 //  EJECUTOR DE TOOLS
 // ─────────────────────────────────────────────
+// ¿El nombre que el modelo indica como destinatario del turno corresponde a quien escribe?
+function esParaQuienEscribe(paraQuien, patient) {
+  if (!patient?.nombre || patient.nombre === "Paciente") return true;
+  const norm = s => String(s || "").toLowerCase().normalize("NFD").replace(/[̀-ͯ]/g, "");
+  const genericas = new Set(["para", "paciente", "persona", "mismo", "misma", "quien", "escribe", "que", "del", "los", "las"]);
+  const tokens = norm(paraQuien).split(/[^a-zñ]+/).filter(t => t.length >= 3 && !genericas.has(t));
+  if (tokens.length === 0) return true;
+  const delPaciente = new Set(norm(patient.nombre).split(/[^a-zñ]+/).filter(t => t.length >= 3));
+  return tokens.some(t => delPaciente.has(t));
+}
+
 async function executeTool(name, input, telefono, cfg = {}, perfil = null, consultorio_id = DEFAULT_CONSULTORIO_ID, opts = {}) {
   const creds = credsCalendar(perfil);
   console.log(`[tool] ${name}`, JSON.stringify(input, null, 2));
   const patient = await db.getPatient(telefono);
+  if ((name === "check_availability" || name === "create_appointment") && !esParaQuienEscribe(input.para_quien, patient)) {
+    console.warn(`[agent] ${name} bloqueado — ${telefono} (${patient?.nombre}) pidió turno para "${input.para_quien}"`);
+    return { error: `No se puede buscar ni agendar turnos para ${input.para_quien}: solo para ${patient.nombre}, la persona que escribe. No ofrezcas horarios. Decile amablemente que esa persona tiene que escribir desde su propio WhatsApp o comunicarse con el consultorio.` };
+  }
   switch (name) {
     case "check_availability": {
       const resultado = await checkAvailability({
