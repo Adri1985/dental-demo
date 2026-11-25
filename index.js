@@ -322,12 +322,22 @@ async function executeTool(name, input, telefono, cfg = {}, perfil = null, consu
       if (resultado?.event_id && !patient?.primer_turno_realizado) {
         db.setPatientPrimerTurno(telefono).catch(e => console.error("[primer_turno] error:", e.message));
       }
+      if (resultado?.event_id) {
+        return { ...resultado, a_nombre_de: patient.nombre, nota: `El turno quedó a nombre de ${patient.nombre}, la persona que te escribe. Confirmáselo a ella, no a otra persona.` };
+      }
       return resultado;
     }
-    case "cancel_appointment":
-      return await cancelAppointment({ ...input, creds });
+    case "cancel_appointment": {
+      // Solo se pueden cancelar turnos agendados con el teléfono de quien escribe
+      const propios = await getPatientAppointments(telefono, null, creds);
+      if (!propios.some(t => t.event_id === input.event_id)) {
+        console.warn(`[agent] cancelación bloqueada — ${telefono} intentó cancelar ${input.event_id}, que no es suyo`);
+        return { error: "Ese turno no pertenece a la persona que te escribe. Solo podés cancelar turnos propios del paciente." };
+      }
+      return await cancelAppointment({ event_id: input.event_id, creds });
+    }
     case "get_patient_appointments": {
-      const turnos = await getPatientAppointments(telefono, patient?.dni, creds);
+      const turnos = await getPatientAppointments(telefono, null, creds);
       return { turnos };
     }
     case "save_patient_data": {

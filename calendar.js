@@ -92,12 +92,12 @@ async function getPatientAppointments(telefono, dni, creds) {
     pageToken = data.nextPageToken;
   } while (pageToken);
   console.log(`[getPatientAppointments] buscando tel=${telefono} dni=${dni} | total eventos=${eventos.length}`);
+  // Solo por teléfono: el DNI se carga a mano y no identifica a quien escribe
   const encontrados = eventos.filter((ev) => {
     const desc = ev.description || "";
     const matchTel = telefono && desc.includes(`Teléfono: ${telefono}`);
-    const matchDni = dni && desc.includes(`DNI: ${dni}`);
-    if (matchTel || matchDni) console.log(`[getPatientAppointments] match: ${ev.summary} | ${ev.start?.dateTime}`);
-    return matchTel || matchDni;
+    if (matchTel) console.log(`[getPatientAppointments] match: ${ev.summary} | ${ev.start?.dateTime}`);
+    return matchTel;
   });
   console.log(`[getPatientAppointments] encontrados=${encontrados.length}`);
   return encontrados.map((ev) => ({
